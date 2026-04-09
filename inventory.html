@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>ZedOps Staging — Inventory</title>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; color: #1a1a1a; }
+
+/* Staging banner */
+.staging-banner { background: #E65100; color: white; text-align: center; padding: 6px; font-weight: 700; font-size: 12px; letter-spacing: 1px; }
+
+/* Header */
+.header { background: linear-gradient(135deg, #1565C0, #1976D2); color: white; padding: 14px 20px; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.15); display: flex; justify-content: space-between; align-items: center; }
+.header h1 { font-size: 20px; font-weight: 700; }
+.header .subtitle { font-size: 12px; opacity: 0.85; margin-top: 2px; }
+.sync-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #4CAF50; margin-right: 6px; }
+.sync-dot.off { background: #F44336; }
+
+/* Sub-nav */
+.subnav { display: flex; gap: 4px; padding: 10px 16px; background: white; border-bottom: 1px solid #e0e0e0; overflow-x: auto; position: sticky; top: 58px; z-index: 99; }
+.subnav-btn { padding: 7px 14px; border-radius: 20px; border: 2px solid #e0e0e0; background: white; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: all 0.2s; color: #555; }
+.subnav-btn:hover { border-color: #1565C0; color: #1565C0; }
+.subnav-btn.active { background: #1565C0; color: white; border-color: #1565C0; }
+
+/* Content */
+.content { padding: 16px; max-width: 960px; margin: 0 auto; padding-bottom: 80px; }
+.section { display: none; }
+.section.active { display: block; }
+
+/* Cards */
+.card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 20px; }
+.card { background: white; border-radius: 12px; padding: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+.card-label { font-size: 11px; color: #888; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; }
+.card-value { font-size: 28px; font-weight: 700; margin-top: 4px; }
+.card-value.blue { color: #1565C0; }
+.card-value.red { color: #C62828; }
+.card-value.orange { color: #E65100; }
+.card-value.green { color: #2E7D32; }
+
+/* Location toggle */
+.loc-toggle { display: flex; border: 1.5px solid #ddd; border-radius: 8px; overflow: hidden; margin-bottom: 16px; width: fit-content; }
+.loc-btn { padding: 7px 16px; font-size: 13px; font-weight: 600; background: white; border: none; cursor: pointer; color: #666; transition: all 0.2s; }
+.loc-btn.active { background: #1565C0; color: white; }
+
+/* Alert rows */
+.alert-section { margin-bottom: 20px; }
+.alert-section h3 { font-size: 14px; font-weight: 700; margin-bottom: 8px; color: #333; }
+.alert-row { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: white; border-radius: 8px; margin-bottom: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); font-size: 13px; }
+.alert-row .dish-name { flex: 1; font-weight: 600; }
+.badge { padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; }
+.badge.red { background: #FFCDD2; color: #C62828; }
+.badge.yellow { background: #FFF9C4; color: #F57F17; }
+.badge.green { background: #C8E6C9; color: #2E7D32; }
+.loc-pill { padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+.loc-pill.colonnade { background: #E3F2FD; color: #1565C0; }
+.loc-pill.rim { background: #FFF3E0; color: #E65100; }
+
+/* Inventory table */
+.inv-table { width: 100%; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.08); margin-bottom: 20px; }
+.inv-table table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.inv-table th { background: #f5f5f5; padding: 10px 12px; text-align: left; font-weight: 700; font-size: 11px; text-transform: uppercase; color: #666; border-bottom: 2px solid #e0e0e0; }
+.inv-table td { padding: 8px 12px; border-bottom: 1px solid #f0f0f0; }
+.inv-table tr:last-child td { border-bottom: none; }
+.inv-table tr:hover { background: #f8fdf8; }
+.qty-cell { font-weight: 700; font-size: 15px; }
+.action-btn { padding: 4px 10px; border-radius: 6px; border: none; font-size: 12px; font-weight: 700; cursor: pointer; margin-left: 4px; }
+.action-btn.add { background: #C8E6C9; color: #2E7D32; }
+.action-btn.add:hover { background: #A5D6A7; }
+.action-btn.remove { background: #FFCDD2; color: #C62828; }
+.action-btn.remove:hover { background: #EF9A9A; }
+.empty-msg { text-align: center; padding: 40px; color: #999; font-size: 14px; }
+
+/* Enter Inventory form */
+.form-header { display: flex; gap: 12px; align-items: flex-end; margin-bottom: 16px; flex-wrap: wrap; }
+.form-group { display: flex; flex-direction: column; gap: 4px; }
+.form-group label { font-size: 11px; font-weight: 700; color: #666; text-transform: uppercase; }
+.form-group select, .form-group input { padding: 8px 12px; border: 1.5px solid #ddd; border-radius: 8px; font-size: 14px; font-family: inherit; }
+.form-group select:focus, .form-group input:focus { border-color: #1565C0; outline: none; box-shadow: 0 0 0 2px rgba(21,101,192,0.15); }
+
+.case-section { margin-bottom: 24px; }
+.case-section-header { font-size: 14px; font-weight: 700; color: #1565C0; padding: 8px 12px; background: #E3F2FD; border-radius: 8px 8px 0 0; }
+.dish-entry { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: white; border-bottom: 1px solid #f0f0f0; flex-wrap: wrap; }
+.dish-entry:last-child { border-bottom: none; border-radius: 0 0 8px 8px; }
+.dish-entry .dish-label { flex: 1; min-width: 180px; font-weight: 600; font-size: 13px; }
+.date-qty-row { display: flex; align-items: center; gap: 6px; }
+.date-qty-row input[type="date"] { padding: 6px 8px; border: 1.5px solid #ddd; border-radius: 6px; font-size: 13px; font-family: inherit; }
+.date-qty-row input[type="number"] { width: 60px; padding: 6px 8px; border: 1.5px solid #ddd; border-radius: 6px; font-size: 13px; text-align: center; font-weight: 600; font-family: inherit; }
+.date-qty-row input:focus { border-color: #1565C0; outline: none; }
+.add-date-btn { background: none; border: 1px dashed #bbb; color: #888; font-size: 11px; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-weight: 600; }
+.add-date-btn:hover { border-color: #1565C0; color: #1565C0; }
+.remove-date-btn { background: none; border: none; color: #ccc; font-size: 16px; cursor: pointer; padding: 2px 6px; }
+.remove-date-btn:hover { color: #C62828; }
+
+.submit-bar { position: fixed; bottom: 0; left: 0; right: 0; background: white; padding: 12px 20px; box-shadow: 0 -2px 8px rgba(0,0,0,0.1); display: flex; justify-content: center; gap: 12px; z-index: 100; }
+.btn { padding: 10px 24px; border-radius: 8px; border: none; font-size: 14px; font-weight: 700; cursor: pointer; transition: all 0.2s; }
+.btn-primary { background: #1565C0; color: white; }
+.btn-primary:hover { background: #1255A1; }
+.btn-secondary { background: #f0f0f0; color: #555; }
+.btn-secondary:hover { background: #e0e0e0; }
+.btn-success { background: #2E7D32; color: white; }
+.btn-success:hover { background: #1B5E20; }
+.btn-danger { background: #C62828; color: white; }
+.btn-danger:hover { background: #B71C1C; }
+
+/* Quick Action Modal */
+.modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 200; justify-content: center; align-items: center; }
+.modal-overlay.show { display: flex; }
+.modal { background: white; border-radius: 16px; padding: 24px; width: 90%; max-width: 360px; box-shadow: 0 8px 32px rgba(0,0,0,0.2); }
+.modal h3 { font-size: 18px; margin-bottom: 4px; }
+.modal .modal-subtitle { font-size: 13px; color: #666; margin-bottom: 16px; }
+.modal .modal-field { margin-bottom: 12px; }
+.modal .modal-field label { display: block; font-size: 11px; font-weight: 700; color: #666; text-transform: uppercase; margin-bottom: 4px; }
+.modal .modal-field input { width: 100%; padding: 10px 12px; border: 1.5px solid #ddd; border-radius: 8px; font-size: 16px; font-family: inherit; }
+.modal .modal-field input:focus { border-color: #1565C0; outline: none; }
+.modal-actions { display: flex; gap: 8px; margin-top: 16px; }
+.modal-actions .btn { flex: 1; }
+
+/* Toast notification */
+.toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; z-index: 300; display: none; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+.toast.show { display: block; animation: fadeInUp 0.3s ease; }
+@keyframes fadeInUp { from { opacity: 0; transform: translateX(-50%) translateY(10px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+</style>
+</head>
+<body>
+
+<div class="staging-banner">STAGING ENVIRONMENT — Inventory Development</div>
+
+<div class="header">
+  <div>
+    <h1>ZedOps — Inventory</h1>
+    <div class="subtitle"><span class="sync-dot" id="syncDot"></span><span id="syncLabel">Connecting...</span></div>
+  </div>
+</div>
+
+<div class="subnav" id="subnav">
+  <button class="subnav-btn active" onclick="switchSection('dashboard')">Dashboard</button>
+  <button class="subnav-btn" onclick="switchSection('enter')">Enter Inventory</button>
+  <button class="subnav-btn disabled" style="opacity:0.4;cursor:default" title="Coming soon">Log Transfer</button>
+  <button class="subnav-btn disabled" style="opacity:0.4;cursor:default" title="Coming soon">Log Adjustment</button>
+  <button class="subnav-btn disabled" style="opacity:0.4;cursor:default" title="Coming soon">Log Stockout</button>
+  <button class="subnav-btn disabled" style="opacity:0.4;cursor:default" title="Coming soon">Physical Count</button>
+  <button class="subnav-btn disabled" style="opacity:0.4;cursor:default" title="Coming soon">Shelf Life Config</button>
+  <button class="subnav-btn disabled" style="opacity:0.4;cursor:default" title="Coming soon">Log History</button>
+</div>
+
+<div class="content">
+
+  <!-- ===== DASHBOARD ===== -->
+  <div class="section active" id="sec-dashboard">
+    <div class="card-grid" id="summaryCards">
+      <div class="card"><div class="card-label">SKUs Tracked</div><div class="card-value blue" id="cardSkus">0</div></div>
+      <div class="card"><div class="card-label">Expiring in 3 Days</div><div class="card-value red" id="cardExpiring">0</div></div>
+      <div class="card"><div class="card-label">Excess Carry-In</div><div class="card-value orange" id="cardExcess">0</div></div>
+      <div class="card"><div class="card-label">Total Units</div><div class="card-value green" id="cardTotal">0</div></div>
+    </div>
+
+    <div class="loc-toggle">
+      <button class="loc-btn active" onclick="setDashLoc('both',this)">Both</button>
+      <button class="loc-btn" onclick="setDashLoc('colonnade',this)">Colonnade</button>
+      <button class="loc-btn" onclick="setDashLoc('rim',this)">RIM</button>
+    </div>
+
+    <div class="alert-section" id="expiryAlerts"></div>
+
+    <div class="inv-table" id="invTableWrap">
+      <table>
+        <thead><tr><th>Dish</th><th>Location</th><th>Use-By</th><th>Days Left</th><th>Units</th><th>Actions</th></tr></thead>
+        <tbody id="invTableBody"><tr><td colspan="6" class="empty-msg">No inventory data yet. Use "Enter Inventory" to get started.</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ===== ENTER INVENTORY ===== -->
+  <div class="section" id="sec-enter">
+    <h2 style="font-size:18px;margin-bottom:12px;">Enter Inventory</h2>
+    <p style="font-size:13px;color:#666;margin-bottom:16px;">Walk the case and enter what's on the shelf. This replaces current system quantities for the dishes you enter.</p>
+
+    <div class="form-header">
+      <div class="form-group">
+        <label>Location</label>
+        <select id="enterLoc">
+          <option value="colonnade">Colonnade</option>
+          <option value="rim">RIM</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Default Date</label>
+        <input type="date" id="enterDefaultDate">
+      </div>
+    </div>
+
+    <div id="enterSheet"></div>
+
+    <div class="submit-bar" id="enterSubmitBar" style="display:none;">
+      <button class="btn btn-secondary" onclick="switchSection('dashboard')">Cancel</button>
+      <button class="btn btn-success" onclick="submitEnterInventory()">Save Inventory</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- Quick Action Modal -->
+<div class="modal-overlay" id="quickModal">
+  <div class="modal">
+    <h3 id="modalTitle">Add Units</h3>
+    <div class="modal-subtitle" id="modalSubtitle"></div>
+    <div class="modal-field">
+      <label>Use-By Date</label>
+      <input type="date" id="modalDate">
+    </div>
+    <div class="modal-field">
+      <label>Quantity</label>
+      <input type="number" id="modalQty" min="1" value="1" inputmode="numeric">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeQuickModal()">Cancel</button>
+      <button class="btn" id="modalConfirmBtn" onclick="confirmQuickAction()">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================================
+// Firebase Setup — STAGING paths
+// ============================================================
+const firebaseConfig = {
+  apiKey: "AIzaSyDUveUlxrNDIU4yDUpbzjv8-X625S-l0Po",
+  authDomain: "zedrics-production-hub.firebaseapp.com",
+  databaseURL: "https://zedrics-production-hub-default-rtdb.firebaseio.com",
+  projectId: "zedrics-production-hub",
+  storageBucket: "zedrics-production-hub.firebasestorage.app",
+  messagingSenderId: "1000819775934",
+  appId: "1:1000819775934:web:6a0f14f54f797b092841ef"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+// STAGING paths — completely isolated from production
+const invRef = db.ref('staging_inv_inventory');
+const adjRef = db.ref('staging_inv_adjustments');
+const countsRef = db.ref('staging_inv_counts');
+const dishLibRef = db.ref('dishLibrary'); // read-only, shared with production for shelf life
+
+// Sync indicator
+const connRef = db.ref('.info/connected');
+connRef.on('value', snap => {
+  const dot = document.getElementById('syncDot');
+  const label = document.getElementById('syncLabel');
+  if (snap.val()) { dot.classList.remove('off'); label.textContent = 'Live sync on'; }
+  else { dot.classList.add('off'); label.textContent = 'Offline'; }
+});
+
+// ============================================================
+// Dish Data
+// ============================================================
+const DISH_SECTIONS = {
+  "Breakfasts (Case 2)": [
+    "Bacon & Gruyere Egg Bites w/ Cauliflower Hash (2)",
+    "Bacon Tomato & Mushroom Omelette",
+    "Beef Tenderloin Steak & Egg Scramble (3)",
+    "Blueberry Protein Pancakes w/ Eggs (3)",
+    "Brisket Hash (3)",
+    "Country Sausage Breakfast Bowl (3)",
+    "Overnight Oats",
+    "Southern Breakfast Bowl (3)",
+    "Tex Mex Turkey Picadillo (1)",
+    "Turkey Chorizo over Rice (3)",
+    "Turkey Sausage Egg & Sweet Potato Hash (3)"
+  ],
+  "Entrees (Cases 3-5)": [
+    "Arroz Con Pollo (2)",
+    "BBQ Brisket Mac",
+    "Beef Taco Skillet (2)",
+    "Blackened Chicken Alfredo Penne (3)",
+    "Blackened Chicken w/ Fingerlings (3)",
+    "Blackened Mahi Over Cilantro Lime Rice (5)",
+    "Chicken & Italian Sausage Over Pasta (2)",
+    "Chicken Enchilada Casserole (2)",
+    "Chicken Madeira (4)",
+    "Dirty Rice",
+    "GF Chicken ZedStrips Over Mac-N-Cheese (4)",
+    "Glazed Beef Meatloaf (3)",
+    "Greek Chicken Bowl",
+    "Green Chile Chicken Over Rice (2)",
+    "Grilled Chicken Over Cheesy Bacon Broccoli (2)",
+    "Grilled Salmon (3)",
+    "Herb Chicken w/ Carrots & Broccolini (3)",
+    "Korean Beef BBQ Tenderloin (2)",
+    "Parmesan Crusted Chop Steak (2)",
+    "Ranch Chicken w/ Mozzarella & Bacon (2)",
+    "Roasted Turkey w/ Cajun Butter (3)",
+    "Rustic Chicken Parmesan (2)",
+    "Salisbury Steak (4)",
+    "Seared Beef Tenderloin (4)",
+    "Texas Style Turkey Chili Bowl (1)",
+    "Texas Style Turkey Chili Mac (1)",
+    "Turkey Ragu over Spaghetti Squash (2)"
+  ],
+  "Half-Pound Proteins (Case 6)": [
+    "1/2# Baked Chicken (1)",
+    "1/2# Chicken ZedStrips w/ Dijonnaise (1)",
+    "1/2# Green Chile Chicken (1)",
+    "1/2# Grilled Chicken (1)",
+    "1/2# Herb Marinated Chicken (1)",
+    "1/2# Turkey Chorizo (1)"
+  ],
+  "Snacks": [
+    "Peanut Butter & Chocolate Chews"
+  ]
+};
+
+const DEFAULT_SHELF_LIFE = {
+  "Peanut Butter & Chocolate Chews": 10,
+  "BBQ Brisket Mac": 14,
+  "Blackened Chicken Alfredo Penne (3)": 14,
+  "Blackened Mahi Over Cilantro Lime Rice (5)": 14,
+  "Chicken & Italian Sausage Over Pasta (2)": 14,
+  "GF Chicken ZedStrips Over Mac-N-Cheese (4)": 14,
+  "Grilled Salmon (3)": 14,
+  "Texas Style Turkey Chili Mac (1)": 14,
+  "Turkey Ragu over Spaghetti Squash (2)": 14
+};
+
+function getAllDishNames() {
+  const all = [];
+  Object.values(DISH_SECTIONS).forEach(dishes => dishes.forEach(d => all.push(d)));
+  return all.sort();
+}
+
+function dishKey(name) {
+  return name.replace(/[.#$/\[\]]/g, '_');
+}
+
+function getShelfLife(name) {
+  return DEFAULT_SHELF_LIFE[name] || 18;
+}
+
+// ============================================================
+// Date Utilities
+// ============================================================
+function today() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+function toFbKey(isoDate) {
+  // YYYY-MM-DD → M-D (Firebase key format, no zero padding)
+  const parts = isoDate.split('-');
+  return parseInt(parts[1]) + '-' + parseInt(parts[2]);
+}
+
+function fromFbKey(fbKey) {
+  // M-D → YYYY-MM-DD (assumes current year)
+  const parts = fbKey.split('-');
+  const y = new Date().getFullYear();
+  return y + '-' + parts[0].padStart(2,'0') + '-' + parts[1].padStart(2,'0');
+}
+
+function daysUntil(isoDate) {
+  const now = new Date(); now.setHours(0,0,0,0);
+  const target = new Date(isoDate + 'T00:00:00');
+  return Math.ceil((target - now) / (1000*60*60*24));
+}
+
+function formatDate(isoDate) {
+  const d = new Date(isoDate + 'T00:00:00');
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return months[d.getMonth()] + ' ' + d.getDate();
+}
+
+// ============================================================
+// Dashboard
+// ============================================================
+let dashLoc = 'both';
+let invData = {}; // cached inventory snapshot
+
+function setDashLoc(loc, btn) {
+  dashLoc = loc;
+  document.querySelectorAll('.loc-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderDashboard();
+}
+
+function refreshDashboard() {
+  invRef.once('value').then(snap => {
+    invData = snap.val() || {};
+    renderDashboard();
+  });
+}
+
+function renderDashboard() {
+  const rows = [];
+  let totalUnits = 0, expiringCount = 0, excessCount = 0;
+
+  // Flatten inventory into rows
+  Object.entries(invData).forEach(([dk, dates]) => {
+    if (!dates || typeof dates !== 'object') return;
+    // Find the original dish name from the key
+    const dishName = findDishName(dk);
+    Object.entries(dates).forEach(([ubKey, locs]) => {
+      if (!locs || typeof locs !== 'object') return;
+      const isoDate = fromFbKey(ubKey);
+      const days = daysUntil(isoDate);
+
+      ['colonnade', 'rim'].forEach(loc => {
+        const qty = parseInt(locs[loc]) || 0;
+        if (qty <= 0) return;
+        if (dashLoc !== 'both' && dashLoc !== loc) return;
+
+        rows.push({ dishName: dishName || dk, dishKey: dk, location: loc, useByFb: ubKey, isoDate, days, qty });
+        totalUnits += qty;
+        if (days <= 3) expiringCount += qty;
+        if ((qty >= 15 && days <= 8) || qty >= 30) excessCount++;
+      });
+    });
+  });
+
+  // Sort by soonest expiry
+  rows.sort((a, b) => a.days - b.days || a.dishName.localeCompare(b.dishName));
+
+  // Summary cards
+  document.getElementById('cardSkus').textContent = rows.length;
+  document.getElementById('cardExpiring').textContent = expiringCount;
+  document.getElementById('cardExcess').textContent = excessCount;
+  document.getElementById('cardTotal').textContent = totalUnits;
+
+  // Expiry alerts
+  const alertHtml = [];
+  const expiryRows = rows.filter(r => r.days <= 5);
+  if (expiryRows.length > 0) {
+    alertHtml.push('<h3>Expiry Alerts</h3>');
+    expiryRows.forEach(r => {
+      const badgeClass = r.days <= 2 ? 'red' : 'yellow';
+      const badgeText = r.days <= 0 ? 'EXPIRED' : r.days + 'd left';
+      alertHtml.push(`<div class="alert-row">
+        <span class="dish-name">${esc(r.dishName)}</span>
+        <span class="loc-pill ${r.location}">${locLabel(r.location)}</span>
+        <span class="badge ${badgeClass}">${badgeText}</span>
+        <span style="font-weight:700">${r.qty} units</span>
+      </div>`);
+    });
+  }
+  document.getElementById('expiryAlerts').innerHTML = alertHtml.join('');
+
+  // Full inventory table
+  const tbody = document.getElementById('invTableBody');
+  if (rows.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-msg">No inventory data yet. Use "Enter Inventory" to get started.</td></tr>';
+    return;
+  }
+
+  let html = '';
+  rows.forEach(r => {
+    const daysBadge = r.days <= 2 ? 'red' : r.days <= 5 ? 'yellow' : 'green';
+    const daysText = r.days <= 0 ? 'EXPIRED' : r.days + 'd';
+    const encoded = encodeURIComponent(r.dishKey);
+    html += `<tr>
+      <td style="font-weight:600">${esc(r.dishName)}</td>
+      <td><span class="loc-pill ${r.location}">${locLabel(r.location)}</span></td>
+      <td>${formatDate(r.isoDate)}</td>
+      <td><span class="badge ${daysBadge}">${daysText}</span></td>
+      <td class="qty-cell">${r.qty}</td>
+      <td>
+        <button class="action-btn add" onclick="openQuickModal('add','${encoded}','${r.location}','${r.useByFb}')">+</button>
+        <button class="action-btn remove" onclick="openQuickModal('remove','${encoded}','${r.location}','${r.useByFb}')">—</button>
+      </td>
+    </tr>`;
+  });
+  tbody.innerHTML = html;
+}
+
+function findDishName(dk) {
+  const all = getAllDishNames();
+  return all.find(n => dishKey(n) === dk) || dk;
+}
+
+function locLabel(loc) {
+  return loc === 'colonnade' ? 'Colonnade' : loc === 'rim' ? 'RIM' : loc;
+}
+
+function esc(str) {
+  const d = document.createElement('div'); d.textContent = str; return d.innerHTML;
+}
+
+// ============================================================
+// Quick Action Modal
+// ============================================================
+let quickMode = '', quickDishKey = '', quickLoc = '', quickUseBy = '';
+
+function openQuickModal(mode, encodedDk, loc, ubFb) {
+  quickMode = mode;
+  quickDishKey = decodeURIComponent(encodedDk);
+  quickLoc = loc;
+  quickUseBy = ubFb;
+
+  const dishName = findDishName(quickDishKey);
+  document.getElementById('modalTitle').textContent = mode === 'add' ? '+ Add Units' : '— Remove Units';
+  document.getElementById('modalSubtitle').textContent = dishName + ' · ' + locLabel(loc) + ' · ' + formatDate(fromFbKey(ubFb));
+  document.getElementById('modalDate').value = fromFbKey(ubFb);
+  document.getElementById('modalQty').value = 1;
+
+  const btn = document.getElementById('modalConfirmBtn');
+  btn.className = mode === 'add' ? 'btn btn-success' : 'btn btn-danger';
+  btn.textContent = mode === 'add' ? 'Add' : 'Remove';
+
+  document.getElementById('quickModal').classList.add('show');
+  document.getElementById('modalQty').focus();
+}
+
+function closeQuickModal() {
+  document.getElementById('quickModal').classList.remove('show');
+}
+
+function confirmQuickAction() {
+  const qty = parseInt(document.getElementById('modalQty').value) || 0;
+  if (qty <= 0) return;
+
+  const dateVal = document.getElementById('modalDate').value;
+  const ubKey = toFbKey(dateVal);
+  const delta = quickMode === 'add' ? qty : -qty;
+  const path = quickDishKey + '/' + ubKey + '/' + quickLoc;
+
+  invRef.child(path).transaction(current => {
+    const newVal = (current || 0) + delta;
+    return newVal < 0 ? 0 : newVal;
+  }).then(() => {
+    // Log to adjustments
+    adjRef.push({
+      dish: quickDishKey,
+      dishName: findDishName(quickDishKey),
+      location: quickLoc,
+      useBy: ubKey,
+      qty: delta,
+      reason: quickMode === 'add' ? 'quick_add' : 'quick_remove',
+      timestamp: firebase.database.ServerValue.TIMESTAMP
+    });
+    showToast((quickMode === 'add' ? 'Added ' : 'Removed ') + qty + ' units');
+    closeQuickModal();
+    refreshDashboard();
+  });
+}
+
+// ============================================================
+// Enter Inventory
+// ============================================================
+function buildEnterSheet() {
+  const container = document.getElementById('enterSheet');
+  const defaultDate = document.getElementById('enterDefaultDate').value || today();
+  let html = '';
+
+  Object.entries(DISH_SECTIONS).forEach(([section, dishes]) => {
+    html += `<div class="case-section">
+      <div class="case-section-header">${esc(section)}</div>`;
+    dishes.forEach(name => {
+      const dk = dishKey(name);
+      html += `<div class="dish-entry" data-dish="${dk}" data-name="${esc(name)}">
+        <div class="dish-label">${esc(name)}</div>
+        <div class="date-qty-rows">
+          <div class="date-qty-row">
+            <input type="date" value="${defaultDate}" class="enter-date">
+            <input type="number" min="0" placeholder="0" class="enter-qty" inputmode="numeric">
+            <button class="remove-date-btn" onclick="removeEnterRow(this)" title="Clear">✕</button>
+          </div>
+        </div>
+        <button class="add-date-btn" onclick="addEnterRow(this)">+ another date</button>
+      </div>`;
+    });
+    html += '</div>';
+  });
+
+  container.innerHTML = html;
+  document.getElementById('enterSubmitBar').style.display = 'flex';
+}
+
+function addEnterRow(btn) {
+  const entry = btn.closest('.dish-entry');
+  const rows = entry.querySelector('.date-qty-rows');
+  const defaultDate = document.getElementById('enterDefaultDate').value || today();
+  const row = document.createElement('div');
+  row.className = 'date-qty-row';
+  row.innerHTML = `<input type="date" value="${defaultDate}" class="enter-date">
+    <input type="number" min="0" placeholder="0" class="enter-qty" inputmode="numeric">
+    <button class="remove-date-btn" onclick="removeEnterRow(this)" title="Remove">✕</button>`;
+  rows.appendChild(row);
+}
+
+function removeEnterRow(btn) {
+  const row = btn.closest('.date-qty-row');
+  const rows = row.parentElement;
+  if (rows.children.length > 1) {
+    row.remove();
+  } else {
+    // Last row — just clear the values
+    row.querySelector('.enter-qty').value = '';
+  }
+}
+
+function submitEnterInventory() {
+  const loc = document.getElementById('enterLoc').value;
+  const entries = [];
+  const dishEntries = document.querySelectorAll('#sec-enter .dish-entry');
+
+  dishEntries.forEach(entry => {
+    const dk = entry.dataset.dish;
+    const name = entry.dataset.name;
+    const rows = entry.querySelectorAll('.date-qty-row');
+
+    rows.forEach(row => {
+      const dateVal = row.querySelector('.enter-date').value;
+      const qtyVal = parseInt(row.querySelector('.enter-qty').value);
+      if (!dateVal || isNaN(qtyVal) || qtyVal < 0) return;
+
+      entries.push({ dishKey: dk, dishName: name, useByFb: toFbKey(dateVal), qty: qtyVal });
+    });
+  });
+
+  if (entries.length === 0) {
+    showToast('No entries to save — enter at least one quantity');
+    return;
+  }
+
+  // Build updates object — replace semantics (set, not increment)
+  const updates = {};
+  entries.forEach(e => {
+    updates[e.dishKey + '/' + e.useByFb + '/' + loc] = e.qty;
+  });
+
+  invRef.update(updates).then(() => {
+    // Log to counts for audit trail
+    countsRef.push({
+      type: 'staff_entry',
+      location: loc,
+      entryCount: entries.length,
+      items: entries.map(e => ({ dish: e.dishKey, name: e.dishName, useBy: e.useByFb, qty: e.qty })),
+      timestamp: firebase.database.ServerValue.TIMESTAMP
+    });
+
+    showToast('Saved ' + entries.length + ' entries to ' + locLabel(loc));
+    switchSection('dashboard');
+  }).catch(err => {
+    showToast('Error saving: ' + err.message);
+  });
+}
+
+// ============================================================
+// Navigation
+// ============================================================
+function switchSection(section) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.subnav-btn').forEach(b => b.classList.remove('active'));
+
+  const sec = document.getElementById('sec-' + section);
+  if (sec) sec.classList.add('active');
+
+  // Update subnav active state
+  const labels = { dashboard: 'Dashboard', enter: 'Enter Inventory' };
+  document.querySelectorAll('.subnav-btn').forEach(b => {
+    if (b.textContent === labels[section]) b.classList.add('active');
+  });
+
+  // Hide/show submit bar
+  document.getElementById('enterSubmitBar').style.display = section === 'enter' ? 'flex' : 'none';
+
+  // Build sheets on navigation
+  if (section === 'dashboard') refreshDashboard();
+  if (section === 'enter') buildEnterSheet();
+}
+
+// ============================================================
+// Toast
+// ============================================================
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// ============================================================
+// Init
+// ============================================================
+document.getElementById('enterDefaultDate').value = today();
+refreshDashboard();
+
+// Listen for real-time changes to keep dashboard fresh
+invRef.on('value', snap => {
+  invData = snap.val() || {};
+  if (document.getElementById('sec-dashboard').classList.contains('active')) {
+    renderDashboard();
+  }
+});
+</script>
+
+</body>
+</html>
