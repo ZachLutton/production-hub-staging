@@ -179,6 +179,89 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .config-unsaved-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #FF6F00; color: white; padding: 12px 20px; text-align: center; font-weight: 700; font-size: 14px; z-index: 100; display: none; box-shadow: 0 -2px 8px rgba(0,0,0,0.15); }
 .config-unsaved-bar .bar-actions { display: flex; justify-content: center; gap: 12px; margin-top: 8px; }
 .config-unsaved-bar .btn { padding: 8px 20px; font-size: 13px; }
+
+/* ===== LOG TRANSFER ===== */
+.transfer-form { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); margin-bottom: 16px; }
+.transfer-form h3 { font-size: 16px; margin-bottom: 12px; color: #1565C0; }
+.transfer-arrow { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+.transfer-arrow .arrow { font-size: 20px; color: #1565C0; font-weight: 700; }
+.dish-search-wrap { position: relative; }
+.dish-search-results { position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1.5px solid #ddd; border-top: none; border-radius: 0 0 8px 8px; max-height: 200px; overflow-y: auto; z-index: 50; display: none; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+.dish-search-results.show { display: block; }
+.dish-search-results div { padding: 8px 12px; cursor: pointer; font-size: 13px; }
+.dish-search-results div:hover { background: #E3F2FD; }
+.transfer-items { margin-top: 12px; }
+.transfer-item { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: #f8f9fa; border-radius: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.transfer-item .dish-name { flex: 1; font-weight: 600; font-size: 13px; min-width: 150px; }
+.transfer-item input { width: 60px; padding: 6px 8px; border: 1.5px solid #ddd; border-radius: 6px; font-size: 14px; text-align: center; font-weight: 600; }
+.transfer-item .remove-item { background: none; border: none; color: #ccc; font-size: 18px; cursor: pointer; padding: 2px 6px; }
+.transfer-item .remove-item:hover { color: #C62828; }
+
+/* ===== LOG ADJUSTMENT ===== */
+.reason-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.reason-chip { padding: 6px 14px; border-radius: 20px; border: 2px solid #e0e0e0; background: white; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+.reason-chip:hover { border-color: #1565C0; }
+.reason-chip.active { background: #1565C0; color: white; border-color: #1565C0; }
+.reason-chip.waste { border-color: #FFCDD2; color: #C62828; }
+.reason-chip.waste.active { background: #C62828; color: white; border-color: #C62828; }
+.reason-chip.received { border-color: #C8E6C9; color: #2E7D32; }
+.reason-chip.received.active { background: #2E7D32; color: white; border-color: #2E7D32; }
+.reason-chip.damaged { border-color: #FFE0B2; color: #E65100; }
+.reason-chip.damaged.active { background: #E65100; color: white; border-color: #E65100; }
+.reason-chip.correction { border-color: #E3F2FD; color: #1565C0; }
+.reason-chip.correction.active { background: #1565C0; color: white; border-color: #1565C0; }
+
+/* ===== LOG STOCKOUT ===== */
+.stockout-list { display: flex; flex-direction: column; gap: 8px; }
+.stockout-item { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: white; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); cursor: pointer; transition: all 0.2s; border: 2px solid transparent; }
+.stockout-item:hover { border-color: #FFCDD2; }
+.stockout-item.selected { border-color: #C62828; background: #FFF5F5; }
+.stockout-item .dish-name { flex: 1; font-weight: 600; font-size: 14px; }
+.stockout-item .check-circle { width: 24px; height: 24px; border-radius: 50%; border: 2px solid #ddd; display: flex; align-items: center; justify-content: center; font-size: 14px; color: transparent; transition: all 0.2s; }
+.stockout-item.selected .check-circle { border-color: #C62828; background: #C62828; color: white; }
+.stockout-loc-filter { display: flex; gap: 6px; margin-bottom: 12px; }
+
+/* ===== PHYSICAL COUNT ===== */
+.count-dish { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: white; border-bottom: 1px solid #f0f0f0; }
+.count-dish:last-child { border-bottom: none; }
+.count-dish .dish-label { flex: 1; font-weight: 600; font-size: 13px; }
+.count-dish input { width: 60px; padding: 6px 8px; border: 1.5px solid #ddd; border-radius: 6px; font-size: 14px; text-align: center; font-weight: 600; }
+.count-dish input:focus { border-color: #1565C0; outline: none; }
+.count-dish .expected { font-size: 12px; color: #888; min-width: 60px; text-align: center; }
+.count-dish .variance { font-size: 12px; font-weight: 700; min-width: 50px; text-align: center; }
+.count-dish .variance.positive { color: #2E7D32; }
+.count-dish .variance.negative { color: #C62828; }
+.count-summary { background: white; border-radius: 12px; padding: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); margin-bottom: 16px; }
+.count-summary .stat { display: inline-block; margin-right: 24px; }
+.count-summary .stat-label { font-size: 11px; color: #888; text-transform: uppercase; font-weight: 600; }
+.count-summary .stat-value { font-size: 20px; font-weight: 700; }
+
+/* ===== SHELF LIFE CONFIG ===== */
+.shelf-life-table { width: 100%; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+.shelf-life-table table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.shelf-life-table th { background: #f5f5f5; padding: 10px 12px; text-align: left; font-weight: 700; font-size: 11px; text-transform: uppercase; color: #666; border-bottom: 2px solid #e0e0e0; }
+.shelf-life-table td { padding: 8px 12px; border-bottom: 1px solid #f0f0f0; }
+.shelf-life-table tr:last-child td { border-bottom: none; }
+.shelf-life-table input[type="number"] { width: 60px; padding: 4px 6px; border: 1.5px solid #ddd; border-radius: 6px; font-size: 13px; text-align: center; font-weight: 600; }
+.shelf-life-table input:focus { border-color: #1565C0; outline: none; }
+
+/* ===== LOG HISTORY ===== */
+.history-filters { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; align-items: flex-end; }
+.history-filters .form-group { min-width: 130px; }
+.history-entry { background: white; border-radius: 10px; padding: 12px 16px; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+.history-entry .entry-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.history-entry .entry-type { padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+.history-entry .entry-type.transfer { background: #E3F2FD; color: #1565C0; }
+.history-entry .entry-type.adjustment { background: #FFF3E0; color: #E65100; }
+.history-entry .entry-type.stockout { background: #FFCDD2; color: #C62828; }
+.history-entry .entry-type.count { background: #C8E6C9; color: #2E7D32; }
+.history-entry .entry-type.entry { background: #F3E5F5; color: #7B1FA2; }
+.history-entry .entry-time { font-size: 12px; color: #999; }
+.history-entry .entry-detail { font-size: 13px; color: #444; line-height: 1.5; }
+.history-entry .entry-detail strong { color: #1a1a1a; }
+.history-empty { text-align: center; padding: 40px; color: #999; font-size: 14px; }
+.load-more-btn { display: block; width: 100%; padding: 12px; background: white; border: 2px dashed #ddd; border-radius: 10px; font-size: 14px; font-weight: 600; color: #888; cursor: pointer; text-align: center; margin-top: 8px; }
+.load-more-btn:hover { border-color: #1565C0; color: #1565C0; }
 </style>
 </head>
 <body>
@@ -212,12 +295,12 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 <div class="subnav" id="subnav">
   <button class="subnav-btn active" onclick="switchSection('dashboard')">Dashboard</button>
   <button class="subnav-btn" onclick="switchSection('enter')">Enter Inventory</button>
-  <button class="subnav-btn disabled" style="opacity:0.4;cursor:default" title="Coming soon">Log Transfer</button>
-  <button class="subnav-btn disabled" style="opacity:0.4;cursor:default" title="Coming soon">Log Adjustment</button>
-  <button class="subnav-btn disabled" style="opacity:0.4;cursor:default" title="Coming soon">Log Stockout</button>
-  <button class="subnav-btn disabled" style="opacity:0.4;cursor:default" title="Coming soon">Physical Count</button>
-  <button class="subnav-btn disabled" style="opacity:0.4;cursor:default" title="Coming soon">Shelf Life Config</button>
-  <button class="subnav-btn disabled" style="opacity:0.4;cursor:default" title="Coming soon">Log History</button>
+  <button class="subnav-btn" onclick="switchSection('transfer')">Log Transfer</button>
+  <button class="subnav-btn" onclick="switchSection('adjustment')">Log Adjustment</button>
+  <button class="subnav-btn" onclick="switchSection('stockout')">Log Stockout</button>
+  <button class="subnav-btn" onclick="switchSection('count')">Physical Count</button>
+  <button class="subnav-btn" onclick="switchSection('shelflife')">Shelf Life</button>
+  <button class="subnav-btn" onclick="switchSection('history')">Log History</button>
   <button class="subnav-btn admin-only" id="caseConfigBtn" onclick="switchSection('caseconfig')" style="display:none">Case Config</button>
 </div>
 
@@ -288,6 +371,189 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
       </div>
     </div>
     <div class="case-config-grid" id="caseConfigGrid"></div>
+  </div>
+
+  <!-- ===== LOG TRANSFER ===== -->
+  <div class="section" id="sec-transfer">
+    <h2 style="font-size:18px;margin-bottom:4px;">Log Transfer</h2>
+    <p style="font-size:13px;color:#666;margin-bottom:16px;">Move inventory between locations. Select dishes, enter quantities, and the system updates both locations automatically.</p>
+
+    <div class="transfer-form">
+      <div class="transfer-arrow">
+        <div class="form-group">
+          <label>From</label>
+          <select id="transferFrom" onchange="updateTransferDirection()">
+            <option value="colonnade">Colonnade</option>
+            <option value="rim">RIM</option>
+          </select>
+        </div>
+        <span class="arrow">→</span>
+        <div class="form-group">
+          <label>To</label>
+          <select id="transferTo" onchange="updateTransferDirection()">
+            <option value="rim">RIM</option>
+            <option value="colonnade">Colonnade</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-bottom:12px;">
+        <label>Search Dishes</label>
+        <div class="dish-search-wrap">
+          <input type="text" id="transferSearch" placeholder="Type dish name..." oninput="searchTransferDish(this.value)" onfocus="searchTransferDish(this.value)" autocomplete="off">
+          <div class="dish-search-results" id="transferSearchResults"></div>
+        </div>
+      </div>
+
+      <div id="transferItems" class="transfer-items"></div>
+    </div>
+
+    <div class="submit-bar" id="transferSubmitBar" style="display:none;">
+      <button class="btn btn-secondary" onclick="switchSection('dashboard')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitTransfer()">Log Transfer</button>
+    </div>
+  </div>
+
+  <!-- ===== LOG ADJUSTMENT ===== -->
+  <div class="section" id="sec-adjustment">
+    <h2 style="font-size:18px;margin-bottom:4px;">Log Adjustment</h2>
+    <p style="font-size:13px;color:#666;margin-bottom:16px;">Record inventory changes that aren't transfers — waste, damage, new deliveries, or corrections.</p>
+
+    <div class="transfer-form">
+      <label style="font-size:11px;font-weight:700;color:#666;text-transform:uppercase;margin-bottom:6px;display:block;">Reason</label>
+      <div class="reason-chips" id="adjustReasonChips">
+        <button class="reason-chip waste active" onclick="setAdjustReason('waste',this)">Waste / Expired</button>
+        <button class="reason-chip damaged" onclick="setAdjustReason('damaged',this)">Damaged</button>
+        <button class="reason-chip received" onclick="setAdjustReason('received',this)">Received / Delivery</button>
+        <button class="reason-chip correction" onclick="setAdjustReason('correction',this)">Correction</button>
+      </div>
+
+      <div class="form-group" style="margin-bottom:12px;">
+        <label>Location</label>
+        <select id="adjustLoc">
+          <option value="colonnade">Colonnade</option>
+          <option value="rim">RIM</option>
+        </select>
+      </div>
+
+      <div class="form-group" style="margin-bottom:12px;">
+        <label>Search Dishes</label>
+        <div class="dish-search-wrap">
+          <input type="text" id="adjustSearch" placeholder="Type dish name..." oninput="searchAdjustDish(this.value)" onfocus="searchAdjustDish(this.value)" autocomplete="off">
+          <div class="dish-search-results" id="adjustSearchResults"></div>
+        </div>
+      </div>
+
+      <div id="adjustItems" class="transfer-items"></div>
+
+      <div class="form-group" style="margin-top:12px;">
+        <label>Notes (optional)</label>
+        <input type="text" id="adjustNotes" placeholder="e.g. Expired during holiday weekend">
+      </div>
+    </div>
+
+    <div class="submit-bar" id="adjustSubmitBar" style="display:none;">
+      <button class="btn btn-secondary" onclick="switchSection('dashboard')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitAdjustment()">Log Adjustment</button>
+    </div>
+  </div>
+
+  <!-- ===== LOG STOCKOUT ===== -->
+  <div class="section" id="sec-stockout">
+    <h2 style="font-size:18px;margin-bottom:4px;">Log Stockout</h2>
+    <p style="font-size:13px;color:#666;margin-bottom:16px;">Tap dishes that are out of stock. This helps track which items run out and when.</p>
+
+    <div class="form-group" style="margin-bottom:12px;">
+      <label>Location</label>
+      <select id="stockoutLoc" onchange="buildStockoutList()">
+        <option value="colonnade">Colonnade</option>
+        <option value="rim">RIM</option>
+      </select>
+    </div>
+
+    <div class="stockout-list" id="stockoutList"></div>
+
+    <div class="submit-bar" id="stockoutSubmitBar" style="display:none;">
+      <button class="btn btn-secondary" onclick="switchSection('dashboard')">Cancel</button>
+      <button class="btn btn-danger" onclick="submitStockout()">Log Stockout</button>
+    </div>
+  </div>
+
+  <!-- ===== PHYSICAL COUNT ===== -->
+  <div class="section" id="sec-count">
+    <h2 style="font-size:18px;margin-bottom:4px;">Physical Count</h2>
+    <p style="font-size:13px;color:#666;margin-bottom:16px;">Walk the case and count every dish. The system compares your count to what's expected and flags any variances.</p>
+
+    <div style="display:flex;gap:12px;align-items:flex-end;margin-bottom:16px;flex-wrap:wrap;">
+      <div class="form-group">
+        <label>Location</label>
+        <select id="countLoc" onchange="buildCountSheet()">
+          <option value="colonnade">Colonnade</option>
+          <option value="rim">RIM</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="count-summary" id="countSummary" style="display:none;">
+      <span class="stat"><span class="stat-label">Counted</span><br><span class="stat-value blue" id="countCounted">0</span></span>
+      <span class="stat"><span class="stat-label">Variances</span><br><span class="stat-value red" id="countVariances">0</span></span>
+      <span class="stat"><span class="stat-label">Total Difference</span><br><span class="stat-value" id="countDiff">0</span></span>
+    </div>
+
+    <div id="countSheet"></div>
+
+    <div class="submit-bar" id="countSubmitBar" style="display:none;">
+      <button class="btn btn-secondary" onclick="switchSection('dashboard')">Cancel</button>
+      <button class="btn btn-success" onclick="submitCount()">Save Count</button>
+    </div>
+  </div>
+
+  <!-- ===== SHELF LIFE CONFIG ===== -->
+  <div class="section" id="sec-shelflife">
+    <h2 style="font-size:18px;margin-bottom:4px;">Shelf Life Settings</h2>
+    <p style="font-size:13px;color:#666;margin-bottom:16px;">Set the default shelf life (in days) for each dish. This determines expiry alerts on the dashboard. Default is 18 days if not set.</p>
+
+    <div class="shelf-life-table" id="shelfLifeTable">
+      <table>
+        <thead><tr><th>Dish Name</th><th>Case</th><th>Shelf Life (Days)</th></tr></thead>
+        <tbody id="shelfLifeBody"></tbody>
+      </table>
+    </div>
+
+    <div class="submit-bar" id="shelflifeSubmitBar" style="display:none;">
+      <button class="btn btn-secondary" onclick="switchSection('dashboard')">Cancel</button>
+      <button class="btn btn-success" onclick="saveShelfLifeConfig()">Save Shelf Life</button>
+    </div>
+  </div>
+
+  <!-- ===== LOG HISTORY ===== -->
+  <div class="section" id="sec-history">
+    <h2 style="font-size:18px;margin-bottom:4px;">Log History</h2>
+    <p style="font-size:13px;color:#666;margin-bottom:16px;">View all inventory transactions — transfers, adjustments, stockouts, counts, and entries.</p>
+
+    <div class="history-filters">
+      <div class="form-group">
+        <label>Type</label>
+        <select id="historyType" onchange="loadHistory()">
+          <option value="all">All Types</option>
+          <option value="transfer">Transfers</option>
+          <option value="adjustment">Adjustments</option>
+          <option value="stockout">Stockouts</option>
+          <option value="count">Counts</option>
+          <option value="entry">Entries</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>From</label>
+        <input type="date" id="historyFrom" onchange="loadHistory()">
+      </div>
+      <div class="form-group">
+        <label>To</label>
+        <input type="date" id="historyTo" onchange="loadHistory()">
+      </div>
+    </div>
+
+    <div id="historyList"></div>
   </div>
 
 </div>
@@ -367,6 +633,9 @@ const invRef = db.ref('staging_inv_inventory');
 const adjRef = db.ref('staging_inv_adjustments');
 const countsRef = db.ref('staging_inv_counts');
 const configRef = db.ref('staging_inv_caseConfig');
+const transfersRef = db.ref('staging_inv_transfers');
+const stockoutsRef = db.ref('staging_inv_stockouts');
+const shelfLifeRef = db.ref('staging_inv_shelfLife');
 const dishLibRef = db.ref('dishLibrary'); // read-only, shared with production for shelf life
 
 // Sync indicator
@@ -470,8 +739,10 @@ function dishKey(name) {
   return name.replace(/[.#$/\[\]]/g, '_');
 }
 
+let customShelfLife = {};
+
 function getShelfLife(name) {
-  return DEFAULT_SHELF_LIFE[name] || 18;
+  return customShelfLife[name] || DEFAULT_SHELF_LIFE[name] || 18;
 }
 
 // ============================================================
@@ -1130,6 +1401,637 @@ function discardConfigChanges() {
 }
 
 // ============================================================
+// LOG TRANSFER
+// ============================================================
+let transferItemsList = [];
+
+function updateTransferDirection() {
+  const from = document.getElementById('transferFrom').value;
+  const to = document.getElementById('transferTo').value;
+  if (from === to) {
+    document.getElementById('transferTo').value = from === 'colonnade' ? 'rim' : 'colonnade';
+  }
+}
+
+function searchTransferDish(query) {
+  const results = document.getElementById('transferSearchResults');
+  if (!query || query.length < 1) { results.classList.remove('show'); return; }
+  const q = query.toLowerCase();
+  const all = getAllDishNames();
+  const added = transferItemsList.map(i => i.name);
+  const matches = all.filter(n => n.toLowerCase().includes(q) && !added.includes(n)).slice(0, 8);
+  if (matches.length === 0) { results.classList.remove('show'); return; }
+  results.innerHTML = matches.map(n => `<div onclick="addTransferItem('${esc(n).replace(/'/g, "\\'")}')">${esc(n)}</div>`).join('');
+  results.classList.add('show');
+}
+
+function addTransferItem(name) {
+  transferItemsList.push({ name, qty: 1 });
+  document.getElementById('transferSearch').value = '';
+  document.getElementById('transferSearchResults').classList.remove('show');
+  renderTransferItems();
+}
+
+function removeTransferItem(idx) {
+  transferItemsList.splice(idx, 1);
+  renderTransferItems();
+}
+
+function renderTransferItems() {
+  const container = document.getElementById('transferItems');
+  if (transferItemsList.length === 0) {
+    container.innerHTML = '<div style="text-align:center;padding:20px;color:#999;font-size:13px;">Search above to add dishes to this transfer</div>';
+    return;
+  }
+  container.innerHTML = transferItemsList.map((item, idx) =>
+    `<div class="transfer-item">
+      <span class="dish-name">${esc(item.name)}</span>
+      <input type="number" min="1" value="${item.qty}" oninput="transferItemsList[${idx}].qty=parseInt(this.value)||0" inputmode="numeric">
+      <span style="font-size:12px;color:#888;">units</span>
+      <button class="remove-item" onclick="removeTransferItem(${idx})">&#10005;</button>
+    </div>`
+  ).join('');
+}
+
+function submitTransfer() {
+  const from = document.getElementById('transferFrom').value;
+  const to = document.getElementById('transferTo').value;
+  const valid = transferItemsList.filter(i => i.qty > 0);
+  if (valid.length === 0) { showToast('Add at least one dish with a quantity'); return; }
+
+  const updates = {};
+  valid.forEach(item => {
+    const dk = dishKey(item.name);
+    // We need to get the current use-by dates for this dish — use first available
+    // For transfers, reduce from source location and add to target
+    // We'll operate on all use-by dates for the dish, starting with earliest
+  });
+
+  // Fetch current inventory to find use-by dates
+  invRef.once('value').then(snap => {
+    const data = snap.val() || {};
+    const updates = {};
+    const logItems = [];
+
+    valid.forEach(item => {
+      const dk = dishKey(item.name);
+      const dishData = data[dk] || {};
+      let remaining = item.qty;
+
+      // Get use-by dates sorted earliest first
+      const ubKeys = Object.keys(dishData).sort((a, b) => {
+        const [am, ad] = a.split('-').map(Number);
+        const [bm, bd] = b.split('-').map(Number);
+        return (am * 100 + ad) - (bm * 100 + bd);
+      });
+
+      ubKeys.forEach(ubKey => {
+        if (remaining <= 0) return;
+        const locData = dishData[ubKey] || {};
+        const available = parseInt(locData[from]) || 0;
+        if (available <= 0) return;
+
+        const moveQty = Math.min(remaining, available);
+        const currentTo = parseInt(locData[to]) || 0;
+
+        updates[dk + '/' + ubKey + '/' + from] = available - moveQty;
+        updates[dk + '/' + ubKey + '/' + to] = currentTo + moveQty;
+
+        logItems.push({ dish: dk, dishName: item.name, useBy: ubKey, qty: moveQty });
+        remaining -= moveQty;
+      });
+
+      if (remaining > 0) {
+        // Not enough inventory — transfer what we can, note the shortfall
+        logItems.push({ dish: dk, dishName: item.name, useBy: 'n/a', qty: 0, note: 'Short ' + remaining + ' units' });
+      }
+    });
+
+    if (Object.keys(updates).length === 0) {
+      showToast('No inventory found to transfer from ' + locLabel(from));
+      return;
+    }
+
+    return invRef.update(updates).then(() => {
+      transfersRef.push({
+        from: from,
+        to: to,
+        items: logItems,
+        totalUnits: logItems.reduce((s, i) => s + i.qty, 0),
+        timestamp: firebase.database.ServerValue.TIMESTAMP
+      });
+      showToast('Transferred ' + logItems.reduce((s, i) => s + i.qty, 0) + ' units: ' + locLabel(from) + ' → ' + locLabel(to));
+      transferItemsList = [];
+      renderTransferItems();
+      switchSection('dashboard');
+    });
+  }).catch(err => showToast('Error: ' + err.message));
+}
+
+// Close search results when clicking outside
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.dish-search-wrap')) {
+    document.querySelectorAll('.dish-search-results').forEach(el => el.classList.remove('show'));
+  }
+});
+
+// ============================================================
+// LOG ADJUSTMENT
+// ============================================================
+let adjustReason = 'waste';
+let adjustItemsList = [];
+
+function setAdjustReason(reason, btn) {
+  adjustReason = reason;
+  document.querySelectorAll('.reason-chip').forEach(c => c.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+function searchAdjustDish(query) {
+  const results = document.getElementById('adjustSearchResults');
+  if (!query || query.length < 1) { results.classList.remove('show'); return; }
+  const q = query.toLowerCase();
+  const all = getAllDishNames();
+  const added = adjustItemsList.map(i => i.name);
+  const matches = all.filter(n => n.toLowerCase().includes(q) && !added.includes(n)).slice(0, 8);
+  if (matches.length === 0) { results.classList.remove('show'); return; }
+  results.innerHTML = matches.map(n => `<div onclick="addAdjustItem('${esc(n).replace(/'/g, "\\'")}')">${esc(n)}</div>`).join('');
+  results.classList.add('show');
+}
+
+function addAdjustItem(name) {
+  adjustItemsList.push({ name, qty: 1 });
+  document.getElementById('adjustSearch').value = '';
+  document.getElementById('adjustSearchResults').classList.remove('show');
+  renderAdjustItems();
+}
+
+function removeAdjustItem(idx) {
+  adjustItemsList.splice(idx, 1);
+  renderAdjustItems();
+}
+
+function renderAdjustItems() {
+  const container = document.getElementById('adjustItems');
+  if (adjustItemsList.length === 0) {
+    container.innerHTML = '<div style="text-align:center;padding:20px;color:#999;font-size:13px;">Search above to add dishes</div>';
+    return;
+  }
+  container.innerHTML = adjustItemsList.map((item, idx) =>
+    `<div class="transfer-item">
+      <span class="dish-name">${esc(item.name)}</span>
+      <input type="number" min="1" value="${item.qty}" oninput="adjustItemsList[${idx}].qty=parseInt(this.value)||0" inputmode="numeric">
+      <span style="font-size:12px;color:#888;">units</span>
+      <button class="remove-item" onclick="removeAdjustItem(${idx})">&#10005;</button>
+    </div>`
+  ).join('');
+}
+
+function submitAdjustment() {
+  const loc = document.getElementById('adjustLoc').value;
+  const notes = document.getElementById('adjustNotes').value.trim();
+  const valid = adjustItemsList.filter(i => i.qty > 0);
+  if (valid.length === 0) { showToast('Add at least one dish with a quantity'); return; }
+
+  const isAdding = (adjustReason === 'received' || adjustReason === 'correction');
+
+  invRef.once('value').then(snap => {
+    const data = snap.val() || {};
+    const updates = {};
+    const logItems = [];
+
+    valid.forEach(item => {
+      const dk = dishKey(item.name);
+      const dishData = data[dk] || {};
+
+      if (isAdding) {
+        // For received/correction: add to today's use-by date
+        const shelfDays = getShelfLife(item.name);
+        const useByDate = new Date();
+        useByDate.setDate(useByDate.getDate() + shelfDays);
+        const ubKey = (useByDate.getMonth() + 1) + '-' + useByDate.getDate();
+        const current = (dishData[ubKey] && parseInt(dishData[ubKey][loc])) || 0;
+        updates[dk + '/' + ubKey + '/' + loc] = current + item.qty;
+        logItems.push({ dish: dk, dishName: item.name, useBy: ubKey, qty: item.qty, direction: 'add' });
+      } else {
+        // For waste/damaged: remove from earliest use-by dates
+        let remaining = item.qty;
+        const ubKeys = Object.keys(dishData).sort((a, b) => {
+          const [am, ad] = a.split('-').map(Number);
+          const [bm, bd] = b.split('-').map(Number);
+          return (am * 100 + ad) - (bm * 100 + bd);
+        });
+
+        ubKeys.forEach(ubKey => {
+          if (remaining <= 0) return;
+          const locData = dishData[ubKey] || {};
+          const available = parseInt(locData[loc]) || 0;
+          if (available <= 0) return;
+
+          const removeQty = Math.min(remaining, available);
+          updates[dk + '/' + ubKey + '/' + loc] = available - removeQty;
+          logItems.push({ dish: dk, dishName: item.name, useBy: ubKey, qty: removeQty, direction: 'remove' });
+          remaining -= removeQty;
+        });
+      }
+    });
+
+    return invRef.update(updates).then(() => {
+      adjRef.push({
+        reason: adjustReason,
+        location: loc,
+        items: logItems,
+        notes: notes,
+        totalUnits: logItems.reduce((s, i) => s + i.qty, 0),
+        timestamp: firebase.database.ServerValue.TIMESTAMP
+      });
+      const verb = isAdding ? 'Added' : 'Removed';
+      showToast(verb + ' ' + logItems.reduce((s, i) => s + i.qty, 0) + ' units (' + adjustReason + ')');
+      adjustItemsList = [];
+      renderAdjustItems();
+      document.getElementById('adjustNotes').value = '';
+      switchSection('dashboard');
+    });
+  }).catch(err => showToast('Error: ' + err.message));
+}
+
+// ============================================================
+// LOG STOCKOUT
+// ============================================================
+let stockoutSelections = new Set();
+
+function buildStockoutList() {
+  stockoutSelections = new Set();
+  const container = document.getElementById('stockoutList');
+  let html = '';
+
+  Object.entries(DISH_SECTIONS).forEach(([section, dishes]) => {
+    html += `<div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;padding:8px 0 4px;margin-top:8px;">${esc(section)}</div>`;
+    dishes.forEach(name => {
+      const dk = dishKey(name);
+      html += `<div class="stockout-item" id="so_${dk}" onclick="toggleStockout('${dk}')">
+        <span class="dish-name">${esc(name)}</span>
+        <div class="check-circle">&#10003;</div>
+      </div>`;
+    });
+  });
+
+  container.innerHTML = html;
+}
+
+function toggleStockout(dk) {
+  const el = document.getElementById('so_' + dk);
+  if (stockoutSelections.has(dk)) {
+    stockoutSelections.delete(dk);
+    el.classList.remove('selected');
+  } else {
+    stockoutSelections.add(dk);
+    el.classList.add('selected');
+  }
+}
+
+function submitStockout() {
+  if (stockoutSelections.size === 0) { showToast('Tap at least one dish that is out of stock'); return; }
+
+  const loc = document.getElementById('stockoutLoc').value;
+  const items = Array.from(stockoutSelections).map(dk => ({
+    dish: dk,
+    dishName: findDishName(dk)
+  }));
+
+  stockoutsRef.push({
+    location: loc,
+    items: items,
+    count: items.length,
+    timestamp: firebase.database.ServerValue.TIMESTAMP
+  }).then(() => {
+    showToast('Logged ' + items.length + ' stockout(s) at ' + locLabel(loc));
+    stockoutSelections = new Set();
+    switchSection('dashboard');
+  }).catch(err => showToast('Error: ' + err.message));
+}
+
+// ============================================================
+// PHYSICAL COUNT
+// ============================================================
+let countExpected = {};
+
+function buildCountSheet() {
+  const loc = document.getElementById('countLoc').value;
+  const container = document.getElementById('countSheet');
+
+  // Get current inventory for comparison
+  invRef.once('value').then(snap => {
+    const data = snap.val() || {};
+    countExpected = {};
+
+    // Build expected totals per dish for this location
+    Object.entries(data).forEach(([dk, dates]) => {
+      if (!dates || typeof dates !== 'object') return;
+      let total = 0;
+      Object.values(dates).forEach(locs => {
+        if (locs && typeof locs === 'object') total += parseInt(locs[loc]) || 0;
+      });
+      if (total > 0) countExpected[dk] = total;
+    });
+
+    let html = '';
+    Object.entries(DISH_SECTIONS).forEach(([section, dishes]) => {
+      html += `<div class="case-section">
+        <div class="case-section-header">${esc(section)}</div>`;
+      dishes.forEach(name => {
+        const dk = dishKey(name);
+        const expected = countExpected[dk] || 0;
+        html += `<div class="count-dish" data-dish="${dk}">
+          <span class="dish-label">${esc(name)}</span>
+          <span class="expected">${expected > 0 ? 'Exp: ' + expected : '—'}</span>
+          <input type="number" min="0" placeholder="—" class="count-input" data-dish="${dk}" oninput="updateCountSummary()" inputmode="numeric">
+          <span class="variance" id="var_${dk}"></span>
+        </div>`;
+      });
+      html += '</div>';
+    });
+
+    container.innerHTML = html;
+    document.getElementById('countSummary').style.display = 'block';
+    updateCountSummary();
+  });
+}
+
+function updateCountSummary() {
+  let counted = 0, variances = 0, totalDiff = 0;
+  document.querySelectorAll('.count-input').forEach(input => {
+    const val = input.value;
+    if (val === '') return;
+    const actual = parseInt(val) || 0;
+    const dk = input.dataset.dish;
+    const expected = countExpected[dk] || 0;
+    const diff = actual - expected;
+
+    counted++;
+    const varEl = document.getElementById('var_' + dk);
+    if (diff !== 0) {
+      variances++;
+      totalDiff += diff;
+      varEl.textContent = (diff > 0 ? '+' : '') + diff;
+      varEl.className = 'variance ' + (diff > 0 ? 'positive' : 'negative');
+    } else {
+      varEl.textContent = '✓';
+      varEl.className = 'variance positive';
+    }
+  });
+
+  document.getElementById('countCounted').textContent = counted;
+  document.getElementById('countVariances').textContent = variances;
+  const diffEl = document.getElementById('countDiff');
+  diffEl.textContent = (totalDiff > 0 ? '+' : '') + totalDiff;
+  diffEl.className = 'stat-value ' + (totalDiff === 0 ? 'green' : totalDiff > 0 ? 'blue' : 'red');
+}
+
+function submitCount() {
+  const loc = document.getElementById('countLoc').value;
+  const items = [];
+  let totalCounted = 0;
+
+  document.querySelectorAll('.count-input').forEach(input => {
+    const val = input.value;
+    if (val === '') return;
+    const actual = parseInt(val) || 0;
+    const dk = input.dataset.dish;
+    const expected = countExpected[dk] || 0;
+    items.push({ dish: dk, dishName: findDishName(dk), expected, actual, variance: actual - expected });
+    totalCounted += actual;
+  });
+
+  if (items.length === 0) { showToast('Enter at least one count'); return; }
+
+  // Log the count
+  countsRef.push({
+    type: 'physical_count',
+    location: loc,
+    items: items,
+    totalCounted: totalCounted,
+    totalVariances: items.filter(i => i.variance !== 0).length,
+    timestamp: firebase.database.ServerValue.TIMESTAMP
+  }).then(() => {
+    // Update inventory with actual counts
+    // We replace the total for each dish at this location proportionally across use-by dates
+    return invRef.once('value').then(snap => {
+      const data = snap.val() || {};
+      const updates = {};
+
+      items.forEach(item => {
+        const dishData = data[item.dish] || {};
+        const ubKeys = Object.keys(dishData);
+        const expectedTotal = item.expected;
+        const actual = item.actual;
+
+        if (expectedTotal === 0 && actual > 0) {
+          // No existing inventory — create with today's shelf life
+          const shelfDays = getShelfLife(item.dishName);
+          const useByDate = new Date();
+          useByDate.setDate(useByDate.getDate() + shelfDays);
+          const ubKey = (useByDate.getMonth() + 1) + '-' + useByDate.getDate();
+          updates[item.dish + '/' + ubKey + '/' + loc] = actual;
+        } else if (actual === 0) {
+          // Zero out all use-by dates for this location
+          ubKeys.forEach(ubKey => {
+            if (dishData[ubKey] && (parseInt(dishData[ubKey][loc]) || 0) > 0) {
+              updates[item.dish + '/' + ubKey + '/' + loc] = 0;
+            }
+          });
+        } else if (expectedTotal > 0) {
+          // Scale proportionally
+          const ratio = actual / expectedTotal;
+          ubKeys.forEach(ubKey => {
+            const current = parseInt(dishData[ubKey]?.[loc]) || 0;
+            if (current > 0) {
+              updates[item.dish + '/' + ubKey + '/' + loc] = Math.round(current * ratio);
+            }
+          });
+        }
+      });
+
+      if (Object.keys(updates).length > 0) {
+        return invRef.update(updates);
+      }
+    });
+  }).then(() => {
+    showToast('Physical count saved — ' + items.length + ' dishes counted');
+    switchSection('dashboard');
+  }).catch(err => showToast('Error: ' + err.message));
+}
+
+// ============================================================
+// SHELF LIFE CONFIG
+// ============================================================
+function buildShelfLifeTable() {
+  const tbody = document.getElementById('shelfLifeBody');
+  let html = '';
+
+  Object.entries(DISH_SECTIONS).forEach(([section, dishes]) => {
+    dishes.forEach(name => {
+      const days = getShelfLife(name);
+      html += `<tr>
+        <td style="font-weight:600">${esc(name)}</td>
+        <td style="font-size:12px;color:#888;">${esc(section)}</td>
+        <td><input type="number" min="1" max="90" value="${days}" data-dish="${esc(name)}" class="shelf-input"></td>
+      </tr>`;
+    });
+  });
+
+  tbody.innerHTML = html;
+}
+
+function saveShelfLifeConfig() {
+  const updates = {};
+  document.querySelectorAll('.shelf-input').forEach(input => {
+    const name = input.dataset.dish;
+    const days = parseInt(input.value) || 18;
+    updates[dishKey(name)] = { name: name, days: days };
+  });
+
+  shelfLifeRef.set(updates).then(() => {
+    // Update local customShelfLife
+    Object.values(updates).forEach(item => {
+      customShelfLife[item.name] = item.days;
+    });
+    showToast('Shelf life settings saved');
+    switchSection('dashboard');
+  }).catch(err => showToast('Error: ' + err.message));
+}
+
+function loadShelfLifeConfig() {
+  return shelfLifeRef.once('value').then(snap => {
+    const val = snap.val();
+    if (val && typeof val === 'object') {
+      Object.values(val).forEach(item => {
+        if (item && item.name && item.days) {
+          customShelfLife[item.name] = item.days;
+        }
+      });
+    }
+  });
+}
+
+// ============================================================
+// LOG HISTORY
+// ============================================================
+let historyLimit = 30;
+
+function loadHistory() {
+  const typeFilter = document.getElementById('historyType').value;
+  const fromDate = document.getElementById('historyFrom').value;
+  const toDate = document.getElementById('historyTo').value;
+  const container = document.getElementById('historyList');
+
+  container.innerHTML = '<div class="history-empty">Loading...</div>';
+
+  // Collect from all log sources
+  const promises = [];
+
+  if (typeFilter === 'all' || typeFilter === 'transfer') {
+    promises.push(transfersRef.orderByChild('timestamp').limitToLast(50).once('value').then(snap => {
+      const items = [];
+      snap.forEach(child => { items.push({ ...child.val(), id: child.key, logType: 'transfer' }); });
+      return items;
+    }));
+  }
+
+  if (typeFilter === 'all' || typeFilter === 'adjustment') {
+    promises.push(adjRef.orderByChild('timestamp').limitToLast(50).once('value').then(snap => {
+      const items = [];
+      snap.forEach(child => { items.push({ ...child.val(), id: child.key, logType: 'adjustment' }); });
+      return items;
+    }));
+  }
+
+  if (typeFilter === 'all' || typeFilter === 'stockout') {
+    promises.push(stockoutsRef.orderByChild('timestamp').limitToLast(50).once('value').then(snap => {
+      const items = [];
+      snap.forEach(child => { items.push({ ...child.val(), id: child.key, logType: 'stockout' }); });
+      return items;
+    }));
+  }
+
+  if (typeFilter === 'all' || typeFilter === 'count' || typeFilter === 'entry') {
+    promises.push(countsRef.orderByChild('timestamp').limitToLast(50).once('value').then(snap => {
+      const items = [];
+      snap.forEach(child => {
+        const val = child.val();
+        const lt = val.type === 'physical_count' ? 'count' : 'entry';
+        if (typeFilter === 'all' || typeFilter === lt) {
+          items.push({ ...val, id: child.key, logType: lt });
+        }
+      });
+      return items;
+    }));
+  }
+
+  Promise.all(promises).then(results => {
+    let all = results.flat();
+
+    // Date filter
+    if (fromDate) {
+      const fromTs = new Date(fromDate + 'T00:00:00').getTime();
+      all = all.filter(i => (i.timestamp || 0) >= fromTs);
+    }
+    if (toDate) {
+      const toTs = new Date(toDate + 'T23:59:59').getTime();
+      all = all.filter(i => (i.timestamp || 0) <= toTs);
+    }
+
+    // Sort newest first
+    all.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    all = all.slice(0, historyLimit);
+
+    if (all.length === 0) {
+      container.innerHTML = '<div class="history-empty">No log entries found for these filters.</div>';
+      return;
+    }
+
+    let html = '';
+    all.forEach(entry => {
+      const time = entry.timestamp ? new Date(entry.timestamp).toLocaleString() : 'Unknown';
+      let detail = '';
+
+      if (entry.logType === 'transfer') {
+        const names = (entry.items || []).map(i => i.dishName || i.dish).slice(0, 3).join(', ');
+        const extra = (entry.items || []).length > 3 ? ' +' + ((entry.items || []).length - 3) + ' more' : '';
+        detail = `<strong>${entry.totalUnits || 0} units</strong> moved from <strong>${locLabel(entry.from)}</strong> → <strong>${locLabel(entry.to)}</strong><br>${names}${extra}`;
+      } else if (entry.logType === 'adjustment') {
+        const names = (entry.items || []).map(i => i.dishName || i.dish).slice(0, 3).join(', ');
+        const extra = (entry.items || []).length > 3 ? ' +' + ((entry.items || []).length - 3) + ' more' : '';
+        const reasonLabel = { waste: 'Waste/Expired', damaged: 'Damaged', received: 'Received', correction: 'Correction', quick_add: 'Quick Add', quick_remove: 'Quick Remove' };
+        detail = `<strong>${reasonLabel[entry.reason] || entry.reason}</strong> — ${entry.totalUnits || entry.qty || 0} units at <strong>${locLabel(entry.location)}</strong><br>${names}${extra}`;
+        if (entry.notes) detail += `<br><em style="color:#888;">${esc(entry.notes)}</em>`;
+      } else if (entry.logType === 'stockout') {
+        const names = (entry.items || []).map(i => i.dishName || i.dish).join(', ');
+        detail = `<strong>${entry.count || 0} dish(es)</strong> out of stock at <strong>${locLabel(entry.location)}</strong><br>${names}`;
+      } else if (entry.logType === 'count') {
+        detail = `Physical count at <strong>${locLabel(entry.location)}</strong> — <strong>${entry.totalCounted || 0} units</strong> across ${(entry.items || []).length} dishes, <strong>${entry.totalVariances || 0} variances</strong>`;
+      } else if (entry.logType === 'entry') {
+        detail = `Inventory entered at <strong>${locLabel(entry.location)}</strong> — <strong>${entry.entryCount || 0} items</strong>`;
+      }
+
+      html += `<div class="history-entry">
+        <div class="entry-header">
+          <span class="entry-type ${entry.logType}">${entry.logType}</span>
+          <span class="entry-time">${time}</span>
+        </div>
+        <div class="entry-detail">${detail}</div>
+      </div>`;
+    });
+
+    if (all.length >= historyLimit) {
+      html += `<button class="load-more-btn" onclick="historyLimit+=30;loadHistory();">Load More</button>`;
+    }
+
+    container.innerHTML = html;
+  });
+}
+
+// ============================================================
 // Navigation
 // ============================================================
 function switchSection(section) {
@@ -1146,19 +2048,35 @@ function switchSection(section) {
   const sec = document.getElementById('sec-' + section);
   if (sec) sec.classList.add('active');
 
-  const labels = { dashboard: 'Dashboard', enter: 'Enter Inventory', caseconfig: 'Case Config' };
+  const labels = {
+    dashboard: 'Dashboard', enter: 'Enter Inventory', transfer: 'Log Transfer',
+    adjustment: 'Log Adjustment', stockout: 'Log Stockout', count: 'Physical Count',
+    shelflife: 'Shelf Life', history: 'Log History', caseconfig: 'Case Config'
+  };
   document.querySelectorAll('.subnav-btn').forEach(b => {
     if (b.textContent === labels[section]) b.classList.add('active');
   });
 
-  // Hide/show submit bar and config bar
-  document.getElementById('enterSubmitBar').style.display = section === 'enter' ? 'flex' : 'none';
+  // Hide all submit bars
+  const bars = ['enterSubmitBar','transferSubmitBar','adjustSubmitBar','stockoutSubmitBar','countSubmitBar','shelflifeSubmitBar'];
+  bars.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
   if (section !== 'caseconfig') {
     document.getElementById('configUnsavedBar').style.display = 'none';
   }
 
+  // Show relevant submit bar
+  const barMap = { enter: 'enterSubmitBar', transfer: 'transferSubmitBar', adjustment: 'adjustSubmitBar', stockout: 'stockoutSubmitBar', count: 'countSubmitBar', shelflife: 'shelflifeSubmitBar' };
+  if (barMap[section]) document.getElementById(barMap[section]).style.display = 'flex';
+
+  // Init sections
   if (section === 'dashboard') refreshDashboard();
   if (section === 'enter') buildEnterSheet();
+  if (section === 'transfer') { transferItemsList = []; renderTransferItems(); }
+  if (section === 'adjustment') { adjustItemsList = []; renderAdjustItems(); }
+  if (section === 'stockout') buildStockoutList();
+  if (section === 'count') buildCountSheet();
+  if (section === 'shelflife') buildShelfLifeTable();
+  if (section === 'history') { historyLimit = 30; loadHistory(); }
   if (section === 'caseconfig') buildCaseConfigUI();
 }
 
@@ -1178,8 +2096,13 @@ function showToast(msg) {
 function init() {
   document.getElementById('enterDefaultDate').value = today();
 
-  // Load case config from Firebase, then init dashboard
-  loadCaseConfig().then(() => {
+  // Set default history date range (last 7 days)
+  const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7);
+  document.getElementById('historyFrom').value = weekAgo.getFullYear() + '-' + String(weekAgo.getMonth()+1).padStart(2,'0') + '-' + String(weekAgo.getDate()).padStart(2,'0');
+  document.getElementById('historyTo').value = today();
+
+  // Load case config and shelf life from Firebase, then init dashboard
+  Promise.all([loadCaseConfig(), loadShelfLifeConfig()]).then(() => {
     refreshDashboard();
     listenForConfigChanges();
   });
