@@ -20,12 +20,16 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .header .subtitle { font-size: 12px; opacity: 0.85; margin-top: 2px; }
 .sync-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #4CAF50; margin-right: 6px; }
 .sync-dot.off { background: #F44336; }
+.admin-badge { display: inline-block; background: #FF6F00; color: white; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 10px; margin-left: 8px; letter-spacing: 0.5px; vertical-align: middle; }
 
 /* Sub-nav */
 .subnav { display: flex; gap: 4px; padding: 10px 16px; background: white; border-bottom: 1px solid #e0e0e0; overflow-x: auto; position: sticky; top: 58px; z-index: 99; }
 .subnav-btn { padding: 7px 14px; border-radius: 20px; border: 2px solid #e0e0e0; background: white; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: all 0.2s; color: #555; }
 .subnav-btn:hover { border-color: #1565C0; color: #1565C0; }
 .subnav-btn.active { background: #1565C0; color: white; border-color: #1565C0; }
+.subnav-btn.admin-only { border-color: #FF6F00; color: #FF6F00; }
+.subnav-btn.admin-only.active { background: #FF6F00; color: white; border-color: #FF6F00; }
+.subnav-btn.admin-only:hover { border-color: #E65100; color: #E65100; }
 
 /* Content */
 .content { padding: 16px; max-width: 960px; margin: 0 auto; padding-bottom: 80px; }
@@ -106,17 +110,19 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .btn-success:hover { background: #1B5E20; }
 .btn-danger { background: #C62828; color: white; }
 .btn-danger:hover { background: #B71C1C; }
+.btn-admin { background: #FF6F00; color: white; }
+.btn-admin:hover { background: #E65100; }
 
 /* Quick Action Modal */
 .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 200; justify-content: center; align-items: center; }
 .modal-overlay.show { display: flex; }
-.modal { background: white; border-radius: 16px; padding: 24px; width: 90%; max-width: 360px; box-shadow: 0 8px 32px rgba(0,0,0,0.2); }
+.modal { background: white; border-radius: 16px; padding: 24px; width: 90%; max-width: 400px; box-shadow: 0 8px 32px rgba(0,0,0,0.2); }
 .modal h3 { font-size: 18px; margin-bottom: 4px; }
 .modal .modal-subtitle { font-size: 13px; color: #666; margin-bottom: 16px; }
 .modal .modal-field { margin-bottom: 12px; }
 .modal .modal-field label { display: block; font-size: 11px; font-weight: 700; color: #666; text-transform: uppercase; margin-bottom: 4px; }
-.modal .modal-field input { width: 100%; padding: 10px 12px; border: 1.5px solid #ddd; border-radius: 8px; font-size: 16px; font-family: inherit; }
-.modal .modal-field input:focus { border-color: #1565C0; outline: none; }
+.modal .modal-field input, .modal .modal-field select { width: 100%; padding: 10px 12px; border: 1.5px solid #ddd; border-radius: 8px; font-size: 16px; font-family: inherit; }
+.modal .modal-field input:focus, .modal .modal-field select:focus { border-color: #1565C0; outline: none; }
 .modal-actions { display: flex; gap: 8px; margin-top: 16px; }
 .modal-actions .btn { flex: 1; }
 
@@ -134,6 +140,43 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .pin-input:focus { border-color: #1565C0; }
 .pin-error { color: #e74c3c; font-size: 14px; margin-top: 12px; min-height: 20px; }
 #main-content { display: none; }
+
+/* ===== CASE CONFIG (Admin) ===== */
+.config-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 8px; }
+.config-header h2 { font-size: 18px; }
+.config-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.case-config-grid { display: flex; flex-direction: column; gap: 16px; }
+.config-case { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+.config-case-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: #E3F2FD; font-weight: 700; font-size: 14px; color: #1565C0; cursor: grab; }
+.config-case-header:active { cursor: grabbing; }
+.config-case-header .case-actions { display: flex; gap: 6px; }
+.config-case-header .case-actions button { background: none; border: none; font-size: 14px; cursor: pointer; padding: 2px 6px; border-radius: 4px; }
+.config-case-header .case-actions button:hover { background: rgba(0,0,0,0.08); }
+.config-case-name { flex: 1; }
+.config-case-name input { border: none; background: transparent; font-weight: 700; font-size: 14px; color: #1565C0; width: 100%; font-family: inherit; }
+.config-case-name input:focus { outline: none; background: white; border-radius: 4px; padding: 2px 6px; }
+.config-dish-list { min-height: 40px; padding: 4px 0; }
+.config-dish-item { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-bottom: 1px solid #f0f0f0; font-size: 13px; font-weight: 600; background: white; transition: background 0.15s; }
+.config-dish-item:last-child { border-bottom: none; }
+.config-dish-item .drag-handle { cursor: grab; color: #bbb; font-size: 16px; user-select: none; }
+.config-dish-item .drag-handle:active { cursor: grabbing; }
+.config-dish-item.dragging { opacity: 0.4; background: #e3f2fd; }
+.config-dish-item .dish-text { flex: 1; }
+.config-dish-item .dish-remove { background: none; border: none; color: #ccc; font-size: 16px; cursor: pointer; padding: 2px 6px; }
+.config-dish-item .dish-remove:hover { color: #C62828; }
+.drop-indicator { height: 3px; background: #1565C0; border-radius: 2px; margin: 0 14px; transition: opacity 0.15s; }
+
+/* Add dish form at bottom of case */
+.add-dish-inline { display: flex; gap: 6px; padding: 6px 14px; align-items: center; }
+.add-dish-inline input { flex: 1; padding: 6px 10px; border: 1.5px solid #ddd; border-radius: 6px; font-size: 13px; font-family: inherit; }
+.add-dish-inline input:focus { border-color: #1565C0; outline: none; }
+.add-dish-inline button { padding: 6px 12px; border-radius: 6px; border: none; font-size: 12px; font-weight: 700; cursor: pointer; background: #E3F2FD; color: #1565C0; }
+.add-dish-inline button:hover { background: #BBDEFB; }
+
+.config-unsaved-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #FF6F00; color: white; padding: 12px 20px; text-align: center; font-weight: 700; font-size: 14px; z-index: 100; display: none; box-shadow: 0 -2px 8px rgba(0,0,0,0.15); }
+.config-unsaved-bar .bar-actions { display: flex; justify-content: center; gap: 12px; margin-top: 8px; }
+.config-unsaved-bar .btn { padding: 8px 20px; font-size: 13px; }
 </style>
 </head>
 <body>
@@ -155,7 +198,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 
 <div class="header">
   <div>
-    <h1>ZedOps — Inventory</h1>
+    <h1>ZedOps — Inventory <span class="admin-badge" id="adminBadge" style="display:none">ADMIN</span></h1>
     <div class="subtitle"><span class="sync-dot" id="syncDot"></span><span id="syncLabel">Connecting...</span></div>
   </div>
 </div>
@@ -169,6 +212,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
   <button class="subnav-btn disabled" style="opacity:0.4;cursor:default" title="Coming soon">Physical Count</button>
   <button class="subnav-btn disabled" style="opacity:0.4;cursor:default" title="Coming soon">Shelf Life Config</button>
   <button class="subnav-btn disabled" style="opacity:0.4;cursor:default" title="Coming soon">Log History</button>
+  <button class="subnav-btn admin-only" id="caseConfigBtn" onclick="switchSection('caseconfig')" style="display:none">Case Config</button>
 </div>
 
 <div class="content">
@@ -225,6 +269,21 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
     </div>
   </div>
 
+  <!-- ===== CASE CONFIG (Admin Only) ===== -->
+  <div class="section" id="sec-caseconfig">
+    <div class="config-header">
+      <div>
+        <h2>Case Configuration</h2>
+        <p style="font-size:13px;color:#666;margin-top:4px;">Drag dishes between cases to rearrange. Changes sync to all devices when saved.</p>
+      </div>
+      <div class="config-actions">
+        <button class="btn btn-admin" onclick="addNewCase()">+ Add Case</button>
+        <button class="btn btn-primary" onclick="addNewDishModal()">+ New Dish</button>
+      </div>
+    </div>
+    <div class="case-config-grid" id="caseConfigGrid"></div>
+  </div>
+
 </div>
 
 <!-- Quick Action Modal -->
@@ -244,6 +303,35 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
       <button class="btn btn-secondary" onclick="closeQuickModal()">Cancel</button>
       <button class="btn" id="modalConfirmBtn" onclick="confirmQuickAction()">Confirm</button>
     </div>
+  </div>
+</div>
+
+<!-- Add New Dish Modal -->
+<div class="modal-overlay" id="newDishModal">
+  <div class="modal">
+    <h3>Add New Dish</h3>
+    <div class="modal-subtitle">Enter the dish name and select which case it belongs to.</div>
+    <div class="modal-field">
+      <label>Dish Name</label>
+      <input type="text" id="newDishName" placeholder="e.g. Chicken Alfredo (3)">
+    </div>
+    <div class="modal-field">
+      <label>Case</label>
+      <select id="newDishCase"></select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeNewDishModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmNewDish()">Add Dish</button>
+    </div>
+  </div>
+</div>
+
+<!-- Config Unsaved Bar -->
+<div class="config-unsaved-bar" id="configUnsavedBar">
+  Unsaved changes to case configuration
+  <div class="bar-actions">
+    <button class="btn btn-secondary" onclick="discardConfigChanges()">Discard</button>
+    <button class="btn btn-success" onclick="saveConfigChanges()">Save Changes</button>
   </div>
 </div>
 
@@ -272,6 +360,7 @@ const db = firebase.database();
 const invRef = db.ref('staging_inv_inventory');
 const adjRef = db.ref('staging_inv_adjustments');
 const countsRef = db.ref('staging_inv_counts');
+const configRef = db.ref('staging_inv_caseConfig');
 const dishLibRef = db.ref('dishLibrary'); // read-only, shared with production for shelf life
 
 // Sync indicator
@@ -284,9 +373,14 @@ connRef.on('value', snap => {
 });
 
 // ============================================================
-// Dish Data
+// Role Management
 // ============================================================
-const DISH_SECTIONS = {
+let isAdmin = false;
+
+// ============================================================
+// Dish Data — Default (used as fallback if no Firebase config)
+// ============================================================
+const DEFAULT_DISH_SECTIONS = {
   "Breakfasts (Case 2)": [
     "Bacon & Gruyere Egg Bites w/ Cauliflower Hash (2)",
     "Bacon Tomato & Mushroom Omelette",
@@ -342,6 +436,12 @@ const DISH_SECTIONS = {
   ]
 };
 
+// Live case config — loaded from Firebase, falls back to defaults
+let DISH_SECTIONS = JSON.parse(JSON.stringify(DEFAULT_DISH_SECTIONS));
+// Working copy for admin edits (only used in Case Config section)
+let editingSections = null;
+let configDirty = false;
+
 const DEFAULT_SHELF_LIFE = {
   "Peanut Butter & Chocolate Chews": 10,
   "BBQ Brisket Mac": 14,
@@ -369,6 +469,66 @@ function getShelfLife(name) {
 }
 
 // ============================================================
+// Load Case Config from Firebase
+// ============================================================
+function loadCaseConfig() {
+  return configRef.once('value').then(snap => {
+    const val = snap.val();
+    if (val && typeof val === 'object') {
+      // Firebase config is stored as ordered array of {name, dishes}
+      const sections = {};
+      if (Array.isArray(val)) {
+        val.forEach(c => { if (c && c.name) sections[c.name] = c.dishes || []; });
+      } else {
+        // Object format fallback
+        Object.keys(val).forEach(k => {
+          const c = val[k];
+          if (c && c.name) sections[c.name] = c.dishes || [];
+        });
+      }
+      if (Object.keys(sections).length > 0) {
+        DISH_SECTIONS = sections;
+        return;
+      }
+    }
+    // No config saved yet — use defaults and save them
+    DISH_SECTIONS = JSON.parse(JSON.stringify(DEFAULT_DISH_SECTIONS));
+    saveCaseConfigToFirebase();
+  });
+}
+
+function saveCaseConfigToFirebase() {
+  // Store as ordered array to preserve case order
+  const arr = Object.entries(DISH_SECTIONS).map(([name, dishes]) => ({ name, dishes }));
+  return configRef.set(arr);
+}
+
+// Listen for real-time config changes (another admin might edit)
+function listenForConfigChanges() {
+  configRef.on('value', snap => {
+    const val = snap.val();
+    if (!val) return;
+    const sections = {};
+    if (Array.isArray(val)) {
+      val.forEach(c => { if (c && c.name) sections[c.name] = c.dishes || []; });
+    } else {
+      Object.keys(val).forEach(k => {
+        const c = val[k];
+        if (c && c.name) sections[c.name] = c.dishes || [];
+      });
+    }
+    if (Object.keys(sections).length > 0) {
+      DISH_SECTIONS = sections;
+      // If not currently editing config, refresh enter sheet if visible
+      if (!configDirty) {
+        const enterSec = document.getElementById('sec-enter');
+        if (enterSec && enterSec.classList.contains('active')) buildEnterSheet();
+      }
+    }
+  });
+}
+
+// ============================================================
 // Date Utilities
 // ============================================================
 function today() {
@@ -377,13 +537,11 @@ function today() {
 }
 
 function toFbKey(isoDate) {
-  // YYYY-MM-DD → M-D (Firebase key format, no zero padding)
   const parts = isoDate.split('-');
   return parseInt(parts[1]) + '-' + parseInt(parts[2]);
 }
 
 function fromFbKey(fbKey) {
-  // M-D → YYYY-MM-DD (assumes current year)
   const parts = fbKey.split('-');
   const y = new Date().getFullYear();
   return y + '-' + parts[0].padStart(2,'0') + '-' + parts[1].padStart(2,'0');
@@ -405,7 +563,7 @@ function formatDate(isoDate) {
 // Dashboard
 // ============================================================
 let dashLoc = 'both';
-let invData = {}; // cached inventory snapshot
+let invData = {};
 
 function setDashLoc(loc, btn) {
   dashLoc = loc;
@@ -425,10 +583,8 @@ function renderDashboard() {
   const rows = [];
   let totalUnits = 0, expiringCount = 0, excessCount = 0;
 
-  // Flatten inventory into rows
   Object.entries(invData).forEach(([dk, dates]) => {
     if (!dates || typeof dates !== 'object') return;
-    // Find the original dish name from the key
     const dishName = findDishName(dk);
     Object.entries(dates).forEach(([ubKey, locs]) => {
       if (!locs || typeof locs !== 'object') return;
@@ -448,16 +604,13 @@ function renderDashboard() {
     });
   });
 
-  // Sort by soonest expiry
   rows.sort((a, b) => a.days - b.days || a.dishName.localeCompare(b.dishName));
 
-  // Summary cards
   document.getElementById('cardSkus').textContent = rows.length;
   document.getElementById('cardExpiring').textContent = expiringCount;
   document.getElementById('cardExcess').textContent = excessCount;
   document.getElementById('cardTotal').textContent = totalUnits;
 
-  // Expiry alerts
   const alertHtml = [];
   const expiryRows = rows.filter(r => r.days <= 5);
   if (expiryRows.length > 0) {
@@ -475,7 +628,6 @@ function renderDashboard() {
   }
   document.getElementById('expiryAlerts').innerHTML = alertHtml.join('');
 
-  // Full inventory table
   const tbody = document.getElementById('invTableBody');
   if (rows.length === 0) {
     tbody.innerHTML = '<tr><td colspan="6" class="empty-msg">No inventory data yet. Use "Enter Inventory" to get started.</td></tr>';
@@ -557,7 +709,6 @@ function confirmQuickAction() {
     const newVal = (current || 0) + delta;
     return newVal < 0 ? 0 : newVal;
   }).then(() => {
-    // Log to adjustments
     adjRef.push({
       dish: quickDishKey,
       dishName: findDishName(quickDishKey),
@@ -592,7 +743,7 @@ function buildEnterSheet() {
           <div class="date-qty-row">
             <input type="date" value="${defaultDate}" class="enter-date">
             <input type="number" min="0" placeholder="0" class="enter-qty" inputmode="numeric">
-            <button class="remove-date-btn" onclick="removeEnterRow(this)" title="Clear">✕</button>
+            <button class="remove-date-btn" onclick="removeEnterRow(this)" title="Clear">&#10005;</button>
           </div>
         </div>
         <button class="add-date-btn" onclick="addEnterRow(this)">+ another date</button>
@@ -613,7 +764,7 @@ function addEnterRow(btn) {
   row.className = 'date-qty-row';
   row.innerHTML = `<input type="date" value="${defaultDate}" class="enter-date">
     <input type="number" min="0" placeholder="0" class="enter-qty" inputmode="numeric">
-    <button class="remove-date-btn" onclick="removeEnterRow(this)" title="Remove">✕</button>`;
+    <button class="remove-date-btn" onclick="removeEnterRow(this)" title="Remove">&#10005;</button>`;
   rows.appendChild(row);
 }
 
@@ -623,7 +774,6 @@ function removeEnterRow(btn) {
   if (rows.children.length > 1) {
     row.remove();
   } else {
-    // Last row — just clear the values
     row.querySelector('.enter-qty').value = '';
   }
 }
@@ -652,14 +802,12 @@ function submitEnterInventory() {
     return;
   }
 
-  // Build updates object — replace semantics (set, not increment)
   const updates = {};
   entries.forEach(e => {
     updates[e.dishKey + '/' + e.useByFb + '/' + loc] = e.qty;
   });
 
   invRef.update(updates).then(() => {
-    // Log to counts for audit trail
     countsRef.push({
       type: 'staff_entry',
       location: loc,
@@ -676,27 +824,336 @@ function submitEnterInventory() {
 }
 
 // ============================================================
+// Case Config (Admin Only) — Drag & Drop
+// ============================================================
+let dragItem = null;
+let dragSourceCase = null;
+
+function buildCaseConfigUI() {
+  editingSections = JSON.parse(JSON.stringify(DISH_SECTIONS));
+  configDirty = false;
+  document.getElementById('configUnsavedBar').style.display = 'none';
+  renderCaseConfig();
+}
+
+function renderCaseConfig() {
+  const grid = document.getElementById('caseConfigGrid');
+  let html = '';
+
+  Object.entries(editingSections).forEach(([caseName, dishes], caseIdx) => {
+    html += `<div class="config-case" data-case="${esc(caseName)}" data-case-idx="${caseIdx}">
+      <div class="config-case-header">
+        <div class="config-case-name">
+          <input type="text" value="${esc(caseName)}" onchange="renameCaseSection(${caseIdx}, this.value)" onclick="this.select()">
+        </div>
+        <span style="font-size:12px;color:#1565C0;opacity:0.7;margin:0 8px;">${dishes.length} dishes</span>
+        <div class="case-actions">
+          <button onclick="deleteCaseSection(${caseIdx})" title="Delete case">&#128465;</button>
+        </div>
+      </div>
+      <div class="config-dish-list" data-case-idx="${caseIdx}"
+           ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, ${caseIdx})">`;
+
+    dishes.forEach((dish, dishIdx) => {
+      html += `<div class="config-dish-item" draggable="true"
+                   data-case-idx="${caseIdx}" data-dish-idx="${dishIdx}"
+                   ondragstart="handleDragStart(event, ${caseIdx}, ${dishIdx})"
+                   ondragend="handleDragEnd(event)">
+        <span class="drag-handle">&#9776;</span>
+        <span class="dish-text">${esc(dish)}</span>
+        <button class="dish-remove" onclick="removeDishFromCase(${caseIdx}, ${dishIdx})" title="Remove dish">&#10005;</button>
+      </div>`;
+    });
+
+    if (dishes.length === 0) {
+      html += '<div style="padding:16px;text-align:center;color:#bbb;font-size:13px;">Drop dishes here</div>';
+    }
+
+    html += `</div>
+      <div class="add-dish-inline">
+        <input type="text" placeholder="Add dish name..." id="addDishInput_${caseIdx}" onkeydown="if(event.key==='Enter')addDishToCase(${caseIdx})">
+        <button onclick="addDishToCase(${caseIdx})">Add</button>
+      </div>
+    </div>`;
+  });
+
+  grid.innerHTML = html;
+}
+
+function markConfigDirty() {
+  configDirty = true;
+  document.getElementById('configUnsavedBar').style.display = 'block';
+}
+
+// Drag & Drop handlers
+function handleDragStart(e, caseIdx, dishIdx) {
+  dragItem = { caseIdx, dishIdx };
+  dragSourceCase = caseIdx;
+  e.target.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', ''); // Required for Firefox
+}
+
+function handleDragEnd(e) {
+  e.target.classList.remove('dragging');
+  // Remove all drop indicators
+  document.querySelectorAll('.drop-indicator').forEach(el => el.remove());
+  document.querySelectorAll('.config-dish-list').forEach(el => el.style.background = '');
+  dragItem = null;
+}
+
+function handleDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const list = e.currentTarget;
+  list.style.background = '#f0f7ff';
+
+  // Find closest dish item to show drop position
+  const items = Array.from(list.querySelectorAll('.config-dish-item'));
+  // Remove existing indicators
+  list.querySelectorAll('.drop-indicator').forEach(el => el.remove());
+
+  const afterItem = getClosestDishItem(list, e.clientY);
+  const indicator = document.createElement('div');
+  indicator.className = 'drop-indicator';
+
+  if (afterItem) {
+    list.insertBefore(indicator, afterItem);
+  } else {
+    list.appendChild(indicator);
+  }
+}
+
+function handleDragLeave(e) {
+  // Only handle if leaving the list (not entering a child)
+  if (!e.currentTarget.contains(e.relatedTarget)) {
+    e.currentTarget.style.background = '';
+    e.currentTarget.querySelectorAll('.drop-indicator').forEach(el => el.remove());
+  }
+}
+
+function handleDrop(e, targetCaseIdx) {
+  e.preventDefault();
+  e.currentTarget.style.background = '';
+  e.currentTarget.querySelectorAll('.drop-indicator').forEach(el => el.remove());
+
+  if (!dragItem) return;
+
+  const sourceCases = Object.keys(editingSections);
+  const sourceKey = sourceCases[dragItem.caseIdx];
+  const targetKey = sourceCases[targetCaseIdx];
+
+  // Get the dish being moved
+  const dish = editingSections[sourceKey][dragItem.dishIdx];
+  if (!dish) return;
+
+  // Remove from source
+  editingSections[sourceKey].splice(dragItem.dishIdx, 1);
+
+  // Find drop position in target
+  const list = e.currentTarget;
+  const items = Array.from(list.querySelectorAll('.config-dish-item:not(.dragging)'));
+  const afterItem = getClosestDishItem(list, e.clientY);
+  let insertIdx = editingSections[targetKey].length; // default: end
+
+  if (afterItem) {
+    const afterDishIdx = parseInt(afterItem.dataset.dishIdx);
+    // If same case and moving down, adjust index
+    if (dragItem.caseIdx === targetCaseIdx && dragItem.dishIdx < afterDishIdx) {
+      insertIdx = afterDishIdx;
+    } else {
+      insertIdx = afterDishIdx;
+    }
+  }
+
+  // Insert at target position
+  editingSections[targetKey].splice(insertIdx, 0, dish);
+
+  markConfigDirty();
+  renderCaseConfig();
+}
+
+function getClosestDishItem(list, y) {
+  const items = Array.from(list.querySelectorAll('.config-dish-item:not(.dragging)'));
+  let closest = null;
+  let closestOffset = Number.POSITIVE_INFINITY;
+
+  items.forEach(item => {
+    const box = item.getBoundingClientRect();
+    const offset = y - box.top - box.height / 2;
+    if (offset < 0 && offset > -closestOffset) {
+      closestOffset = -offset;
+      closest = item;
+    }
+  });
+
+  return closest;
+}
+
+// Case management functions
+function addNewCase() {
+  const name = prompt('Enter case name (e.g. "Desserts (Case 7)")');
+  if (!name || !name.trim()) return;
+  editingSections[name.trim()] = [];
+  markConfigDirty();
+  renderCaseConfig();
+  showToast('Added case: ' + name.trim());
+}
+
+function renameCaseSection(caseIdx, newName) {
+  if (!newName || !newName.trim()) return;
+  const keys = Object.keys(editingSections);
+  const oldName = keys[caseIdx];
+  if (oldName === newName.trim()) return;
+
+  // Rebuild with new name preserving order
+  const newSections = {};
+  keys.forEach((k, i) => {
+    if (i === caseIdx) {
+      newSections[newName.trim()] = editingSections[k];
+    } else {
+      newSections[k] = editingSections[k];
+    }
+  });
+  editingSections = newSections;
+  markConfigDirty();
+}
+
+function deleteCaseSection(caseIdx) {
+  const keys = Object.keys(editingSections);
+  const name = keys[caseIdx];
+  const dishes = editingSections[name];
+
+  if (dishes.length > 0) {
+    if (!confirm('Delete "' + name + '" and its ' + dishes.length + ' dishes? This cannot be undone.')) return;
+  }
+
+  delete editingSections[name];
+  markConfigDirty();
+  renderCaseConfig();
+  showToast('Removed case: ' + name);
+}
+
+function addDishToCase(caseIdx) {
+  const input = document.getElementById('addDishInput_' + caseIdx);
+  const name = input.value.trim();
+  if (!name) return;
+
+  const keys = Object.keys(editingSections);
+  const caseKey = keys[caseIdx];
+
+  // Check for duplicates across all cases
+  let exists = false;
+  Object.values(editingSections).forEach(dishes => {
+    if (dishes.includes(name)) exists = true;
+  });
+  if (exists) {
+    showToast('That dish already exists in a case');
+    return;
+  }
+
+  editingSections[caseKey].push(name);
+  input.value = '';
+  markConfigDirty();
+  renderCaseConfig();
+}
+
+function removeDishFromCase(caseIdx, dishIdx) {
+  const keys = Object.keys(editingSections);
+  const caseKey = keys[caseIdx];
+  const dish = editingSections[caseKey][dishIdx];
+  editingSections[caseKey].splice(dishIdx, 1);
+  markConfigDirty();
+  renderCaseConfig();
+  showToast('Removed: ' + dish);
+}
+
+// New Dish Modal (from header button)
+function addNewDishModal() {
+  const select = document.getElementById('newDishCase');
+  select.innerHTML = '';
+  Object.keys(editingSections).forEach(name => {
+    select.innerHTML += `<option value="${esc(name)}">${esc(name)}</option>`;
+  });
+  document.getElementById('newDishName').value = '';
+  document.getElementById('newDishModal').classList.add('show');
+  document.getElementById('newDishName').focus();
+}
+
+function closeNewDishModal() {
+  document.getElementById('newDishModal').classList.remove('show');
+}
+
+function confirmNewDish() {
+  const name = document.getElementById('newDishName').value.trim();
+  const caseName = document.getElementById('newDishCase').value;
+  if (!name) { showToast('Enter a dish name'); return; }
+
+  // Check duplicates
+  let exists = false;
+  Object.values(editingSections).forEach(dishes => {
+    if (dishes.includes(name)) exists = true;
+  });
+  if (exists) { showToast('That dish already exists'); return; }
+
+  editingSections[caseName].push(name);
+  markConfigDirty();
+  renderCaseConfig();
+  closeNewDishModal();
+  showToast('Added: ' + name + ' to ' + caseName);
+}
+
+// Save / Discard
+function saveConfigChanges() {
+  DISH_SECTIONS = JSON.parse(JSON.stringify(editingSections));
+  saveCaseConfigToFirebase().then(() => {
+    configDirty = false;
+    document.getElementById('configUnsavedBar').style.display = 'none';
+    showToast('Case configuration saved — all devices updated');
+  }).catch(err => {
+    showToast('Error saving: ' + err.message);
+  });
+}
+
+function discardConfigChanges() {
+  editingSections = JSON.parse(JSON.stringify(DISH_SECTIONS));
+  configDirty = false;
+  document.getElementById('configUnsavedBar').style.display = 'none';
+  renderCaseConfig();
+  showToast('Changes discarded');
+}
+
+// ============================================================
 // Navigation
 // ============================================================
 function switchSection(section) {
+  // Warn if leaving unsaved config
+  if (configDirty && section !== 'caseconfig') {
+    if (!confirm('You have unsaved case configuration changes. Leave without saving?')) return;
+    configDirty = false;
+    document.getElementById('configUnsavedBar').style.display = 'none';
+  }
+
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.subnav-btn').forEach(b => b.classList.remove('active'));
 
   const sec = document.getElementById('sec-' + section);
   if (sec) sec.classList.add('active');
 
-  // Update subnav active state
-  const labels = { dashboard: 'Dashboard', enter: 'Enter Inventory' };
+  const labels = { dashboard: 'Dashboard', enter: 'Enter Inventory', caseconfig: 'Case Config' };
   document.querySelectorAll('.subnav-btn').forEach(b => {
     if (b.textContent === labels[section]) b.classList.add('active');
   });
 
-  // Hide/show submit bar
+  // Hide/show submit bar and config bar
   document.getElementById('enterSubmitBar').style.display = section === 'enter' ? 'flex' : 'none';
+  if (section !== 'caseconfig') {
+    document.getElementById('configUnsavedBar').style.display = 'none';
+  }
 
-  // Build sheets on navigation
   if (section === 'dashboard') refreshDashboard();
   if (section === 'enter') buildEnterSheet();
+  if (section === 'caseconfig') buildCaseConfigUI();
 }
 
 // ============================================================
@@ -714,15 +1171,26 @@ function showToast(msg) {
 // ============================================================
 function init() {
   document.getElementById('enterDefaultDate').value = today();
-  refreshDashboard();
 
-  // Listen for real-time changes to keep dashboard fresh
+  // Load case config from Firebase, then init dashboard
+  loadCaseConfig().then(() => {
+    refreshDashboard();
+    listenForConfigChanges();
+  });
+
+  // Listen for real-time inventory changes
   invRef.on('value', snap => {
     invData = snap.val() || {};
     if (document.getElementById('sec-dashboard').classList.contains('active')) {
       renderDashboard();
     }
   });
+
+  // Show admin features if applicable
+  if (isAdmin) {
+    document.getElementById('adminBadge').style.display = 'inline-block';
+    document.getElementById('caseConfigBtn').style.display = 'inline-block';
+  }
 }
 
 // ============================================================
@@ -730,6 +1198,7 @@ function init() {
 // ============================================================
 const auth = firebase.auth();
 const TEAM_PIN = '7590';
+const ADMIN_PIN = '6895';
 const LOGIN_KEY = 'zedops_inv_login';
 const LOGIN_DURATION = 24 * 60 * 60 * 1000; // 24 hours
 
@@ -738,12 +1207,17 @@ function isLoginValid() {
     const stored = localStorage.getItem(LOGIN_KEY);
     if (!stored) return false;
     const data = JSON.parse(stored);
-    return data.pin === TEAM_PIN && (Date.now() - data.time) < LOGIN_DURATION;
+    if ((Date.now() - data.time) >= LOGIN_DURATION) return false;
+    if (data.pin === TEAM_PIN || data.pin === ADMIN_PIN) {
+      isAdmin = data.pin === ADMIN_PIN;
+      return true;
+    }
+    return false;
   } catch(e) { return false; }
 }
 
-function saveLogin() {
-  localStorage.setItem(LOGIN_KEY, JSON.stringify({ pin: TEAM_PIN, time: Date.now() }));
+function saveLogin(pin) {
+  localStorage.setItem(LOGIN_KEY, JSON.stringify({ pin: pin, time: Date.now() }));
 }
 
 function showApp() {
@@ -752,9 +1226,9 @@ function showApp() {
   init();
 }
 
-function handleLogin() {
+function handleLogin(pin) {
   auth.signInAnonymously().then(() => {
-    saveLogin();
+    saveLogin(pin);
     showApp();
   }).catch(err => {
     document.getElementById('pin-error').textContent = 'Login error: ' + err.message;
@@ -765,7 +1239,11 @@ document.getElementById('pin-input').addEventListener('input', function() {
   document.getElementById('pin-error').textContent = '';
   if (this.value.length === 4) {
     if (this.value === TEAM_PIN) {
-      handleLogin();
+      isAdmin = false;
+      handleLogin(TEAM_PIN);
+    } else if (this.value === ADMIN_PIN) {
+      isAdmin = true;
+      handleLogin(ADMIN_PIN);
     } else {
       document.getElementById('pin-error').textContent = 'Incorrect PIN';
       this.value = '';
