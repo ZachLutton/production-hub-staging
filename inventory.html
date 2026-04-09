@@ -6,6 +6,7 @@
 <title>ZedOps Staging — Inventory</title>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; color: #1a1a1a; }
@@ -123,10 +124,33 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; z-index: 300; display: none; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
 .toast.show { display: block; animation: fadeInUp 0.3s ease; }
 @keyframes fadeInUp { from { opacity: 0; transform: translateX(-50%) translateY(10px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+
+/* Login screen */
+#login-screen { display: flex; justify-content: center; align-items: center; min-height: 100vh; background: linear-gradient(135deg, #1565C0, #1976D2); }
+.login-box { background: white; padding: 40px; border-radius: 16px; text-align: center; width: 320px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+.login-box h1 { color: #1a1a2e; font-size: 22px; margin-bottom: 6px; }
+.login-box p { color: #666; font-size: 14px; margin-bottom: 24px; }
+.pin-input { width: 180px; font-size: 32px; text-align: center; letter-spacing: 12px; padding: 12px; border: 2px solid #ccc; border-radius: 8px; outline: none; }
+.pin-input:focus { border-color: #1565C0; }
+.pin-error { color: #e74c3c; font-size: 14px; margin-top: 12px; min-height: 20px; }
+#main-content { display: none; }
 </style>
 </head>
 <body>
 
+<!-- LOGIN SCREEN -->
+<div id="login-screen">
+  <div class="login-box">
+    <h1>ZedOps — Inventory</h1>
+    <p style="font-size:11px;color:#E65100;font-weight:700;margin-bottom:8px;">STAGING ENVIRONMENT</p>
+    <p>Enter team PIN to continue</p>
+    <input type="password" id="pin-input" class="pin-input" maxlength="4" inputmode="numeric" pattern="[0-9]*" autofocus>
+    <div class="pin-error" id="pin-error"></div>
+  </div>
+</div>
+
+<!-- MAIN CONTENT (hidden until login) -->
+<div id="main-content">
 <div class="staging-banner">STAGING ENVIRONMENT — Inventory Development</div>
 
 <div class="header">
@@ -225,6 +249,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 
 <!-- Toast -->
 <div class="toast" id="toast"></div>
+
+</div><!-- end main-content -->
 
 <script>
 // ============================================================
@@ -684,18 +710,77 @@ function showToast(msg) {
 }
 
 // ============================================================
-// Init
+// Init (called after login)
 // ============================================================
-document.getElementById('enterDefaultDate').value = today();
-refreshDashboard();
+function init() {
+  document.getElementById('enterDefaultDate').value = today();
+  refreshDashboard();
 
-// Listen for real-time changes to keep dashboard fresh
-invRef.on('value', snap => {
-  invData = snap.val() || {};
-  if (document.getElementById('sec-dashboard').classList.contains('active')) {
-    renderDashboard();
+  // Listen for real-time changes to keep dashboard fresh
+  invRef.on('value', snap => {
+    invData = snap.val() || {};
+    if (document.getElementById('sec-dashboard').classList.contains('active')) {
+      renderDashboard();
+    }
+  });
+}
+
+// ============================================================
+// PIN Login + Firebase Auth
+// ============================================================
+const auth = firebase.auth();
+const TEAM_PIN = '7590';
+const LOGIN_KEY = 'zedops_inv_login';
+const LOGIN_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+
+function isLoginValid() {
+  try {
+    const stored = localStorage.getItem(LOGIN_KEY);
+    if (!stored) return false;
+    const data = JSON.parse(stored);
+    return data.pin === TEAM_PIN && (Date.now() - data.time) < LOGIN_DURATION;
+  } catch(e) { return false; }
+}
+
+function saveLogin() {
+  localStorage.setItem(LOGIN_KEY, JSON.stringify({ pin: TEAM_PIN, time: Date.now() }));
+}
+
+function showApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('main-content').style.display = 'block';
+  init();
+}
+
+function handleLogin() {
+  auth.signInAnonymously().then(() => {
+    saveLogin();
+    showApp();
+  }).catch(err => {
+    document.getElementById('pin-error').textContent = 'Login error: ' + err.message;
+  });
+}
+
+document.getElementById('pin-input').addEventListener('input', function() {
+  document.getElementById('pin-error').textContent = '';
+  if (this.value.length === 4) {
+    if (this.value === TEAM_PIN) {
+      handleLogin();
+    } else {
+      document.getElementById('pin-error').textContent = 'Incorrect PIN';
+      this.value = '';
+    }
   }
 });
+
+// On page load: check if already logged in within 24h
+if (isLoginValid()) {
+  auth.signInAnonymously().then(() => {
+    showApp();
+  }).catch(() => {
+    localStorage.removeItem(LOGIN_KEY);
+  });
+}
 </script>
 
 </body>
