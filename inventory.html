@@ -201,6 +201,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
     <h1>ZedOps — Inventory <span class="admin-badge" id="adminBadge" style="display:none">ADMIN</span></h1>
     <div class="subtitle"><span class="sync-dot" id="syncDot"></span><span id="syncLabel">Connecting...</span></div>
   </div>
+  <button onclick="logout()" style="background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.4);color:white;padding:6px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">Logout</button>
 </div>
 
 <div class="subnav" id="subnav">
@@ -1224,6 +1225,13 @@ function showApp() {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('main-content').style.display = 'block';
   init();
+}
+
+function logout() {
+  localStorage.removeItem(LOGIN_KEY);
+  auth.signOut();
+  isAdmin = false;
+  location.reload();
 }
 
 function handleLogin(pin) {
