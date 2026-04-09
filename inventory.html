@@ -7,6 +7,8 @@
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; color: #1a1a1a; }
@@ -201,7 +203,10 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
     <h1>ZedOps — Inventory <span class="admin-badge" id="adminBadge" style="display:none">ADMIN</span></h1>
     <div class="subtitle"><span class="sync-dot" id="syncDot"></span><span id="syncLabel">Connecting...</span></div>
   </div>
-  <button onclick="logout()" style="background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.4);color:white;padding:6px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">Logout</button>
+  <div style="display:flex;gap:8px;align-items:center;">
+    <button onclick="exportStockingGuide()" style="background:rgba(255,255,255,0.9);border:none;color:#1565C0;padding:6px 14px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">Export Stocking Guide</button>
+    <button onclick="logout()" style="background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.4);color:white;padding:6px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">Logout</button>
+  </div>
 </div>
 
 <div class="subnav" id="subnav">
@@ -1225,6 +1230,120 @@ function showApp() {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('main-content').style.display = 'block';
   init();
+}
+
+// ============================================================
+// Export Stocking Guide PDF
+// ============================================================
+function exportStockingGuide() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'letter' });
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const margin = 40;
+  let y = margin;
+
+  // --- Header ---
+  doc.setFillColor(21, 101, 192); // Zedric's blue
+  doc.rect(0, 0, pageW, 60, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(20);
+  doc.setFont('helvetica', 'bold');
+  doc.text("Zedric's Stocking Guide", margin, 38);
+
+  // Date
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.text(dateStr, pageW - margin, 38, { align: 'right' });
+
+  doc.setTextColor(0, 0, 0);
+  y = 80;
+
+  // --- Loop through each case section ---
+  const caseEntries = Object.entries(DISH_SECTIONS);
+
+  caseEntries.forEach(([caseName, dishes], caseIdx) => {
+    // Check if we need a new page (header + at least a few rows)
+    if (y > pageH - 120) {
+      doc.addPage();
+      y = margin;
+    }
+
+    // Case section header
+    doc.setFillColor(227, 242, 253); // light blue
+    doc.rect(margin, y, pageW - margin * 2, 24, 'F');
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(21, 101, 192);
+    doc.text(caseName, margin + 8, y + 16);
+    doc.setFontSize(9);
+    doc.setTextColor(100, 100, 100);
+    doc.text(dishes.length + ' items', pageW - margin - 8, y + 16, { align: 'right' });
+    y += 30;
+
+    // Table for this case
+    const tableData = dishes.map((dish, idx) => [
+      (idx + 1).toString(),
+      dish,
+      '', // Qty column (blank for staff to fill in)
+      ''  // Notes column (blank for staff to fill in)
+    ]);
+
+    doc.autoTable({
+      startY: y,
+      margin: { left: margin, right: margin },
+      head: [['#', 'Dish Name', 'Qty', 'Notes']],
+      body: tableData,
+      theme: 'grid',
+      headStyles: {
+        fillColor: [245, 245, 245],
+        textColor: [80, 80, 80],
+        fontStyle: 'bold',
+        fontSize: 9,
+        cellPadding: 5,
+      },
+      bodyStyles: {
+        fontSize: 10,
+        cellPadding: 6,
+        textColor: [30, 30, 30],
+      },
+      columnStyles: {
+        0: { cellWidth: 28, halign: 'center', fontStyle: 'bold', textColor: [150, 150, 150] },
+        1: { cellWidth: 'auto' },
+        2: { cellWidth: 50, halign: 'center' },
+        3: { cellWidth: 120 },
+      },
+      alternateRowStyles: {
+        fillColor: [250, 252, 255],
+      },
+      didDrawPage: function() {
+        // Footer on each page
+        doc.setFontSize(8);
+        doc.setTextColor(180, 180, 180);
+        doc.text("Zedric's Stocking Guide — " + dateStr, pageW / 2, pageH - 20, { align: 'center' });
+      }
+    });
+
+    y = doc.lastAutoTable.finalY + 16;
+  });
+
+  // --- Summary footer on last page ---
+  if (y > pageH - 60) {
+    doc.addPage();
+    y = margin;
+  }
+  const totalDishes = Object.values(DISH_SECTIONS).reduce((sum, d) => sum + d.length, 0);
+  const totalCases = caseEntries.length;
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(100, 100, 100);
+  doc.text('Total: ' + totalDishes + ' dishes across ' + totalCases + ' cases', margin, y + 10);
+
+  // Save the PDF
+  doc.save('Zedrics_Stocking_Guide_' + now.toISOString().split('T')[0] + '.pdf');
+  showToast('Stocking Guide PDF downloaded');
 }
 
 function logout() {
