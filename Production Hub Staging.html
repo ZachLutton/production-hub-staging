@@ -47,6 +47,9 @@
   .empty-day-msg { text-align: center; padding: 40px 20px; color: #999; font-size: 14px; }
   .station-header .pph-info { font-size: 12px; opacity: 0.9; font-weight: 500; text-align: right; }
   .station-header .pph-live { font-size: 15px; font-weight: 700; }
+  .station-header .operator-input { background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.4); border-radius: 6px; color: white; font-size: 12px; font-weight: 600; padding: 4px 8px; width: 120px; text-align: center; font-family: inherit; outline: none; }
+  .station-header .operator-input::placeholder { color: rgba(255,255,255,0.6); }
+  .station-header .operator-input:focus { background: rgba(255,255,255,0.3); border-color: white; }
 
   .dish-list { background: white; border-radius: 0; box-shadow: 0 1px 4px rgba(0,0,0,0.08); overflow: hidden; }
 
@@ -741,9 +744,11 @@ function render() {
     const livePPH = getStationPPH(stationData);
     const isQueue = stationName === 'Queue';
 
+    const operatorName = stationData.operator || '';
     stationDiv.innerHTML = `
       <div class="station-header">
         <span>${stationName}${isQueue ? ' — assign dishes to stations using Move Dishes' : ''}</span>
+        ${!isQueue ? `<input class="operator-input" type="text" placeholder="Operator" value="${operatorName}" onblur="updateOperator('${currentDay}','${stationName}',this.value)" onclick="event.stopPropagation()">` : ''}
         <div class="pph-info">
           ${isQueue
             ? `<div>${totalOrdered} ordered | ${stationData.dishes.length} dish${stationData.dishes.length !== 1 ? 'es' : ''} to assign</div>`
@@ -962,6 +967,16 @@ function updateNotes(day, station, idx, value) {
   PRODUCTION_DATA[day][station].dishes[idx].notes = value;
   syncFieldToFirebase(day, station, idx, 'notes', value);
   showSaveNotice('Updated');
+}
+
+function updateOperator(day, station, value) {
+  value = value.trim();
+  if (!PRODUCTION_DATA[day] || !PRODUCTION_DATA[day][station]) return;
+  PRODUCTION_DATA[day][station].operator = value;
+  // Field-level sync for operator (station level, not dish level)
+  const safeDay = day.replace(/\//g, '-');
+  dataRef.child(safeDay + '/' + station + '/operator').set(value);
+  showSaveNotice(value ? value + ' assigned' : 'Operator cleared');
 }
 
 function toggleDetail(stationId, idx, event) {
@@ -1201,10 +1216,11 @@ function exportPDF() {
       const totalFinal = stationData.dishes.reduce((s, d) => s + (parseInt(d.finalCount) || 0), 0);
       const livePPH = getStationPPH(stationData);
 
+      const operatorLabel = stationData.operator ? `  —  ${stationData.operator}` : '';
       doc.setFontSize(16);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(0);
-      doc.text(`${dayName} - ${stationName}`, 14, 15);
+      doc.text(`${dayName} - ${stationName}${operatorLabel}`, 14, 15);
 
       doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');
@@ -1477,8 +1493,9 @@ function viewHistoryWeek(weekKey) {
         const stationOrdered = stationData.dishes.reduce((s, d) => s + (d.ordered || 0), 0);
         const stationFinal = stationData.dishes.reduce((s, d) => s + (parseInt(d.finalCount) || 0), 0);
 
+        const histOperator = stationData.operator ? ` (${stationData.operator})` : '';
         html += `<div class="history-station">`;
-        html += `<div class="history-station-name" style="background:${bg}">${stationName} — ${stationOrdered} ordered${stationFinal ? `, ${stationFinal} plated` : ''}</div>`;
+        html += `<div class="history-station-name" style="background:${bg}">${stationName}${histOperator} — ${stationOrdered} ordered${stationFinal ? `, ${stationFinal} plated` : ''}</div>`;
         html += `<table class="history-table"><thead><tr>
           <th>Dish</th><th>Ordered</th><th>Final</th><th>+/-</th><th>PPH</th><th class="notes-col">Notes</th>
         </tr></thead><tbody>`;
