@@ -9,6 +9,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="hub-auth.js?v=2"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; color: #1a1a1a; }
@@ -46,10 +47,10 @@
   .queue-station .station-header::before { content: '📋 '; }
   .empty-day-msg { text-align: center; padding: 40px 20px; color: #999; font-size: 14px; }
   .station-header .pph-info { font-size: 12px; opacity: 0.9; font-weight: 500; text-align: right; }
-  .station-header .pph-live { font-size: 15px; font-weight: 700; }
   .station-header .operator-input { background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.4); border-radius: 6px; color: white; font-size: 12px; font-weight: 600; padding: 4px 8px; width: 120px; text-align: center; font-family: inherit; outline: none; }
   .station-header .operator-input::placeholder { color: rgba(255,255,255,0.6); }
   .station-header .operator-input:focus { background: rgba(255,255,255,0.3); border-color: white; }
+  .station-header .pph-live { font-size: 15px; font-weight: 700; }
 
   .dish-list { background: white; border-radius: 0; box-shadow: 0 1px 4px rgba(0,0,0,0.08); overflow: hidden; }
 
@@ -86,6 +87,32 @@
   .metric-diff.under { color: #C62828; }
   .metric-diff.neutral { color: #999; }
 
+  /* Carry over unfinished */
+  .dish-row.carry-partial { background: #FFF8E1; box-shadow: inset 4px 0 0 #F9A825; }
+  .dish-row.carry-cont { background: #E3F2FD; box-shadow: inset 4px 0 0 #1565C0; }
+  .carry-badge { display: inline-block; margin-top: 3px; font-size: 10.5px; font-weight: 600; padding: 2px 7px; border-radius: 10px; line-height: 1.4; }
+  .carry-badge.partial { background: #FFE082; color: #5D4037; }
+  .carry-badge.cont { background: #BBDEFB; color: #0D47A1; }
+  .carry-undo { background: none; border: none; color: #C62828; font-size: 10.5px; font-weight: 700; text-decoration: underline; cursor: pointer; padding: 0 0 0 6px; }
+  .carry-slot { width: 92px; flex-shrink: 0; display: flex; justify-content: center; }
+  .carry-btn { background: #FFF3E0; color: #E65100; border: 1.5px solid #FFB74D; border-radius: 6px; font-size: 11px; font-weight: 700; padding: 5px 7px; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
+  .carry-btn:hover { background: #FFE0B2; }
+  .metric-diff.carried { color: #F57F17; }
+  .carry-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 400; justify-content: center; align-items: flex-start; padding-top: 80px; }
+  .carry-overlay.show { display: flex; }
+  .carry-panel { background: white; border-radius: 12px; width: 420px; max-width: 94vw; padding: 18px 20px; box-shadow: 0 8px 30px rgba(0,0,0,0.3); font-size: 14px; color: #333; }
+  .carry-panel h2 { font-size: 17px; margin-bottom: 4px; color: #E65100; }
+  .carry-panel .carry-dish { font-weight: 700; margin-bottom: 12px; }
+  .carry-panel label { display: block; font-size: 11px; font-weight: 700; color: #777; text-transform: uppercase; margin: 10px 0 3px; }
+  .carry-panel input, .carry-panel select { width: 100%; padding: 8px; border: 1.5px solid #ccc; border-radius: 6px; font-size: 15px; font-family: inherit; }
+  .carry-panel .carry-row { display: flex; gap: 10px; } .carry-panel .carry-row > div { flex: 1; }
+  .carry-summary { margin-top: 14px; padding: 10px; background: #F1F8E9; border-radius: 8px; font-size: 13px; line-height: 1.5; }
+  .carry-error { color: #C62828; font-size: 13px; min-height: 18px; margin-top: 6px; }
+  .carry-actions { display: flex; gap: 10px; margin-top: 12px; }
+  .carry-actions button { flex: 1; padding: 11px; border-radius: 8px; font-size: 15px; font-weight: 700; cursor: pointer; border: none; }
+  .carry-actions .carry-cancel { background: #eee; color: #333; }
+  .carry-actions .carry-confirm { background: #E65100; color: white; }
+
   .expand-btn { background: none; border: none; color: #bbb; font-size: 16px; cursor: pointer; padding: 2px 6px; flex-shrink: 0; }
   .expand-btn:hover { color: #1B5E20; }
 
@@ -109,6 +136,16 @@
 
   .save-notice { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #1B5E20; color: white; padding: 10px 24px; border-radius: 24px; font-size: 13px; font-weight: 600; opacity: 0; transition: opacity 0.3s; pointer-events: none; box-shadow: 0 4px 12px rgba(0,0,0,0.2); z-index: 200; }
   .save-notice.show { opacity: 1; }
+  /* End-of-production reminder: counted dishes still missing start/stop times. Never blocks anything. */
+  .missing-times { background: #FFF3E0; border: 1.5px solid #FB8C00; color: #5D2E00; border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; font-size: 15px; line-height: 1.4; }
+  .missing-times summary { cursor: pointer; font-weight: 700; list-style: none; }
+  .missing-times summary::-webkit-details-marker { display: none; }
+  .missing-times .mt-more { color: #E65100; text-decoration: underline; font-weight: 600; font-size: 13px; margin-left: 6px; white-space: nowrap; }
+  .missing-times ul { margin: 8px 0 2px 20px; font-size: 14px; }
+  .missing-times li { margin: 2px 0; }
+  .missing-times .mt-st { color: #8D6E63; font-size: 12px; }
+  .day-tab .mt-badge { display: inline-block; margin-left: 6px; min-width: 18px; padding: 0 5px; border-radius: 9px; background: #FB8C00; color: white; font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; vertical-align: middle; }
+  .metric-input.time-input.needs-time { border-color: #FB8C00; background: #FFF3E0; }
   .sync-status { font-size: 10px; opacity: 0.8; margin-top: 1px; }
   .sync-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
   .sync-dot.connected { background: #69F0AE; }
@@ -213,8 +250,8 @@
 <!-- LOGIN SCREEN -->
 <div id="login-screen">
     <div class="login-box">
-        <h1>Zedric's Production Hub</h1>
-        <p>Enter team or admin PIN to continue</p>
+        <h1>Zedric's Production Hub <span style="background:#F9A825;color:#333;font-size:11px;padding:2px 8px;border-radius:4px;margin-left:8px;vertical-align:middle;">STAGING</span></h1>
+        <p>Enter team PIN to continue</p>
         <input type="password" id="pin-input" class="pin-input" maxlength="4" inputmode="numeric" pattern="[0-9]*" autofocus>
         <div class="pin-error" id="pin-error"></div>
     </div>
@@ -224,6 +261,9 @@
 <div id="main-content">
 <div class="header">
   <div class="header-left">
+    <div style="margin-bottom:10px;">
+      <span style="display:inline-block;background:#F9A825;color:#333;font-size:13px;font-weight:700;padding:8px 14px;border-radius:6px;">STAGING copy: test data only. The live hub is not affected.</span>
+    </div>
     <h1>Zedric's Production Hub <span style="background:#F9A825;color:#333;font-size:11px;padding:2px 8px;border-radius:4px;margin-left:8px;vertical-align:middle;">STAGING</span></h1>
     <div class="subtitle">Drag to reorder | Tap to move between days</div>
     <div class="sync-status" id="syncStatus"><span class="sync-dot disconnected" id="syncDot"></span>Connecting...</div>
@@ -232,7 +272,7 @@
     <button class="btn btn-outline" onclick="toggleMoveMode()" id="moveModeBtn">Move Dishes</button>
     <button class="btn btn-outline" onclick="openHistory()">History</button>
     <button class="btn btn-white" onclick="exportPDF()">Export PDF</button>
-    <button class="btn btn-outline" onclick="logout()" style="font-size:11px;padding:6px 10px;">Logout</button>
+    <button class="btn btn-outline" onclick="logout()" style="font-size:11px; padding:6px 10px; opacity:0.7;">Logout</button>
   </div>
 </div>
 
@@ -257,57 +297,74 @@
     <div id="historyContent"></div>
   </div>
 </div>
+<div class="carry-overlay" id="carryOverlay" onclick="if(event.target===this)closeCarryDialog()">
+  <div class="carry-panel" role="dialog" aria-labelledby="carryTitle">
+    <h2 id="carryTitle">Carry over unfinished (to the Queue)</h2>
+    <div class="carry-dish" id="carryDishName"></div>
+    <div class="carry-row">
+      <div><label for="carryDone">Plates done today</label><input id="carryDone" type="number" min="1" inputmode="numeric" oninput="updateCarrySummary()"></div>
+      <div><label for="carryStart">Start</label><input id="carryStart" type="text" placeholder="700" oninput="updateCarrySummary()"></div>
+      <div><label for="carryStop">Stop</label><input id="carryStop" type="text" placeholder="830" oninput="updateCarrySummary()"></div>
+    </div>
+    <div class="carry-summary" id="carrySummary"></div>
+    <div class="carry-error" id="carryError"></div>
+    <div class="carry-actions">
+      <button class="carry-cancel" onclick="closeCarryDialog()">Cancel</button>
+      <button class="carry-confirm" id="carryConfirmBtn" onclick="confirmCarryOver()">Send rest to Queue</button>
+    </div>
+  </div>
+</div>
 </div><!-- end main-content -->
 
 <script>
 const PRODUCTION_DATA = {
-  "Tuesday 4/14": {
+  "Tuesday 5/5": {
     "Queue": { target: 800, dishes: [
-      { name: "Bacon & Gruyere Egg Bites w/ Cauliflower Hash (2)", addIn: "", guide: "", instruction: "", ordered: 55, finalCount: "", startTime: "", stopTime: "", notes: "" },
+      { name: "Bacon & Gruyere Egg Bites w/ Cauliflower Hash (2)", addIn: "", guide: "", instruction: "", ordered: 50, finalCount: "", startTime: "", stopTime: "", notes: "" },
       { name: "Bacon Tomato & Mushroom Omelette", addIn: "", guide: "", instruction: "", ordered: 55, finalCount: "", startTime: "", stopTime: "", notes: "" },
-      { name: "Brisket Hash (3)", addIn: "", guide: "", instruction: "", ordered: 100, finalCount: "", startTime: "", stopTime: "", notes: "" },
+      { name: "Brisket Hash (3)", addIn: "", guide: "", instruction: "", ordered: 70, finalCount: "", startTime: "", stopTime: "", notes: "" },
       { name: "Beef Tenderloin Steak & Egg Scramble (3)", addIn: "", guide: "", instruction: "", ordered: 50, finalCount: "", startTime: "", stopTime: "", notes: "" },
-      { name: "Overnight Oats", addIn: "", guide: "", instruction: "", ordered: 70, finalCount: "", startTime: "", stopTime: "", notes: "" },
-      { name: "Blueberry Protein Pancakes w/ Eggs (3)", addIn: "", guide: "", instruction: "", ordered: 30, finalCount: "", startTime: "", stopTime: "", notes: "" },
-      { name: "Country Sausage Breakfast Bowl (3)", addIn: "", guide: "", instruction: "", ordered: 160, finalCount: "", startTime: "", stopTime: "", notes: "" },
-      { name: "Turkey Chorizo over Rice (3)", addIn: "", guide: "", instruction: "", ordered: 70, finalCount: "", startTime: "", stopTime: "", notes: "" },
-      { name: "Southern Breakfast Bowl (3)", addIn: "", guide: "", instruction: "", ordered: 60, finalCount: "", startTime: "", stopTime: "", notes: "" },
-      { name: "Tex Mex Turkey Picadillo (1)", addIn: "", guide: "", instruction: "", ordered: 150, finalCount: "", startTime: "", stopTime: "", notes: "" },
-      { name: "Turkey Sausage Egg & Sweet Potato Hash (3)", addIn: "", guide: "", instruction: "", ordered: 60, finalCount: "", startTime: "", stopTime: "", notes: "" },
-      { name: "Arroz Con Pollo (2)", addIn: "", guide: "", instruction: "", ordered: 95, finalCount: "", startTime: "", stopTime: "", notes: "" },
-      { name: "BBQ Brisket Mac", addIn: "", guide: "", instruction: "", ordered: 180, finalCount: "", startTime: "", stopTime: "", notes: "" },
-      { name: "Beef Taco Skillet (2)", addIn: "", guide: "", instruction: "", ordered: 120, finalCount: "", startTime: "", stopTime: "", notes: "" },
-      { name: "Blackened Chicken Alfredo Penne (3)", addIn: "", guide: "", instruction: "", ordered: 260, finalCount: "", startTime: "", stopTime: "", notes: "" },
+      { name: "Blueberry Overnight Oats", addIn: "", guide: "", instruction: "", ordered: 100, finalCount: "", startTime: "", stopTime: "", notes: "" },
+      { name: "Country Sausage Breakfast Bowl (3)", addIn: "", guide: "", instruction: "", ordered: 140, finalCount: "", startTime: "", stopTime: "", notes: "" },
+      { name: "Turkey Chorizo over Rice (3)", addIn: "", guide: "", instruction: "", ordered: 100, finalCount: "", startTime: "", stopTime: "", notes: "" },
+      { name: "Southern Breakfast Bowl (3)", addIn: "", guide: "", instruction: "", ordered: 50, finalCount: "", startTime: "", stopTime: "", notes: "" },
+      { name: "Tex Mex Turkey Picadillo (1)", addIn: "", guide: "", instruction: "", ordered: 130, finalCount: "", startTime: "", stopTime: "", notes: "" },
+      { name: "Arroz Con Pollo (2)", addIn: "", guide: "", instruction: "", ordered: 115, finalCount: "", startTime: "", stopTime: "", notes: "" },
+      { name: "BBQ Brisket Mac", addIn: "", guide: "", instruction: "", ordered: 150, finalCount: "", startTime: "", stopTime: "", notes: "" },
+      { name: "Beef Taco Skillet (2)", addIn: "", guide: "", instruction: "", ordered: 110, finalCount: "", startTime: "", stopTime: "", notes: "" },
+      { name: "Blackened Chicken Alfredo Penne (3)", addIn: "", guide: "", instruction: "", ordered: 280, finalCount: "", startTime: "", stopTime: "", notes: "" },
       { name: "Blackened Chicken w/ Fingerlings (3)", addIn: "", guide: "", instruction: "", ordered: 230, finalCount: "", startTime: "", stopTime: "", notes: "" },
-      { name: "Blackened Mahi Over Cilantro Lime Rice (5)", addIn: "", guide: "", instruction: "", ordered: 195, finalCount: "", startTime: "", stopTime: "", notes: "" },
-      { name: "Chicken & Italian Sausage Over Pasta (2)", addIn: "", guide: "", instruction: "", ordered: 200, finalCount: "", startTime: "", stopTime: "", notes: "" },
-      { name: "Chicken Enchilada Casserole (2)", addIn: "", guide: "", instruction: "", ordered: 250, finalCount: "", startTime: "", stopTime: "", notes: "" },
-      { name: "Chicken Madeira (4)", addIn: "", guide: "", instruction: "", ordered: 220, finalCount: "", startTime: "", stopTime: "", notes: "" },
-      { name: "Dirty Rice", addIn: "", guide: "", instruction: "", ordered: 55, finalCount: "", startTime: "", stopTime: "", notes: "" },
-      { name: "Glazed Beef Meatloaf (3)", addIn: "", guide: "", instruction: "", ordered: 230, finalCount: "", startTime: "", stopTime: "", notes: "" },
-      { name: "Greek Chicken Bowl", addIn: "", guide: "", instruction: "", ordered: 130, finalCount: "", startTime: "", stopTime: "", notes: "" },
-      { name: "Green Chile Chicken Over Rice (2)", addIn: "", guide: "", instruction: "", ordered: 175, finalCount: "", startTime: "", stopTime: "", notes: "" },
-      { name: "Grilled Chicken Over Cheesy Bacon Broccoli (2)", addIn: "", guide: "", instruction: "", ordered: 150, finalCount: "", startTime: "", stopTime: "", notes: "" },
-      { name: "Grilled Salmon (3)", addIn: "", guide: "", instruction: "", ordered: 140, finalCount: "", startTime: "", stopTime: "", notes: "" },
-      { name: "Herb Chicken w/ Carrots & Broccolini (3)", addIn: "", guide: "", instruction: "", ordered: 150, finalCount: "", startTime: "", stopTime: "", notes: "" },
-      { name: "Korean Beef BBQ Tenderloin (2)", addIn: "", guide: "", instruction: "", ordered: 180, finalCount: "", startTime: "", stopTime: "", notes: "" },
+      { name: "Blackened Mahi Over Cilantro Lime Rice (5)", addIn: "", guide: "", instruction: "", ordered: 200, finalCount: "", startTime: "", stopTime: "", notes: "" },
+      { name: "Chicken & Italian Sausage Over Pasta (2)", addIn: "", guide: "", instruction: "", ordered: 250, finalCount: "", startTime: "", stopTime: "", notes: "" },
+      { name: "Chicken Enchilada Casserole (2)", addIn: "", guide: "", instruction: "", ordered: 270, finalCount: "", startTime: "", stopTime: "", notes: "" },
+      { name: "Chicken Madeira (4)", addIn: "", guide: "", instruction: "", ordered: 325, finalCount: "", startTime: "", stopTime: "", notes: "" },
+      { name: "Fiesta Street Rice Bowl", addIn: "", guide: "", instruction: "", ordered: 100, finalCount: "", startTime: "", stopTime: "", notes: "" },
+      { name: "Glazed Beef Meatloaf (3)", addIn: "", guide: "", instruction: "", ordered: 325, finalCount: "", startTime: "", stopTime: "", notes: "" },
+      { name: "Greek Chicken Bowl", addIn: "", guide: "", instruction: "", ordered: 120, finalCount: "", startTime: "", stopTime: "", notes: "" },
+      { name: "Green Chile Chicken Over Rice (2)", addIn: "", guide: "", instruction: "", ordered: 250, finalCount: "", startTime: "", stopTime: "", notes: "" },
+      { name: "Grilled Chicken Over Cheesy Bacon Broccoli (2)", addIn: "", guide: "", instruction: "", ordered: 180, finalCount: "", startTime: "", stopTime: "", notes: "" },
+      { name: "Grilled Salmon (3)", addIn: "", guide: "", instruction: "", ordered: 110, finalCount: "", startTime: "", stopTime: "", notes: "" },
+      { name: "Herb Chicken w/ Carrots & Broccolini (3)", addIn: "", guide: "", instruction: "", ordered: 165, finalCount: "", startTime: "", stopTime: "", notes: "" },
+      { name: "Korean Beef BBQ Tenderloin (2)", addIn: "", guide: "", instruction: "", ordered: 250, finalCount: "", startTime: "", stopTime: "", notes: "" },
       { name: "Parmesan Crusted Chop Steak (2)", addIn: "", guide: "", instruction: "", ordered: 114, finalCount: "", startTime: "", stopTime: "", notes: "" },
-      { name: "Ranch Chicken w/ Mozzarella & Bacon (2)", addIn: "", guide: "", instruction: "", ordered: 100, finalCount: "", startTime: "", stopTime: "", notes: "" },
-      { name: "Roasted Turkey w/ Cajun Butter (3)", addIn: "", guide: "", instruction: "", ordered: 100, finalCount: "", startTime: "", stopTime: "", notes: "" },
-      { name: "Rustic Chicken Parmesan (2)", addIn: "", guide: "", instruction: "", ordered: 250, finalCount: "", startTime: "", stopTime: "", notes: "" },
+      { name: "Ranch Chicken w/ Mozzarella & Bacon (2)", addIn: "", guide: "", instruction: "", ordered: 90, finalCount: "", startTime: "", stopTime: "", notes: "" },
+      { name: "Roasted Turkey w/ Cajun Butter (3)", addIn: "", guide: "", instruction: "", ordered: 115, finalCount: "", startTime: "", stopTime: "", notes: "" },
+      { name: "Rustic Chicken Parmesan (2)", addIn: "", guide: "", instruction: "", ordered: 300, finalCount: "", startTime: "", stopTime: "", notes: "" },
       { name: "Salisbury Steak (4)", addIn: "", guide: "", instruction: "", ordered: 126, finalCount: "", startTime: "", stopTime: "", notes: "" },
-      { name: "Seared Beef Tenderloin (4)", addIn: "", guide: "", instruction: "", ordered: 120, finalCount: "", startTime: "", stopTime: "", notes: "" },
-      { name: "Texas Style Turkey Chili Bowl (1)", addIn: "", guide: "", instruction: "", ordered: 90, finalCount: "", startTime: "", stopTime: "", notes: "" },
+      { name: "Seared Beef Tenderloin (4)", addIn: "", guide: "", instruction: "", ordered: 180, finalCount: "", startTime: "", stopTime: "", notes: "" },
+      { name: "Texas Style Turkey Chili Bowl (1)", addIn: "", guide: "", instruction: "", ordered: 120, finalCount: "", startTime: "", stopTime: "", notes: "" },
       { name: "Turkey Ragu over Spaghetti Squash (2)", addIn: "", guide: "", instruction: "", ordered: 160, finalCount: "", startTime: "", stopTime: "", notes: "" },
-      { name: "GF Chicken ZedStrips Over Mac-N-Cheese (4)", addIn: "", guide: "", instruction: "", ordered: 160, finalCount: "", startTime: "", stopTime: "", notes: "" },
+      { name: "GF Chicken ZedStrips Over Mac-N-Cheese (4)", addIn: "", guide: "", instruction: "", ordered: 140, finalCount: "", startTime: "", stopTime: "", notes: "" },
       { name: "Texas Style Turkey Chili Mac (1)", addIn: "", guide: "", instruction: "", ordered: 300, finalCount: "", startTime: "", stopTime: "", notes: "" },
-      { name: "Peanut Butter & Chocolate Chews", addIn: "", guide: "", instruction: "", ordered: 150, finalCount: "", startTime: "", stopTime: "", notes: "" },
-      { name: "1/2# Green Chile Chicken (1)", addIn: "", guide: "", instruction: "", ordered: 50, finalCount: "", startTime: "", stopTime: "", notes: "" },
-      { name: "1/2# Grilled Chicken (1)", addIn: "", guide: "", instruction: "", ordered: 40, finalCount: "", startTime: "", stopTime: "", notes: "" },
+      { name: "Chocolate Pecan & Zucchini Muffin", addIn: "", guide: "", instruction: "", ordered: 150, finalCount: "", startTime: "", stopTime: "", notes: "" },
+      { name: "Peanut Butter & Chocolate Chews", addIn: "", guide: "", instruction: "", ordered: 125, finalCount: "", startTime: "", stopTime: "", notes: "" },
+      { name: "1/2# Green Chile Chicken (1)", addIn: "", guide: "", instruction: "", ordered: 60, finalCount: "", startTime: "", stopTime: "", notes: "" },
+      { name: "1/2# Grilled Chicken (1)", addIn: "", guide: "", instruction: "", ordered: 60, finalCount: "", startTime: "", stopTime: "", notes: "" },
       { name: "1/2# Baked Chicken (1)", addIn: "", guide: "", instruction: "", ordered: 35, finalCount: "", startTime: "", stopTime: "", notes: "" },
-      { name: "1/2# Herb Marinated Chicken (1)", addIn: "", guide: "", instruction: "", ordered: 20, finalCount: "", startTime: "", stopTime: "", notes: "" },
-      { name: "1/2# Turkey Chorizo (1)", addIn: "", guide: "", instruction: "", ordered: 15, finalCount: "", startTime: "", stopTime: "", notes: "" },
-      { name: "1/2# Chicken ZedStrips w/ Dijonnaise (1)", addIn: "", guide: "", instruction: "", ordered: 30, finalCount: "", startTime: "", stopTime: "", notes: "" },
+      { name: "Chicken On A Stick", addIn: "", guide: "", instruction: "", ordered: 75, finalCount: "", startTime: "", stopTime: "", notes: "" },
+      { name: "1/2# Herb Marinated Chicken (1)", addIn: "", guide: "", instruction: "", ordered: 15, finalCount: "", startTime: "", stopTime: "", notes: "" },
+      { name: "1/2# Turkey Chorizo (1)", addIn: "", guide: "", instruction: "", ordered: 25, finalCount: "", startTime: "", stopTime: "", notes: "" },
+      { name: "1/2# Chicken ZedStrips w/ Dijonnaise (1)", addIn: "", guide: "", instruction: "", ordered: 50, finalCount: "", startTime: "", stopTime: "", notes: "" },
     ]},
     "Station 1": { target: 800, dishes: [] },
     "Station 2": { target: 800, dishes: [] },
@@ -315,7 +372,7 @@ const PRODUCTION_DATA = {
     "Station 4": { target: 800, dishes: [] },
     "Station 5": { target: 800, dishes: [] },
   },
-  "Wednesday 4/15": {
+  "Wednesday 5/6": {
     "Queue":     { target: 800, dishes: [] },
     "Station 1": { target: 800, dishes: [] },
     "Station 2": { target: 800, dishes: [] },
@@ -323,7 +380,7 @@ const PRODUCTION_DATA = {
     "Station 4": { target: 800, dishes: [] },
     "Station 5": { target: 800, dishes: [] },
   },
-  "Thursday 4/16": {
+  "Thursday 5/7": {
     "Queue":     { target: 800, dishes: [] },
     "Station 1": { target: 800, dishes: [] },
     "Station 2": { target: 800, dishes: [] },
@@ -350,7 +407,6 @@ const dataRef = db.ref('staging_productionData');
 const dishLibraryRef = db.ref('staging_dishLibrary');
 let isRemoteUpdate = false;
 let syncTimeout = null;
-let userRole = 'team'; // 'team' or 'admin'
 
 // Auth is now handled by PIN login below
 
@@ -398,11 +454,13 @@ function isBlankTemplateData(data) {
   return totalDishes > 0 && dishesWithData === 0 && dishesOutsideQueue === 0;
 }
 
-// FULL sync — only used for structural changes (move dishes, reorder, new week push)
 function syncToFirebase() {
   if (isRemoteUpdate) return;
+  if (!productionDataLoaded) { console.warn('BLOCKED: write skipped — live production data not loaded yet'); return; }
+  // SAFEGUARD: Never push blank template data to Firebase — this prevents the local HTML
+  // file from accidentally overwriting the team's real production data
   if (isBlankTemplateData(PRODUCTION_DATA)) {
-    console.warn('BLOCKED: syncToFirebase() skipped — data looks like blank template');
+    console.warn('BLOCKED: syncToFirebase() skipped — data looks like blank template (no finals, times, or station assignments)');
     return;
   }
   if (syncTimeout) clearTimeout(syncTimeout);
@@ -411,18 +469,19 @@ function syncToFirebase() {
   }, 300);
 }
 
-// FIELD-LEVEL sync — used for individual dish field edits (times, counts, notes, etc.)
-// This prevents concurrent users from overwriting each other's changes
+// Field-level sync: only writes the specific field that changed (prevents concurrent edit conflicts)
 function syncFieldToFirebase(day, station, dishIndex, field, value) {
   if (isRemoteUpdate) return;
+  if (!productionDataLoaded) { console.warn('BLOCKED: write skipped — live production data not loaded yet'); return; }
   const safeDay = day.replace(/\//g, '-');
   const path = `${safeDay}/${station}/dishes/${dishIndex}/${field}`;
   dataRef.child(path).set(value);
 }
 
-// Sync a single dish object (used when multiple fields change at once)
+// Dish-level sync: writes an entire dish object (used after structural changes to a single dish)
 function syncDishToFirebase(day, station, dishIndex) {
   if (isRemoteUpdate) return;
+  if (!productionDataLoaded) { console.warn('BLOCKED: write skipped — live production data not loaded yet'); return; }
   const safeDay = day.replace(/\//g, '-');
   const dish = PRODUCTION_DATA[day][station].dishes[dishIndex];
   if (!dish) return;
@@ -478,22 +537,37 @@ function applyDishLibrary() {
       }
     });
     let changed = false;
-    Object.values(PRODUCTION_DATA).forEach(dayData => {
-      Object.values(dayData).forEach(stationData => {
+    Object.keys(PRODUCTION_DATA).forEach(day => {
+      const safeDay = day.replace(/\//g, '-');
+      Object.keys(PRODUCTION_DATA[day]).forEach(station => {
+        const stationData = PRODUCTION_DATA[day][station];
         if (!stationData || !Array.isArray(stationData.dishes)) return;
-        stationData.dishes.forEach(dish => {
+        stationData.dishes.forEach((dish, idx) => {
           const key = dish.name.replace(/[.#$/\[\]]/g, '_');
           const entry = lookup[key];
           if (!entry) return;
-          if (entry.guide && !dish.guide)       { dish.guide = entry.guide; changed = true; }
-          if (entry.instruction && !dish.instruction) { dish.instruction = entry.instruction; changed = true; }
-          if (entry.addIn && !dish.addIn)       { dish.addIn = entry.addIn; changed = true; }
+          if (entry.guide && !dish.guide) {
+            dish.guide = entry.guide; changed = true;
+            dataRef.child(`${safeDay}/${station}/dishes/${idx}/guide`).set(entry.guide);
+          }
+          if (entry.instruction && !dish.instruction) {
+            dish.instruction = entry.instruction; changed = true;
+            dataRef.child(`${safeDay}/${station}/dishes/${idx}/instruction`).set(entry.instruction);
+          }
+          if (entry.addIn && !dish.addIn) {
+            dish.addIn = entry.addIn; changed = true;
+            dataRef.child(`${safeDay}/${station}/dishes/${idx}/addIn`).set(entry.addIn);
+          }
         });
       });
     });
-    if (changed) { syncToFirebase(); render(); }
+    if (changed) { render(); }
   });
 }
+
+// Carry-over link fields (optional; only present on dishes that were carried over).
+// These MUST survive fixFirebaseArrays or a reload would silently drop the links.
+const CARRY_FIELDS = ['carryId', 'carryPart', 'carriedFrom', 'carriedTo', 'fullOrdered', 'carryUndo'];
 
 // Firebase stores arrays as objects with numeric keys — this converts them back
 function fixFirebaseArrays(data) {
@@ -521,17 +595,21 @@ function fixFirebaseArrays(data) {
         station.target = 800;
       }
       // Ensure each dish has all expected fields
-      station.dishes = station.dishes.filter(d => d != null).map(d => ({
-        name: d.name || '',
-        addIn: d.addIn || '',
-        guide: d.guide || '',
-        instruction: d.instruction || '',
-        ordered: parseInt(d.ordered) || 0,
-        finalCount: d.finalCount || '',
-        startTime: d.startTime || '',
-        stopTime: d.stopTime || '',
-        notes: d.notes || ''
-      }));
+      station.dishes = station.dishes.filter(d => d != null).map(d => {
+        const out = {
+          name: d.name || '',
+          addIn: d.addIn || '',
+          guide: d.guide || '',
+          instruction: d.instruction || '',
+          ordered: parseInt(d.ordered) || 0,
+          finalCount: d.finalCount || '',
+          startTime: d.startTime || '',
+          stopTime: d.stopTime || '',
+          notes: d.notes || ''
+        };
+        CARRY_FIELDS.forEach(f => { if (d[f] !== undefined && d[f] !== null && d[f] !== '') out[f] = d[f]; });
+        return out;
+      });
     });
   });
   return data;
@@ -541,8 +619,11 @@ function fixFirebaseArrays(data) {
 let lastKnownWeekKey = null;
 let dishLibrarySeeded = false;
 
-// Listen for real-time changes from other devices
-dataRef.on('value', (snapshot) => {
+// Listen for real-time changes from other devices.
+// Attached only AFTER staff log in (see showApp). Under the locked database rules a listener
+// attached before login is refused and never retried, which left the page showing the built-in
+// template week until a reload.
+function onProductionData(snapshot) {
   const remoteData = snapshot.val();
   if (!remoteData) {
     // Firebase is empty — only push local data if it has real team entries (not blank template)
@@ -591,7 +672,19 @@ dataRef.on('value', (snapshot) => {
   if (isNewWeek) {
     setTimeout(applyDishLibrary, 500);
   }
-});
+}
+
+let productionDataLoaded = false;
+function attachProductionListener() {
+  productionDataLoaded = false;
+  dataRef.off('value', onProductionDataGate);
+  dataRef.on('value', onProductionDataGate, err => {
+    console.error('productionData listener stopped:', err && err.code);
+    productionDataLoaded = false;
+    showSaveNotice('Lost connection to production data \u2014 please log in again');
+  });
+}
+function onProductionDataGate(snapshot) { productionDataLoaded = true; onProductionData(snapshot); }
 
 // Connection status indicator
 db.ref('.info/connected').on('value', (snap) => {
@@ -631,6 +724,7 @@ let currentDay = sortedDays()[0];
 let moveMode = false;
 let selectedDishes = []; // Array of { day, station, index }
 let compactView = false;
+let userRole = 'team'; // 'team' or 'admin'
 
 // Drag state
 let dragItem = null;
@@ -649,6 +743,7 @@ function renderTabs() {
     const btn = document.createElement('button');
     btn.className = 'day-tab' + (day === currentDay ? ' active' : '');
     btn.textContent = day;
+    btn.dataset.day = day;
     btn.onclick = () => switchDay(day);
     tabsEl.appendChild(btn);
   });
@@ -664,16 +759,97 @@ function renderTabs() {
 }
 
 function setView(compact) { compactView = compact; renderTabs(); render(); }
-function switchDay(day) { currentDay = day; renderTabs(); render(); }
+function switchDay(day) { currentDay = day; missingTimesOpen = false; renderTabs(); render(); }
 
-function calcPPH(dish) {
+// Wednesday cookies & muffins never count toward plates-per-hour.
+function isExcludedFromPPH(dish, dayName) {
+  return /^Wednesday/i.test(dayName || '') && /cookie|muffin|chews?\b/i.test((dish && dish.name) || '');
+}
+
+function calcPPH(dish, dayName) {
+  if (isExcludedFromPPH(dish, dayName)) return null;
   if (!dish.startTime || !dish.stopTime || !dish.finalCount) return null;
-  const start = parseTime(dish.startTime);
-  const stop = parseTime(dish.stopTime);
+  const mins = pphMinutes(dish.startTime, dish.stopTime);
+  if (mins === null) return null;
+  const count = parseInt(dish.finalCount);
+  if (isNaN(count)) return null;
+  return Math.round((count / mins) * 60);
+}
+
+// Minutes from start to stop, used by every PPH number (dish, station, PDF, history).
+// Times are typed without AM/PM, so a stop earlier than the start means the run went
+// past noon: 12:51 -> 2:28 is 97 minutes (add 12 hours). If adding 12 hours would make
+// the run longer than 6 hours (a typo like 11:09 -> 11:07, or the same time twice),
+// the times don't make sense, so this returns null and PPH shows "-".
+function pphMinutes(startStr, stopStr) {
+  const start = parseTime(startStr == null ? '' : String(startStr));
+  const stop = parseTime(stopStr == null ? '' : String(stopStr));
   if (start === null || stop === null) return null;
   let mins = stop - start;
-  if (mins <= 0) return null;
-  return Math.round((parseInt(dish.finalCount) / mins) * 60);
+  if (mins <= 0) {
+    mins += 12 * 60;
+    if (mins > 6 * 60) return null;
+  }
+  return mins > 0 ? mins : null;
+}
+
+// What's wrong with a counted dish's times, for the floor warning: 'missing', 'bad' or null.
+function timesProblem(dish, dayName) {
+  if (!dish || !dish.finalCount || String(dish.finalCount).trim() === '') return null;
+  if (isExcludedFromPPH(dish, dayName)) return null;
+  const hasStart = !!(dish.startTime && String(dish.startTime).trim());
+  const hasStop = !!(dish.stopTime && String(dish.stopTime).trim());
+  if (!hasStart || !hasStop) return 'missing';
+  return pphMinutes(dish.startTime, dish.stopTime) === null ? 'bad' : null;
+}
+
+// Every counted dish on a day that still has no usable start/stop times (Queue included).
+function dishesMissingTimes(dayName) {
+  const out = [];
+  const dayData = PRODUCTION_DATA[dayName];
+  if (!dayData) return out;
+  sortedStations(dayName).forEach(st => {
+    const sd = dayData[st];
+    if (!sd || !Array.isArray(sd.dishes)) return;
+    sd.dishes.forEach(d => { const p = timesProblem(d, dayName); if (p) out.push({ station: st, name: d.name, problem: p }); });
+  });
+  return out;
+}
+
+// Amber count on each day tab that still has counted dishes without times.
+function updateMissingTimesBadges() {
+  document.querySelectorAll('#dayTabs .day-tab').forEach(btn => {
+    const day = btn.dataset.day;
+    if (!day) return;
+    const n = dishesMissingTimes(day).length;
+    let b = btn.querySelector('.mt-badge');
+    if (n > 0) {
+      if (!b) { b = document.createElement('span'); b.className = 'mt-badge'; btn.appendChild(b); }
+      b.textContent = n;
+      b.title = n + (n === 1 ? ' dish has' : ' dishes have') + ' a final count but no start/stop times';
+    } else if (b) b.remove();
+  });
+}
+
+// Small reminder at the top of the day: which counted dishes still need start/stop times.
+function missingTimesNoticeHTML(dayName) {
+  const list = dishesMissingTimes(dayName);
+  if (list.length === 0) return '';
+  const n = list.length;
+  const items = list.map(x => `<li>${x.name} <span class="mt-st">(${x.station}${x.problem === 'bad' ? ', check times' : ''})</span></li>`).join('');
+  return `<details class="missing-times" id="missingTimesNotice"${missingTimesOpen ? ' open' : ''} ontoggle="missingTimesOpen=this.open">
+    <summary>\u26A0 ${n} ${n === 1 ? 'dish has' : 'dishes have'} a final count but no start/stop times. Add them so plates per hour can be tracked.<span class="mt-more">${missingTimesOpen ? 'Hide' : 'Show'} list</span></summary>
+    <ul>${items}</ul>
+  </details>`;
+}
+let missingTimesOpen = false;
+
+// Shown next to "Save Current Week to History" so whoever archives the week sees what's missing (never blocks the save).
+function weekMissingTimesNote() {
+  let n = 0;
+  try { sortedDays().forEach(day => { n += dishesMissingTimes(day).length; }); } catch (e) { return ''; }
+  if (n === 0) return '';
+  return `<div class="missing-times" style="margin:12px 20px 0;">\u26A0 ${n} counted ${n === 1 ? 'dish' : 'dishes'} this week still ${n === 1 ? 'has' : 'have'} no start/stop times, so ${n === 1 ? 'it' : 'they'} won't get plates per hour. Add the times before saving if you can. You can still save now.</div>`;
 }
 
 function formatTimeInput(value) {
@@ -702,16 +878,16 @@ function parseTime(str) {
   return h * 60 + m;
 }
 
-function getStationPPH(stationData) {
+function getStationPPH(stationData, dayName) {
   let totalPlates = 0, totalMins = 0;
   stationData.dishes.forEach(d => {
+    if (isExcludedFromPPH(d, dayName)) return;
     if (d.startTime && d.stopTime && d.finalCount) {
-      const start = parseTime(d.startTime);
-      const stop = parseTime(d.stopTime);
+      const mins = pphMinutes(d.startTime, d.stopTime);
       const count = parseInt(d.finalCount);
-      if (start !== null && stop !== null && !isNaN(count) && stop > start) {
+      if (mins !== null && !isNaN(count)) {
         totalPlates += count;
-        totalMins += (stop - start);
+        totalMins += mins;
       }
     }
   });
@@ -722,8 +898,10 @@ function getStationPPH(stationData) {
 function render() {
   const el = document.getElementById('content');
   el.innerHTML = '<div class="instructions">Drag \u2630 to reorder within a station. Use "Move Dishes" to transfer items between days. Enter start/stop times (e.g. 8:30) and final count for auto PPH.</div>';
+  try { updateMissingTimesBadges(); } catch(e) { console.error('Missing-times badge error:', e); }
   const dayData = PRODUCTION_DATA[currentDay];
   if (!dayData) { try { updateMoveBanner(); } catch(e) {} return; }
+  try { el.insertAdjacentHTML('beforeend', missingTimesNoticeHTML(currentDay)); } catch(e) { console.error('Missing-times notice error:', e); }
 
   let hasAnyDishes = false;
   sortedStations(currentDay).forEach(stationName => {
@@ -741,10 +919,10 @@ function render() {
     const totalOrdered = stationData.dishes.reduce((s, d) => s + d.ordered, 0);
     const totalTrays = stationData.dishes.reduce((s, d) => s + Math.ceil(d.ordered / 8), 0);
     const totalFinal = stationData.dishes.reduce((s, d) => s + (parseInt(d.finalCount) || 0), 0);
-    const livePPH = getStationPPH(stationData);
+    const livePPH = getStationPPH(stationData, currentDay);
     const isQueue = stationName === 'Queue';
-
     const operatorName = stationData.operator || '';
+
     stationDiv.innerHTML = `
       <div class="station-header">
         <span>${stationName}${isQueue ? ' — assign dishes to stations using Move Dishes' : ''}</span>
@@ -776,7 +954,7 @@ function render() {
     });
 
     // Station footer with average PPH
-    const pphValues = stationData.dishes.map(d => calcPPH(d)).filter(v => v !== null);
+    const pphValues = stationData.dishes.map(d => calcPPH(d, currentDay)).filter(v => v !== null);
     const avgPPH = pphValues.length > 0 ? Math.round(pphValues.reduce((a,b) => a+b, 0) / pphValues.length) : null;
     const totalPans = stationData.dishes.reduce((s, d) => s + Math.floor(d.ordered / 8), 0);
     const totalRemainder = stationData.dishes.reduce((s, d) => s + (d.ordered % 8), 0);
@@ -811,7 +989,7 @@ function createDishRow(dish, idx, stationName) {
   row.dataset.index = idx;
   row.dataset.station = stationName;
 
-  const pph = calcPPH(dish);
+  const pph = calcPPH(dish, currentDay);
   const diff = dish.finalCount ? parseInt(dish.finalCount) - dish.ordered : null;
   let diffClass = 'neutral', diffText = '-';
   if (diff !== null) {
@@ -819,8 +997,21 @@ function createDishRow(dish, idx, stationName) {
     else if (diff < 0) { diffClass = 'under'; diffText = '' + diff; }
     else { diffClass = 'neutral'; diffText = '0'; }
   }
+  // A partial (carried-over) piece isn't "short" — the rest is planned for another day
+  if (dish.carriedTo) { diffClass = 'carried'; diffText = '\u2192' + carryDestLabel(dish); }
+  if (dish.carriedTo) row.classList.add('carry-partial');
+  else if (dish.carriedFrom) row.classList.add('carry-cont');
+  const carryBadge = carryBadgeHTML(dish, currentDay, stationName, idx, !moveMode);
+  // Fixed-width slot on every row keeps the metric columns lined up whether or not the button shows
+  const carryBtn = `<div class="carry-slot">${(!moveMode && canCarryOver(dish))
+    ? `<button class="carry-btn" tabindex="-1" title="Keep today's plates here and finish the rest on another day" onclick="event.stopPropagation();openCarryDialog('${currentDay}','${stationName}',${idx})">Carry over \u21AA</button>`
+    : ''}</div>`;
 
   const sid = stationName.replace(/\s/g, '');
+  // Counted but no usable times yet: outline the empty/bad time boxes amber (just a cue, never blocks anything)
+  const tProblem = timesProblem(dish, currentDay);
+  const needStart = tProblem && (tProblem === 'bad' || !(dish.startTime && String(dish.startTime).trim())) ? ' needs-time' : '';
+  const needStop = tProblem && (tProblem === 'bad' || !(dish.stopTime && String(dish.stopTime).trim())) ? ' needs-time' : '';
 
   if (moveMode) {
     // In move mode: disable editing, make entire row tappable
@@ -829,6 +1020,7 @@ function createDishRow(dish, idx, stationName) {
       <div class="dish-info">
         <div class="dish-name">${dish.name}</div>
         <div class="dish-details">${dish.guide}</div>
+        ${carryBadge}
       </div>
       <div class="dish-metrics">
         <div class="metric-box">
@@ -855,13 +1047,14 @@ function createDishRow(dish, idx, stationName) {
     `;
   } else {
     // Normal mode: full editing capabilities
-    const nameEditable = userRole === 'admin';
     row.innerHTML = `
       <div class="drag-handle">\u2630</div>
       <div class="dish-info">
-        <div class="dish-name ${nameEditable ? 'editable' : ''}" ${nameEditable ? 'contenteditable="true" spellcheck="false" tabindex="-1" onclick="event.stopPropagation()" onblur="updateDishField(\'' + currentDay + '\',\'' + stationName + '\',' + idx + ',\'name\',this.textContent)"' : ''}>${dish.name}</div>
+        <div class="dish-name editable" contenteditable="true" spellcheck="false" tabindex="-1"
+          onclick="event.stopPropagation()" onblur="updateDishField('${currentDay}','${stationName}',${idx},'name',this.textContent)">${dish.name}</div>
         <div class="dish-details editable" contenteditable="true" spellcheck="false" tabindex="-1"
           onclick="event.stopPropagation()" onblur="updateDishField('${currentDay}','${stationName}',${idx},'guide',this.textContent)">${dish.guide}</div>
+        ${carryBadge}
       </div>
       <div class="dish-metrics">
         <div class="metric-box">
@@ -874,17 +1067,17 @@ function createDishRow(dish, idx, stationName) {
         </div>
         <div class="metric-box">
           <span class="metric-label">Start</span>
-          <input class="metric-input time-input" type="text" placeholder="700" value="${dish.startTime}"
+          <input class="metric-input time-input${needStart}" type="text" placeholder="700" value="${dish.startTime}"
             onclick="event.stopPropagation()" onblur="updateTime('${currentDay}','${stationName}',${idx},'startTime',this.value)">
         </div>
         <div class="metric-box">
           <span class="metric-label">Stop</span>
-          <input class="metric-input time-input" type="text" placeholder="830" value="${dish.stopTime}"
+          <input class="metric-input time-input${needStop}" type="text" placeholder="830" value="${dish.stopTime}"
             onclick="event.stopPropagation()" onblur="updateTime('${currentDay}','${stationName}',${idx},'stopTime',this.value)">
         </div>
         <div class="metric-box">
           <span class="metric-label">Final</span>
-          <input class="metric-input" type="number" placeholder="0" value="${dish.finalCount}"
+          <input class="metric-input" type="number" placeholder="0" value="${dish.finalCount}"${dish.carriedTo ? ' disabled title="Locked: rest was carried over. Undo the carry-over to change."' : ''}
             onclick="event.stopPropagation()" onchange="updateFinal('${currentDay}','${stationName}',${idx},this.value)">
         </div>
         <div class="metric-box">
@@ -901,6 +1094,7 @@ function createDishRow(dish, idx, stationName) {
             onclick="event.stopPropagation()" onblur="updateNotes('${currentDay}','${stationName}',${idx},this.value)">
         </div>
       </div>
+      ${carryBtn}
       <button class="expand-btn" tabindex="-1" onclick="toggleDetail('${sid}',${idx},event)">\u25B6</button>
     `;
   }
@@ -910,21 +1104,18 @@ function createDishRow(dish, idx, stationName) {
       if (e.target.tagName === 'INPUT' || e.target.classList.contains('expand-btn')) return;
       selectForMove(currentDay, stationName, idx);
     };
-  } else if (userRole === 'admin') {
-    // Only admins can drag to reorder
-    row.draggable = true;
-    row.addEventListener('dragstart', handleDragStart);
-    row.addEventListener('dragover', handleDragOver);
-    row.addEventListener('dragend', handleDragEnd);
-    row.addEventListener('drop', handleDrop);
-    const handle = row.querySelector('.drag-handle');
-    handle.addEventListener('touchstart', handleTouchStart, { passive: false });
-    handle.addEventListener('touchmove', handleTouchMove, { passive: false });
-    handle.addEventListener('touchend', handleTouchEnd);
   } else {
-    // Team users: hide drag handle visual cue
-    const handle = row.querySelector('.drag-handle');
-    if (handle) handle.style.visibility = 'hidden';
+    if (userRole === 'admin') {
+      row.draggable = true;
+      row.addEventListener('dragstart', handleDragStart);
+      row.addEventListener('dragover', handleDragOver);
+      row.addEventListener('dragend', handleDragEnd);
+      row.addEventListener('drop', handleDrop);
+      const handle = row.querySelector('.drag-handle');
+      handle.addEventListener('touchstart', handleTouchStart, { passive: false });
+      handle.addEventListener('touchmove', handleTouchMove, { passive: false });
+      handle.addEventListener('touchend', handleTouchEnd);
+    }
   }
 
   return row;
@@ -946,7 +1137,6 @@ function updateFinal(day, station, idx, value) {
 function updateDishField(day, station, idx, field, value) {
   value = value.trim();
   if (field === 'instruction' && value === '(click to add)') return;
-  // Admin-only fields: name requires admin role
   if (field === 'name' && userRole !== 'admin') {
     showSaveNotice('Admin PIN required to edit dish names');
     render();
@@ -955,6 +1145,7 @@ function updateDishField(day, station, idx, field, value) {
   PRODUCTION_DATA[day][station].dishes[idx][field] = value;
   syncFieldToFirebase(day, station, idx, field, value);
   // If guide, instruction, or addIn is edited, save to the permanent Dish Library
+  // so it carries forward to next week automatically
   if (field === 'guide' || field === 'instruction' || field === 'addIn') {
     const dishName = PRODUCTION_DATA[day][station].dishes[idx].name;
     const libKey = dishName.replace(/[.#$/\[\]]/g, '_');
@@ -971,9 +1162,9 @@ function updateNotes(day, station, idx, value) {
 
 function updateOperator(day, station, value) {
   value = value.trim();
+  if (!productionDataLoaded) { console.warn('BLOCKED: write skipped — live production data not loaded yet'); return; }
   if (!PRODUCTION_DATA[day] || !PRODUCTION_DATA[day][station]) return;
   PRODUCTION_DATA[day][station].operator = value;
-  // Field-level sync for operator (station level, not dish level)
   const safeDay = day.replace(/\//g, '-');
   dataRef.child(safeDay + '/' + station + '/operator').set(value);
   showSaveNotice(value ? value + ' assigned' : 'Operator cleared');
@@ -985,6 +1176,243 @@ function toggleDetail(stationId, idx, event) {
   const btn = event.target;
   el.classList.toggle('show');
   btn.textContent = el.classList.contains('show') ? '\u25BC' : '\u25B6';
+}
+
+// --- Carry over unfinished ---
+// A dish that ran out partway (e.g. waiting on edamame) is split into linked pieces:
+//   piece 1 stays on its original day with the plates actually done (+ that day's times/platers),
+//   piece 2 is created on a later day for the remaining plates.
+// Every piece's `ordered` = the plates that piece is responsible for, so adding up `ordered`
+// across the week still equals the dish's full target (`fullOrdered`) — no double counting.
+// Who may carry over (and undo): admin only (Zach, 10/2). Team sees the labels but no button.
+const CARRY_OVER_ROLE = 'admin';
+let carryCtx = null; // { day, station, idx }
+
+function shortDay(dayLabel) {
+  if (!dayLabel) return '';
+  const m = String(dayLabel).match(/^(\w{3})\w*\s+(\d{1,2})[\/\-](\d{1,2})/);
+  return m ? `${m[1]} ${m[2]}/${m[3]}` : String(dayLabel);
+}
+
+// carriedTo = "<day>|<station>" of the next piece (kept up to date when an admin moves it)
+function carryDest(d) {
+  const parts = String((d && d.carriedTo) || '').split('|');
+  return { day: parts[0] || '', station: parts[1] || '' };
+}
+function carryDestLabel(d) {
+  const t = carryDest(d);
+  return t.station === 'Queue' ? 'Queue' : shortDay(t.day);
+}
+function dayIndex(dayName) { return sortedDays().indexOf(dayName); }
+
+function carryAllowedForRole() {
+  return CARRY_OVER_ROLE === 'team' || userRole === 'admin';
+}
+
+function daysAfter(dayName) {
+  const days = sortedDays();
+  const i = days.indexOf(dayName);
+  return i >= 0 ? days.slice(i + 1) : [];
+}
+
+function canCarryOver(dish) {
+  if (!dish || dish.carriedTo || !carryAllowedForRole()) return false;
+  const ordered = parseInt(dish.ordered) || 0;
+  const done = parseInt(dish.finalCount) || 0;
+  const started = done > 0 || !!dish.startTime;
+  return ordered > 1 && done < ordered && started;
+}
+
+// Locate a piece of a carry chain anywhere in the week (pieces can be moved between stations)
+function findCarryPiece(carryId, part) {
+  for (const day of Object.keys(PRODUCTION_DATA)) {
+    for (const station of Object.keys(PRODUCTION_DATA[day] || {})) {
+      const dishes = (PRODUCTION_DATA[day][station] || {}).dishes || [];
+      for (let i = 0; i < dishes.length; i++) {
+        const d = dishes[i];
+        if (d && d.carryId === carryId && (parseInt(d.carryPart) || 1) === part) return { day, station, idx: i, dish: d };
+      }
+    }
+  }
+  return null;
+}
+
+// Plates done in all earlier pieces of the chain (for the "continued" badge)
+function carryDoneBefore(dish) {
+  let done = 0;
+  for (let p = 1; p < (parseInt(dish.carryPart) || 1); p++) {
+    const piece = findCarryPiece(dish.carryId, p);
+    if (piece) done += parseInt(piece.dish.finalCount) || 0;
+  }
+  return done;
+}
+
+function carryLabelText(d) {
+  if (!d || !d.carryId) return '';
+  const bits = [];
+  if (d.carriedFrom) bits.push(`continued from ${shortDay(d.carriedFrom)}`);
+  if (d.carriedTo) bits.push(`partial ${parseInt(d.finalCount) || 0} of ${d.fullOrdered}, rest -> ${carryDest(d).station === 'Queue' ? 'Queue (unassigned)' : shortDay(carryDest(d).day)}`);
+  return bits.length ? ` (${bits.join('; ')})` : '';
+}
+
+function carryBadgeHTML(dish, day, station, idx, interactive) {
+  if (!dish.carryId) return '';
+  let html = '';
+  if (dish.carriedFrom) {
+    const before = carryDoneBefore(dish);
+    html += station === 'Queue'
+      ? `<div class="carry-badge cont">\u21AA Continued from ${shortDay(dish.carriedFrom)} \u00B7 ${dish.ordered} left \u00B7 ${before} of ${dish.fullOrdered} done there \u00B7 admin to assign</div>`
+      : `<div class="carry-badge cont">\u21AA Continued from ${shortDay(dish.carriedFrom)} \u00B7 ${before} of ${dish.fullOrdered} done there \u00B7 ${dish.ordered} to plate here</div>`;
+  }
+  if (dish.carriedTo) {
+    const next = findCarryPiece(dish.carryId, (parseInt(dish.carryPart) || 1) + 1);
+    const dest = next ? { day: next.day, station: next.station } : carryDest(dish);
+    const inQueue = dest.station === 'Queue';
+    const where = `${shortDay(dest.day)}${dest.station && dest.station !== station ? ' \u00B7 ' + dest.station : ''}`;
+    // plates still left after this piece (what this day handed on), not just what the next day kept
+    const remaining = (parseInt(dish.fullOrdered) || 0) - carryDoneBefore(dish) - (parseInt(dish.finalCount) || 0);
+    const undo = interactive && carryAllowedForRole() && next && carryPieceUntouched(next.dish)
+      ? `<button class="carry-undo" onclick="event.stopPropagation();undoCarryOver('${day}','${station}',${idx})">Undo</button>` : '';
+    html += `<div class="carry-badge partial">Partial \u00B7 ${parseInt(dish.finalCount) || 0} plated here \u00B7 ${remaining} ${inQueue ? 'waiting in the Queue for an admin to assign' : 'continued on ' + where}${undo}</div>`;
+  }
+  return html;
+}
+
+function carryPieceUntouched(d) {
+  return !d.finalCount && !d.startTime && !d.stopTime && !d.carriedTo;
+}
+
+function nowHHMM() {
+  const n = new Date();
+  let h = n.getHours(); if (h > 12) h -= 12; if (h === 0) h = 12;
+  return h + ':' + String(n.getMinutes()).padStart(2, '0');
+}
+
+function openCarryDialog(day, station, idx) {
+  const dish = PRODUCTION_DATA[day] && PRODUCTION_DATA[day][station] && PRODUCTION_DATA[day][station].dishes[idx];
+  if (!dish || !canCarryOver(dish)) return;
+  const later = daysAfter(day);
+  if (later.length === 0) {
+    showSaveNotice('Last day of this production week \u2014 carry-over into next week is not supported');
+    return;
+  }
+  carryCtx = { day, station, idx };
+  document.getElementById('carryDishName').textContent = `${dish.name} \u2014 ${dish.ordered} ordered (${shortDay(day)}, ${station})`;
+  document.getElementById('carryDone').value = dish.finalCount || '';
+  document.getElementById('carryStart').value = dish.startTime || '';
+  document.getElementById('carryStop').value = dish.stopTime || nowHHMM();
+  document.getElementById('carryError').textContent = '';
+  updateCarrySummary();
+  document.getElementById('carryOverlay').classList.add('show');
+}
+
+function closeCarryDialog() {
+  document.getElementById('carryOverlay').classList.remove('show');
+  carryCtx = null;
+}
+
+function readCarryForm() {
+  const { day, station, idx } = carryCtx;
+  const dish = PRODUCTION_DATA[day][station].dishes[idx];
+  const done = parseInt(document.getElementById('carryDone').value);
+  const start = formatTimeInput(document.getElementById('carryStart').value);
+  const stop = formatTimeInput(document.getElementById('carryStop').value);
+  const toDay = day, toStation = 'Queue';   // leftovers always wait in this day's Queue for an admin to assign
+  let error = '', warning = '';
+  if (isNaN(done) || done < 1) error = 'Enter how many plates were done today (at least 1).';
+  else if (done >= dish.ordered) error = `Plates done must be less than ${dish.ordered}. If it's finished, just enter the final count.`;
+  // Times never block a carry-over; they only decide whether today's plates show up in PPH.
+  if (!error && pphMinutes(start, stop) === null)
+    warning = 'Heads up: without a valid start and stop time, today\u2019s plates won\u2019t count toward PPH (you can fix the times on the row later).';
+  return { dish, done, start, stop, toDay, toStation, remaining: dish.ordered - (isNaN(done) ? 0 : done), error, warning };
+}
+
+function updateCarrySummary() {
+  if (!carryCtx) return;
+  const f = readCarryForm();
+  const op = (PRODUCTION_DATA[carryCtx.day][carryCtx.station].operator || '').trim();
+  document.getElementById('carrySummary').innerHTML = f.error ? '' :
+    `<b>${f.done}</b> plates stay on <b>${shortDay(carryCtx.day)}</b> (${carryCtx.station}${op ? ', ' + op : ''}) and count toward that day's PPH.<br>` +
+    `The other <b>${f.remaining}</b> go to the <b>Queue</b>, still linked to ${shortDay(carryCtx.day)}. ` +
+    `Assign them to a station and day later in the week with <b>Move Dishes</b>.` +
+    (f.warning ? `<div style="color:#E65100;margin-top:6px;">${f.warning}</div>` : '');
+  document.getElementById('carryError').textContent = f.error;
+  document.getElementById('carryConfirmBtn').disabled = !!f.error;
+  document.getElementById('carryConfirmBtn').style.opacity = f.error ? 0.5 : 1;
+}
+
+// Write only the station dish lists that changed (narrower than a full productionData overwrite)
+function syncStationsToFirebase(pairs) {
+  if (isRemoteUpdate) return Promise.resolve();
+  if (!productionDataLoaded) { console.warn('BLOCKED: carry-over write skipped — live production data not loaded yet'); return Promise.resolve(); }
+  const updates = {};
+  pairs.forEach(([day, station]) => {
+    updates[`${day.replace(/\//g, '-')}/${station}/dishes`] = PRODUCTION_DATA[day][station].dishes;
+  });
+  return dataRef.update(updates);
+}
+
+function carryOverDish(day, station, idx, opts) {
+  const src = PRODUCTION_DATA[day][station].dishes[idx];
+  const { done, start, stop, toDay, toStation } = opts;
+  if (!src || !canCarryOver(src) || !(done >= 1 && done < src.ordered)) return null;
+  if (daysAfter(day).length === 0) return null;            // stays inside this production week
+  if (toDay !== day || toStation !== 'Queue') return null;   // leftovers always go to this day's Queue
+  if (!PRODUCTION_DATA[toDay][toStation]) PRODUCTION_DATA[toDay][toStation] = { target: 800, dishes: [] };
+  const remaining = src.ordered - done;
+  const carryId = src.carryId || ('co' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6));
+  const part = parseInt(src.carryPart) || 1;
+  src.carryUndo = { ordered: src.ordered, finalCount: src.finalCount || '', startTime: src.startTime || '', stopTime: src.stopTime || '' };
+  src.carryId = carryId;
+  src.carryPart = part;
+  src.fullOrdered = parseInt(src.fullOrdered) || src.ordered;
+  src.carriedTo = `${toDay}|${toStation}`;
+  src.ordered = done;               // this piece is now responsible for exactly what was plated
+  src.finalCount = String(done);
+  src.startTime = start;
+  src.stopTime = stop;
+  const cont = {
+    name: src.name, addIn: src.addIn, guide: src.guide, instruction: src.instruction,
+    ordered: remaining, finalCount: '', startTime: '', stopTime: '', notes: '',
+    carryId, carryPart: part + 1, carriedFrom: day, fullOrdered: src.fullOrdered
+  };
+  PRODUCTION_DATA[toDay][toStation].dishes.push(cont);
+  return syncStationsToFirebase([[day, station], [toDay, toStation]]).then(() => ({ remaining, toDay, toStation }));
+}
+
+function confirmCarryOver() {
+  if (!carryCtx) return;
+  const f = readCarryForm();
+  if (f.error) { document.getElementById('carryError').textContent = f.error; return; }
+  const { day, station, idx } = carryCtx;
+  const p = carryOverDish(day, station, idx, f);
+  closeCarryDialog();
+  render();
+  if (p) p.then(r => showSaveNotice(`${r.remaining} plates sent to the Queue \u2014 assign them with Move Dishes`));
+}
+
+function undoCarryOver(day, station, idx) {
+  const src = PRODUCTION_DATA[day][station].dishes[idx];
+  if (!src || !src.carriedTo || !carryAllowedForRole()) return;
+  const next = findCarryPiece(src.carryId, (parseInt(src.carryPart) || 1) + 1);
+  if (!next) return;
+  if (!carryPieceUntouched(next.dish)) {
+    showSaveNotice(`Can't undo: ${shortDay(next.day)} ${next.station} has already started plating it`);
+    return;
+  }
+  if (!confirm(`Undo carry-over?\n\n${next.dish.ordered} plates will be removed from ${next.station === 'Queue' ? 'the Queue' : next.day + ' (' + next.station + ')'} and put back on ${day} (${station}).`)) return;
+  PRODUCTION_DATA[next.day][next.station].dishes.splice(next.idx, 1);
+  const u = src.carryUndo || {};
+  src.ordered = parseInt(u.ordered) || (src.ordered + next.dish.ordered);
+  src.finalCount = u.finalCount !== undefined ? u.finalCount : src.finalCount;
+  src.startTime = u.startTime !== undefined ? u.startTime : src.startTime;
+  src.stopTime = u.stopTime !== undefined ? u.stopTime : src.stopTime;
+  delete src.carriedTo; delete src.carryUndo;
+  if ((parseInt(src.carryPart) || 1) === 1) { delete src.carryId; delete src.carryPart; delete src.fullOrdered; }
+  const pairs = [[day, station]];
+  if (!(next.day === day && next.station === station)) pairs.push([next.day, next.station]);
+  syncStationsToFirebase(pairs).then(() => showSaveNotice('Carry-over undone'));
+  render();
 }
 
 // --- Move between days ---
@@ -1005,10 +1433,8 @@ function toggleMoveMode() {
 function selectForMove(day, station, idx) {
   const existingIdx = selectedDishes.findIndex(s => s.day === day && s.station === station && s.index === idx);
   if (existingIdx >= 0) {
-    // Deselect
     selectedDishes.splice(existingIdx, 1);
   } else {
-    // Add to selection
     selectedDishes.push({ day, station, index: idx });
   }
   render();
@@ -1023,26 +1449,14 @@ function updateMoveBanner() {
   banner.classList.add('show');
 
   if (selectedDishes.length === 0) {
-    text.textContent = 'Tap dishes to select them for moving (select multiple)';
+    text.textContent = 'Tap dishes to select them for moving (multi-select)';
     actions.innerHTML = '';
     return;
   }
 
-  // Build display text showing selected dish names
-  const names = [];
-  selectedDishes.forEach(sel => {
-    try {
-      const dish = PRODUCTION_DATA[sel.day][sel.station].dishes[sel.index];
-      if (dish) names.push(dish.name);
-    } catch(e) {}
-  });
-
-  text.textContent = `Moving ${selectedDishes.length} dish${selectedDishes.length > 1 ? 'es' : ''}: ${names.join(', ')}`;
+  text.textContent = `${selectedDishes.length} dish${selectedDishes.length > 1 ? 'es' : ''} selected`;
 
   actions.innerHTML = '';
-
-  // Collect unique source stations to exclude from destinations
-  const sourceKeys = new Set(selectedDishes.map(s => s.day + '|' + s.station));
 
   // Show same-day stations first, then other days
   const sameDayStations = [];
@@ -1050,8 +1464,6 @@ function updateMoveBanner() {
 
   sortedDays().forEach(day => {
     STATION_ORDER.forEach(station => {
-      // Skip if ALL selected dishes are from this exact day+station
-      if (sourceKeys.size === 1 && sourceKeys.has(day + '|' + station)) return;
       if (day === currentDay) {
         sameDayStations.push({ day, station, label: station });
       } else {
@@ -1070,22 +1482,27 @@ function updateMoveBanner() {
 
   const cancelBtn = document.createElement('button');
   cancelBtn.className = 'move-btn move-btn-cancel';
-  cancelBtn.textContent = 'Deselect All';
+  cancelBtn.textContent = 'Cancel';
   cancelBtn.onclick = () => { selectedDishes = []; render(); };
   actions.appendChild(cancelBtn);
 }
 
 function moveDishesTo(targetDay, targetStation) {
   if (selectedDishes.length === 0) return;
-
-  // Auto-create the target station if it doesn't exist yet
   if (!PRODUCTION_DATA[targetDay]) return;
   if (!PRODUCTION_DATA[targetDay][targetStation]) {
     PRODUCTION_DATA[targetDay][targetStation] = { target: 800, dishes: [] };
   }
 
-  // Sort selections by index descending so splicing doesn't shift earlier indices
-  // Group by day+station for efficient removal
+  // Carry-over leftovers can only go to their own day or later in the same week
+  const tooEarly = selectedDishes.find(sel => {
+    const d = ((PRODUCTION_DATA[sel.day] || {})[sel.station] || {}).dishes;
+    const dish = d && d[sel.index];
+    return dish && dish.carriedFrom && dayIndex(targetDay) < dayIndex(dish.carriedFrom);
+  });
+  if (tooEarly) { showSaveNotice('A carried-over dish can only go to its own day or later in the week'); return; }
+
+  // Group selections by source day+station, then sort by descending index to avoid shifting
   const grouped = {};
   selectedDishes.forEach(sel => {
     const key = sel.day + '|' + sel.station;
@@ -1095,7 +1512,6 @@ function moveDishesTo(targetDay, targetStation) {
 
   const movedDishes = [];
   Object.values(grouped).forEach(group => {
-    // Sort by index descending
     group.sort((a, b) => b.index - a.index);
     group.forEach(sel => {
       try {
@@ -1108,14 +1524,16 @@ function moveDishesTo(targetDay, targetStation) {
     });
   });
 
-  // Add all moved dishes to target
   PRODUCTION_DATA[targetDay][targetStation].dishes.push(...movedDishes);
-
+  // Keep each moved leftover's link pointing at where it now lives (shown on the original day's row)
+  movedDishes.forEach(d => {
+    if (!d.carryId || (parseInt(d.carryPart) || 1) < 2) return;
+    const prev = findCarryPiece(d.carryId, (parseInt(d.carryPart) || 1) - 1);
+    if (prev && prev.dish.carriedTo) prev.dish.carriedTo = `${targetDay}|${targetStation}`;
+  });
   const count = movedDishes.length;
   selectedDishes = [];
-
-  // STAY on the current day — don't navigate away
-  syncToFirebase();
+  syncToFirebase(); // Full sync for structural changes
   renderTabs();
   render();
   showSaveNotice(count + ' dish' + (count > 1 ? 'es' : '') + ' moved to ' + targetStation + (targetDay !== currentDay ? ' (' + targetDay + ')' : ''));
@@ -1214,7 +1632,7 @@ function exportPDF() {
 
       const totalOrdered = stationData.dishes.reduce((s, d) => s + d.ordered, 0);
       const totalFinal = stationData.dishes.reduce((s, d) => s + (parseInt(d.finalCount) || 0), 0);
-      const livePPH = getStationPPH(stationData);
+      const livePPH = getStationPPH(stationData, dayName);
 
       const operatorLabel = stationData.operator ? `  —  ${stationData.operator}` : '';
       doc.setFontSize(16);
@@ -1233,13 +1651,14 @@ function exportPDF() {
 
       const headers = [['#', 'Dish', 'Plate Guide', 'Instruction', 'Ordered', 'Trays', 'Start', 'Stop', 'Final', 'PPH', '+/-', 'Notes']];
       const rows = stationData.dishes.map((d, i) => {
-        const pph = calcPPH(d);
+        const pph = calcPPH(d, dayName);
         const diff = d.finalCount ? parseInt(d.finalCount) - d.ordered : null;
         let diffStr = '-';
         if (diff !== null) diffStr = diff > 0 ? '+' + diff : '' + diff;
+        if (d.carriedTo) diffStr = '-> ' + carryDestLabel(d);
         return [
           i + 1,
-          d.name + (d.addIn ? `\n(${d.addIn})` : ''),
+          d.name + (d.addIn ? `\n(${d.addIn})` : '') + carryLabelText(d),
           d.guide,
           d.instruction || '-',
           d.ordered,
@@ -1278,7 +1697,7 @@ function exportPDF() {
       });
 
       // Average PPH row
-      const pdfPphValues = stationData.dishes.map(d => calcPPH(d)).filter(v => v !== null);
+      const pdfPphValues = stationData.dishes.map(d => calcPPH(d, dayName)).filter(v => v !== null);
       const pdfAvgPPH = pdfPphValues.length > 0 ? Math.round(pdfPphValues.reduce((a,b) => a+b, 0) / pdfPphValues.length) : null;
       const finalY = doc.lastAutoTable.finalY || 180;
       doc.setFontSize(11);
@@ -1356,11 +1775,11 @@ function saveWeekToHistory() {
 
     // Pre-compute PPH for each dish
     const snapshotData = JSON.parse(JSON.stringify(sanitizeKeys(fixedData)));
-    Object.values(snapshotData).forEach(dayData => {
+    Object.entries(snapshotData).forEach(([dayName, dayData]) => {
       Object.values(dayData).forEach(stationData => {
         if (stationData && Array.isArray(stationData.dishes)) {
           stationData.dishes.forEach(d => {
-            const pph = calcPPH(d);
+            const pph = calcPPH(d, dayName);
             if (pph !== null) d.storedPPH = pph;
           });
         }
@@ -1375,8 +1794,16 @@ function saveWeekToHistory() {
       data: snapshotData
     };
 
+    // Reminder only (the save above already happened): counted dishes saved without usable times
+    let noTimes = 0;
+    Object.entries(fixedData).forEach(([dayName, dayData]) => {
+      Object.values(dayData || {}).forEach(stationData => {
+        if (stationData && Array.isArray(stationData.dishes)) stationData.dishes.forEach(d => { if (timesProblem(d, dayName)) noTimes++; });
+      });
+    });
     historyRef.child(weekKey).set(historyEntry).then(() => {
-      showSaveNotice('Week saved to history (' + dishesWithFinals + '/' + totalDishes + ' dishes with final counts)');
+      showSaveNotice('Week saved to history (' + dishesWithFinals + '/' + totalDishes + ' dishes with final counts)' +
+        (noTimes ? ' \u2022 ' + noTimes + ' without start/stop times, no PPH for those' : ''));
     });
   });
 }
@@ -1416,7 +1843,7 @@ function loadHistoryList() {
   historyRef.orderByKey().once('value', (snapshot) => {
     const history = snapshot.val();
     if (!history) {
-      content.innerHTML = '<div class="history-empty">No history saved yet.</div><div style="padding: 12px 20px; border-top: 1px solid #e0e0e0;"><button class="btn btn-white" style="width:100%; background:#1B5E20; color:white;" onclick="saveCurrentWeekSnapshot()">Save Current Week to History</button></div>';
+      content.innerHTML = '<div class="history-empty">No history saved yet.</div>' + weekMissingTimesNote() + '<div style="padding: 12px 20px; border-top: 1px solid #e0e0e0;"><button class="btn btn-white" style="width:100%; background:#1B5E20; color:white;" onclick="saveCurrentWeekSnapshot()">Save Current Week to History</button></div>';
       return;
     }
 
@@ -1439,7 +1866,7 @@ function loadHistoryList() {
     html += '</div>';
 
     // Add save current week button
-    html += '<div style="padding: 12px 20px; border-top: 1px solid #e0e0e0;"><button class="btn btn-white" style="width:100%; background:#1B5E20; color:white;" onclick="saveCurrentWeekSnapshot()">Save Current Week to History</button></div>';
+    html += weekMissingTimesNote() + '<div style="padding: 12px 20px; border-top: 1px solid #e0e0e0;"><button class="btn btn-white" style="width:100%; background:#1B5E20; color:white;" onclick="saveCurrentWeekSnapshot()">Save Current Week to History</button></div>';
 
     content.innerHTML = html;
   });
@@ -1476,7 +1903,7 @@ function viewHistoryWeek(weekKey) {
     }
 
     title.textContent = week.weekLabel || weekKey;
-    const stationBgs = { 'Station 1': '#1565C0', 'Station 2': '#E65100', 'Station 3': '#6A1B9A' };
+    const stationBgs = { 'Queue': '#455A64', 'Station 1': '#1565C0', 'Station 2': '#E65100', 'Station 3': '#6A1B9A', 'Station 4': '#00695C', 'Station 5': '#B71C1C' };
 
     let html = '<div class="history-detail">';
     html += '<button class="history-back" onclick="loadHistoryList()">&#8592; Back to all weeks</button>';
@@ -1493,9 +1920,33 @@ function viewHistoryWeek(weekKey) {
         const stationOrdered = stationData.dishes.reduce((s, d) => s + (d.ordered || 0), 0);
         const stationFinal = stationData.dishes.reduce((s, d) => s + (parseInt(d.finalCount) || 0), 0);
 
+        // Calculate average PPH for the station
+        const pphValues = [];
+        let totalPlates = 0, totalMins = 0;
+        stationData.dishes.forEach(d => {
+          let pph = null;
+          if (isExcludedFromPPH(d, dayName)) return;
+          if (d.storedPPH !== undefined && d.storedPPH !== null && d.storedPPH !== '') {
+            pph = parseInt(d.storedPPH);
+          } else if (d.startTime && d.stopTime && d.finalCount) {
+            const mins = pphMinutes(d.startTime, d.stopTime);
+            const f = parseInt(d.finalCount);
+            if (mins !== null && !isNaN(f)) {
+              pph = Math.round((f / mins) * 60);
+              totalPlates += f;
+              totalMins += mins;
+            }
+          }
+          if (pph !== null) pphValues.push(pph);
+        });
+        const avgPPH = pphValues.length > 0 ? Math.round(pphValues.reduce((a,b) => a+b, 0) / pphValues.length) : null;
+        const stationPPH = totalMins > 0 ? Math.round((totalPlates / totalMins) * 60) : null;
+
         const histOperator = stationData.operator ? ` (${stationData.operator})` : '';
+        const pphLabel = avgPPH !== null ? ` | Avg PPH: ${avgPPH}` : '';
+        const stPphLabel = stationPPH !== null ? ` | Station PPH: ${stationPPH}` : '';
         html += `<div class="history-station">`;
-        html += `<div class="history-station-name" style="background:${bg}">${stationName}${histOperator} — ${stationOrdered} ordered${stationFinal ? `, ${stationFinal} plated` : ''}</div>`;
+        html += `<div class="history-station-name" style="background:${bg}">${stationName}${histOperator} — ${stationOrdered} ordered${stationFinal ? `, ${stationFinal} plated` : ''}${pphLabel}${stPphLabel}</div>`;
         html += `<table class="history-table"><thead><tr>
           <th>Dish</th><th>Ordered</th><th>Final</th><th>+/-</th><th>PPH</th><th class="notes-col">Notes</th>
         </tr></thead><tbody>`;
@@ -1512,18 +1963,19 @@ function viewHistoryWeek(weekKey) {
 
           // Calculate PPH — use pre-stored value if available, otherwise compute from times
           let pphStr = '-';
-          if (d.storedPPH !== undefined && d.storedPPH !== null && d.storedPPH !== '') {
+          if (isExcludedFromPPH(d, dayName)) { /* Wednesday cookies & muffins: no PPH */ }
+          else if (d.storedPPH !== undefined && d.storedPPH !== null && d.storedPPH !== '') {
             pphStr = '' + d.storedPPH;
           } else if (d.startTime && d.stopTime && d.finalCount) {
-            const pphStart = parseTime(String(d.startTime));
-            const pphStop = parseTime(String(d.stopTime));
-            if (pphStart !== null && pphStop !== null && pphStop > pphStart) {
-              pphStr = '' + Math.round((final / (pphStop - pphStart)) * 60);
+            const pphMins = pphMinutes(d.startTime, d.stopTime);
+            if (pphMins !== null) {
+              pphStr = '' + Math.round((final / pphMins) * 60);
             }
           }
 
+          if (d.carriedTo) { diffStr = '&rarr; ' + carryDestLabel(d); diffColor = '#F57F17'; }
           html += `<tr>
-            <td>${d.name}</td>
+            <td>${d.name}${d.carryId ? `<span style="color:#F57F17;font-size:11px;">${carryLabelText(d)}</span>` : ''}</td>
             <td>${d.ordered}</td>
             <td>${d.finalCount || '-'}</td>
             <td style="color:${diffColor}; font-weight:600;">${diffStr}</td>
@@ -1541,32 +1993,10 @@ function viewHistoryWeek(weekKey) {
 }
 
 // ==================== PIN LOGIN ====================
-const TEAM_PIN = '7590';
-const ADMIN_PIN = '6895';
-const LOGIN_KEY = 'zedrics_hub_staging_login';
-const LOGIN_DURATION = 24 * 60 * 60 * 1000; // 24 hours
-
-function isLoginValid() {
-    try {
-        const stored = localStorage.getItem(LOGIN_KEY);
-        if (!stored) return false;
-        const data = JSON.parse(stored);
-        const validPin = (data.pin === TEAM_PIN || data.pin === ADMIN_PIN);
-        if (validPin && (Date.now() - data.time) < LOGIN_DURATION) {
-            userRole = data.pin === ADMIN_PIN ? 'admin' : 'team';
-            return true;
-        }
-        return false;
-    } catch(e) { return false; }
-}
-
-function saveLogin(pin) {
-    localStorage.setItem(LOGIN_KEY, JSON.stringify({ pin: pin, time: Date.now() }));
-    userRole = pin === ADMIN_PIN ? 'admin' : 'team';
-}
-
+// PINs are checked by Firebase (see hub-auth.js); they are not stored in this page.
 function logout() {
-    localStorage.removeItem(LOGIN_KEY);
+    dataRef.off('value', onProductionDataGate);
+    HubAuth.signOut();
     userRole = 'team';
     moveMode = false;
     selectedDishes = [];
@@ -1580,51 +2010,30 @@ function logout() {
 function showApp() {
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('main-content').style.display = 'block';
-    // Update subtitle based on role
-    updateRoleUI();
+    attachProductionListener();
     init();
 }
 
-function updateRoleUI() {
-    const subtitle = document.querySelector('.subtitle');
-    if (userRole === 'admin') {
-        subtitle.textContent = 'Admin Mode — Drag to reorder | Move dishes | Edit dish names';
-        document.getElementById('moveModeBtn').style.display = '';
-    } else {
-        subtitle.textContent = 'Team Mode — Enter times, counts & notes';
-        document.getElementById('moveModeBtn').style.display = '';
-    }
-}
-
-function handleLogin(pin) {
-    auth.signInAnonymously().then(() => {
-        saveLogin(pin);
-        showApp();
-    }).catch(err => {
-        document.getElementById('pin-error').textContent = 'Login error: ' + err.message;
-    });
-}
-
 document.getElementById('pin-input').addEventListener('input', function() {
+    const input = this;
     document.getElementById('pin-error').textContent = '';
-    if (this.value.length === 4) {
-        if (this.value === TEAM_PIN || this.value === ADMIN_PIN) {
-            handleLogin(this.value);
-        } else {
-            document.getElementById('pin-error').textContent = 'Incorrect PIN';
-            this.value = '';
-        }
+    if (input.value.length === 4) {
+        const pin = input.value;
+        input.disabled = true;
+        HubAuth.signInWithPin(pin).then(role => {
+            userRole = role;
+            showApp();
+        }).catch(err => {
+            document.getElementById('pin-error').textContent = HubAuth.friendlyError(err);
+            input.value = '';
+        }).finally(() => { input.disabled = false; });
     }
 });
 
-// On page load: check if already logged in within 24h
-if (isLoginValid()) {
-    auth.signInAnonymously().then(() => {
-        showApp();
-    }).catch(() => {
-        localStorage.removeItem(LOGIN_KEY);
-    });
-}
+// On page load: stay logged in for 24h on this device
+HubAuth.restore().then(role => {
+    if (role) { userRole = role; showApp(); }
+});
 </script>
 </body>
 </html>
