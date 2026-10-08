@@ -1926,16 +1926,15 @@ function viewHistoryWeek(weekKey) {
         stationData.dishes.forEach(d => {
           let pph = null;
           if (isExcludedFromPPH(d, dayName)) return;
+          // Station PPH = all plates / all minutes for every dish with usable times (same as the live view),
+          // whether or not the dish also has a storedPPH. (It used to skip dishes with storedPPH.)
+          const mins = (d.startTime && d.stopTime && d.finalCount) ? pphMinutes(d.startTime, d.stopTime) : null;
+          const f = parseInt(d.finalCount);
+          if (mins !== null && !isNaN(f)) { totalPlates += f; totalMins += mins; }
           if (d.storedPPH !== undefined && d.storedPPH !== null && d.storedPPH !== '') {
             pph = parseInt(d.storedPPH);
-          } else if (d.startTime && d.stopTime && d.finalCount) {
-            const mins = pphMinutes(d.startTime, d.stopTime);
-            const f = parseInt(d.finalCount);
-            if (mins !== null && !isNaN(f)) {
-              pph = Math.round((f / mins) * 60);
-              totalPlates += f;
-              totalMins += mins;
-            }
+          } else if (mins !== null && !isNaN(f)) {
+            pph = Math.round((f / mins) * 60);
           }
           if (pph !== null) pphValues.push(pph);
         });
