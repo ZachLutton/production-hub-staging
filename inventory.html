@@ -4,8 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Zedric's ZedOps — Inventory</title>
+<script src="firebase-config.js"></script>
 <script src="split.js"></script>
 <script src="inventory-store.js"></script>
+<script src="inventory-remote.js"></script>
 <script src="inventory-features.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
@@ -63,9 +65,13 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .badge.yellow { background: #FFF9C4; color: #F57F17; }
 .badge.green { background: #C8E6C9; color: #2E7D32; }
 .loc-pill { padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
-.loc-pill.colonnade { background: #E3F2FD; color: #1565C0; }
-.loc-pill.rim { background: #FFF3E0; color: #E65100; }
 .loc-pill.backstock { background: #EDE7F6; color: #4527A0; }
+.loc-pill.store-0 { background: #E3F2FD; color: #1565C0; }
+.loc-pill.store-1 { background: #FFF3E0; color: #E65100; }
+.loc-pill.store-2 { background: #E8F5E9; color: #1B5E20; }
+.loc-pill.store-3 { background: #FCE4EC; color: #AD1457; }
+.loc-pill.store-4 { background: #E0F7FA; color: #006064; }
+.loc-pill.store-5 { background: #FFF8E1; color: #F57F17; }
 
 /* Inventory table */
 .inv-table { width: 100%; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.08); margin-bottom: 20px; }
@@ -318,7 +324,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 
 <!-- MAIN CONTENT (hidden until login) -->
 <div id="main-content">
-<div class="staging-banner">LOCAL STAGING COPY — not connected to Firebase. The live Production Hub is untouched. Counts stay in this browser until you export a backup.</div>
+<div class="staging-banner" id="stagingBanner">LOCAL STAGING COPY — counts stay in this browser until a new staging Firebase project is pasted into firebase-config.js. The live Production Hub is not connected.</div>
 
 <div class="header">
   <div>
@@ -343,6 +349,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
   <button class="subnav-btn" onclick="switchSection('count')">Physical Count</button>
   <button class="subnav-btn" onclick="switchSection('shelflife')">Shelf Life</button>
   <button class="subnav-btn" onclick="switchSection('history')">Log History</button>
+  <button class="subnav-btn" onclick="switchSection('stores')">Stores</button>
   <button class="subnav-btn admin-only" id="caseConfigBtn" onclick="switchSection('caseconfig')" style="display:none">Case Config</button>
 </div>
 
@@ -367,10 +374,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
       <div class="card"><div class="card-label">Total Units</div><div class="card-value green" id="cardTotal">0</div></div>
     </div>
 
-    <div class="loc-toggle">
-      <button class="loc-btn active" onclick="setDashLoc('both',this)">Both</button>
-      <button class="loc-btn" onclick="setDashLoc('colonnade',this)">Colonnade</button>
-      <button class="loc-btn" onclick="setDashLoc('rim',this)">RIM</button>
+    <div class="loc-toggle" id="dashLocToggle">
+      <button class="loc-btn active" onclick="setDashLoc('all',this)">All</button>
       <button class="loc-btn" onclick="setDashLoc('backstock',this)">Backstock</button>
     </div>
 
@@ -400,12 +405,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
     <div class="form-header">
       <div class="form-group">
         <label>Location</label>
-        <select id="enterLoc">
-          <option value="colonnade">Colonnade case</option>
-          <option value="colonnade_backstock">Colonnade backstock</option>
-          <option value="rim">Rim case</option>
-          <option value="rim_backstock">Rim backstock</option>
-        </select>
+        <select id="enterLoc"></select>
       </div>
       <div class="form-group">
         <label>Default Date</label>
@@ -445,22 +445,12 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
       <div class="transfer-arrow">
         <div class="form-group">
           <label>From</label>
-          <select id="transferFrom" onchange="updateTransferDirection()">
-            <option value="colonnade">Colonnade case</option>
-            <option value="colonnade_backstock">Colonnade backstock</option>
-            <option value="rim">Rim case</option>
-            <option value="rim_backstock">Rim backstock</option>
-          </select>
+          <select id="transferFrom" onchange="updateTransferDirection()"></select>
         </div>
         <span class="arrow">→</span>
         <div class="form-group">
           <label>To</label>
-          <select id="transferTo" onchange="updateTransferDirection()">
-            <option value="rim">Rim case</option>
-            <option value="rim_backstock">Rim backstock</option>
-            <option value="colonnade">Colonnade case</option>
-            <option value="colonnade_backstock">Colonnade backstock</option>
-          </select>
+          <select id="transferTo" onchange="updateTransferDirection()"></select>
         </div>
       </div>
 
@@ -499,12 +489,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 
       <div class="form-group" style="margin-bottom:12px;">
         <label>Location</label>
-        <select id="adjustLoc">
-          <option value="colonnade">Colonnade case</option>
-          <option value="colonnade_backstock">Colonnade backstock</option>
-          <option value="rim">Rim case</option>
-          <option value="rim_backstock">Rim backstock</option>
-        </select>
+        <select id="adjustLoc"></select>
       </div>
 
       <div class="form-group" style="margin-bottom:12px;">
@@ -536,10 +521,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 
     <div class="form-group" style="margin-bottom:12px;">
       <label>Location</label>
-      <select id="stockoutLoc" onchange="buildStockoutList()">
-        <option value="colonnade">Colonnade case</option>
-        <option value="rim">Rim case</option>
-      </select>
+      <select id="stockoutLoc" onchange="buildStockoutList()"></select>
     </div>
 
     <div class="stockout-list" id="stockoutList"></div>
@@ -558,12 +540,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
     <div style="display:flex;gap:12px;align-items:flex-end;margin-bottom:16px;flex-wrap:wrap;">
       <div class="form-group">
         <label>Location</label>
-        <select id="countLoc" onchange="buildCountSheet()">
-          <option value="colonnade">Colonnade case</option>
-          <option value="colonnade_backstock">Colonnade backstock</option>
-          <option value="rim">Rim case</option>
-          <option value="rim_backstock">Rim backstock</option>
-        </select>
+        <select id="countLoc" onchange="buildCountSheet()"></select>
       </div>
     </div>
 
@@ -602,16 +579,15 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
   <!-- ===== RECEIVE ===== -->
   <div class="section" id="sec-receive">
     <h2 style="font-size:18px;margin-bottom:4px;">Receive</h2>
-    <p class="hint" style="margin-bottom:12px;">Scan labels as meals come in. Each scan adds 1 unless you type a quantity first. Use-by is the plate date plus that dish's shelf life. An unknown barcode can be linked to a dish on the spot.</p>
+    <p class="hint" style="margin-bottom:12px;">Scan labels as meals come in. The Shopify SKU on the product is the UPC on the label, so a scan picks the dish from the SKU list. Link a code by hand only when that list has no match. Each scan adds 1 unless you type a quantity first.</p>
+    <div class="split-actions" style="margin-bottom:12px;">
+      <button class="btn btn-secondary" type="button" onclick="document.getElementById('skuCsv').click()">Import Shopify SKU CSV</button>
+      <input id="skuCsv" type="file" accept=".csv,text/csv" hidden onchange="importSkuFile(this)">
+    </div>
     <div class="form-header">
       <div class="form-group">
         <label>Into</label>
-        <select id="receiveLoc">
-          <option value="rim_backstock">Rim backstock</option>
-          <option value="rim">Rim case</option>
-          <option value="colonnade_backstock">Colonnade backstock</option>
-          <option value="colonnade">Colonnade case</option>
-        </select>
+        <select id="receiveLoc"></select>
       </div>
       <div class="form-group">
         <label>Plate date</label>
@@ -638,10 +614,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
     <div class="form-header">
       <div class="form-group">
         <label>Cooler</label>
-        <select id="backstockLoc" onchange="renderBackstock()">
-          <option value="colonnade_backstock">Colonnade backstock</option>
-          <option value="rim_backstock">Rim backstock</option>
-        </select>
+        <select id="backstockLoc" onchange="renderBackstock()"></select>
       </div>
     </div>
     <label class="hint" style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">
@@ -657,12 +630,19 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
   <!-- ===== SPLIT ===== -->
   <div class="section" id="sec-split">
     <h2 style="font-size:18px;margin-bottom:4px;">Split the week</h2>
-    <p class="hint" style="margin-bottom:12px;">Enter or import plated counts. Pickup orders stay at the store the customer chose. Deliveries go to the Rim. Apply writes the suggestion only after you confirm.</p>
+    <p class="hint" style="margin-bottom:12px;">Enter or import plated counts. Pickup orders stay at the store on the order. Deliveries go to the delivery hub. Apply writes the suggestion only after you confirm.</p>
     <div id="splitRoot"></div>
     <div class="submit-bar" id="splitSubmitBar" style="display:none;">
       <button class="btn btn-secondary" onclick="switchSection('dashboard')">Cancel</button>
       <button class="btn btn-success" onclick="applySplit()">Apply split</button>
     </div>
+  </div>
+
+  <!-- ===== STORES ===== -->
+  <div class="section" id="sec-stores">
+    <h2 style="font-size:18px;margin-bottom:4px;">Stores</h2>
+    <p class="hint" style="margin-bottom:12px;">The starting list is the stores you have now. Add another store or a commissary here. Each store has an id, a name, pickup, a delivery-hub flag, a production-kitchen flag, door shelves, and a backstock cooler. Shares for stores in the split must add up to 100. Transfers can move between any two locations, including a commissary.</p>
+    <div id="storesRoot"></div>
   </div>
 
   <!-- ===== LOG HISTORY ===== -->
@@ -722,7 +702,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 <div class="modal-overlay" id="barcodeModal">
   <div class="modal">
     <h3>Link this barcode</h3>
-    <div class="modal-subtitle">Code <strong id="barcodeCodeLabel"></strong> is not linked yet. Pick the dish on the label. The next scan of this code adds that dish.</div>
+    <div class="modal-subtitle">Code <strong id="barcodeCodeLabel"></strong> is not in the Shopify SKU list. Pick the dish once. The next scan of this code adds that dish.</div>
     <div class="modal-field">
       <label>Dish</label>
       <input type="text" id="barcodeDishSearch" placeholder="Search dishes" oninput="searchBarcodeDish(this.value)" autocomplete="off">
@@ -770,43 +750,84 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 
 <script>
 // ============================================================
-// Local data only.
-// This repo's inventory page used to call the live Realtime Database
-// (project zedrics-production-hub), including the shared dish catalog.
-// This branch does not load that SDK and does not read or write it.
-// Counts live in this browser under the key below.
+// Staging data. Empty firebase-config.js stays in this browser.
+// A pasted config must be a new project. The live hub is refused.
 // ============================================================
-const db = ZedLocal.createInventoryDb({
-  storage: window.localStorage,
-  storageKey: 'zedops_staging_inv_local_v1'
-});
-const ServerValue = db.ServerValue;
+var db = null;
+var ServerValue = { TIMESTAMP: { '.sv': 'timestamp' } };
+var dataMode = 'local';
+window.dataMode = 'local';
+var invRef, adjRef, countsRef, configRef, transfersRef, stockoutsRef, shelfLifeRef, splitConfigRef, barcodesRef, skipListRef, storesRef, skuMapRef;
 
-const invRef = db.ref('staging_inv_inventory');
-const adjRef = db.ref('staging_inv_adjustments');
-const countsRef = db.ref('staging_inv_counts');
-const configRef = db.ref('staging_inv_caseConfig');
-const transfersRef = db.ref('staging_inv_transfers');
-const stockoutsRef = db.ref('staging_inv_stockouts');
-const shelfLifeRef = db.ref('staging_inv_shelfLife');
-const splitConfigRef = db.ref('staging_inv_splitConfig');
-const barcodesRef = db.ref('staging_inv_barcodes');
-const skipListRef = db.ref('staging_inv_skipList');
+var stores = ZedSplit.normalizeStores(ZedSplit.DEFAULT_STORES);
+function getStores() { return stores; }
+function setStores(next) { stores = ZedSplit.normalizeStores(next); }
+function locations() { return ZedSplit.locationsFor(stores); }
 
-const LOCATIONS = [
-  { id: 'colonnade', store: 'colonnade', kind: 'case', label: 'Colonnade case' },
-  { id: 'colonnade_backstock', store: 'colonnade', kind: 'backstock', label: 'Colonnade backstock' },
-  { id: 'rim', store: 'rim', kind: 'case', label: 'Rim case' },
-  { id: 'rim_backstock', store: 'rim', kind: 'backstock', label: 'Rim backstock' }
-];
+function bindRefs(nextDb) {
+  db = nextDb;
+  ServerValue = nextDb.ServerValue || ServerValue;
+  invRef = db.ref('staging_inv_inventory');
+  adjRef = db.ref('staging_inv_adjustments');
+  countsRef = db.ref('staging_inv_counts');
+  configRef = db.ref('staging_inv_caseConfig');
+  transfersRef = db.ref('staging_inv_transfers');
+  stockoutsRef = db.ref('staging_inv_stockouts');
+  shelfLifeRef = db.ref('staging_inv_shelfLife');
+  splitConfigRef = db.ref('staging_inv_splitConfig');
+  barcodesRef = db.ref('staging_inv_barcodes');
+  skipListRef = db.ref('staging_inv_skipList');
+  storesRef = db.ref('staging_inv_stores');
+  skuMapRef = db.ref('staging_inv_skuMap');
+}
 
-const connRef = db.ref('.info/connected');
-connRef.on('value', snap => {
-  const dot = document.getElementById('syncDot');
-  const label = document.getElementById('syncLabel');
-  if (snap.val()) { dot.classList.remove('off'); label.textContent = 'Saved on this device'; }
-  else { dot.classList.add('off'); label.textContent = 'Offline'; }
-});
+function watchConnection() {
+  db.ref('.info/connected').on('value', snap => {
+    const dot = document.getElementById('syncDot');
+    const label = document.getElementById('syncLabel');
+    if (!snap.val()) { dot.classList.add('off'); label.textContent = 'Offline'; return; }
+    dot.classList.remove('off');
+    label.textContent = dataMode === 'remote' ? 'Staging project' : 'Saved on this device';
+  });
+}
+
+function fillLocationSelect(id, filter) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const current = el.value;
+  const options = locations().filter(loc => {
+    if (filter === 'case') return loc.kind === 'case';
+    if (filter === 'backstock') return loc.kind === 'backstock';
+    return true;
+  });
+  el.innerHTML = options.map(loc => '<option value="' + loc.id + '">' + esc(loc.label) + '</option>').join('');
+  if (current && options.some(loc => loc.id === current)) el.value = current;
+}
+
+function fillAllLocationSelects() {
+  ['enterLoc', 'transferFrom', 'transferTo', 'adjustLoc', 'countLoc', 'receiveLoc'].forEach(id => fillLocationSelect(id));
+  fillLocationSelect('stockoutLoc', 'case');
+  fillLocationSelect('backstockLoc', 'backstock');
+  const from = document.getElementById('transferFrom');
+  const to = document.getElementById('transferTo');
+  if (from && to && from.value === to.value) {
+    const other = locations().find(loc => loc.id !== from.value);
+    if (other) to.value = other.id;
+  }
+  renderDashToggles();
+}
+
+function renderDashToggles() {
+  const wrap = document.getElementById('dashLocToggle');
+  if (!wrap) return;
+  const buttons = [{ id: 'all', label: 'All' }];
+  getStores().forEach(store => buttons.push({ id: store.id, label: store.name }));
+  buttons.push({ id: 'backstock', label: 'Backstock' });
+  wrap.innerHTML = buttons.map(btn => {
+    const active = dashLoc === btn.id || (dashLoc === 'both' && btn.id === 'all');
+    return '<button class="loc-btn' + (active ? ' active' : '') + '" onclick="setDashLoc(\'' + btn.id + '\', this)">' + esc(btn.label) + '</button>';
+  }).join('');
+}
 
 // ============================================================
 // Role Management
@@ -1002,7 +1023,7 @@ function formatDate(isoDate) {
 // ============================================================
 // Dashboard
 // ============================================================
-let dashLoc = 'both';
+let dashLoc = 'all';
 let invData = {};
 
 function setDashLoc(loc, btn) {
@@ -1031,14 +1052,12 @@ function renderDashboard() {
       const isoDate = fromFbKey(ubKey);
       const days = daysUntil(isoDate);
 
-      LOCATIONS.forEach(locInfo => {
+      locations().forEach(locInfo => {
         const loc = locInfo.id;
         const qty = parseInt(locs[loc]) || 0;
         if (qty <= 0) return;
-        if (dashLoc === 'colonnade' && locInfo.store !== 'colonnade') return;
-        if (dashLoc === 'rim' && locInfo.store !== 'rim') return;
         if (dashLoc === 'backstock' && locInfo.kind !== 'backstock') return;
-        if (dashLoc !== 'both' && dashLoc !== 'colonnade' && dashLoc !== 'rim' && dashLoc !== 'backstock' && dashLoc !== loc) return;
+        if (dashLoc !== 'all' && dashLoc !== 'both' && dashLoc !== 'backstock' && locInfo.storeId !== dashLoc) return;
 
         rows.push({ dishName: dishName || dk, dishKey: dk, location: loc, useByFb: ubKey, isoDate, days, qty });
         totalUnits += qty;
@@ -1106,17 +1125,18 @@ function findDishName(dk) {
 }
 
 function locLabel(loc) {
-  const found = LOCATIONS.find(item => item.id === loc);
+  const found = locations().find(item => item.id === loc);
   if (found) return found.label;
-  if (loc === 'colonnade') return 'Colonnade case';
-  if (loc === 'rim') return 'Rim case';
   return loc || '';
 }
 
 function locClass(loc) {
   if (!loc) return '';
-  if (String(loc).indexOf('backstock') !== -1) return 'backstock';
-  return loc === 'rim' ? 'rim' : 'colonnade';
+  const found = locations().find(item => item.id === loc);
+  if (found && found.kind === 'backstock') return 'backstock';
+  const storeId = found ? found.storeId : ZedSplit.storeIdFromLocation(loc);
+  const idx = getStores().findIndex(store => store.id === storeId);
+  return 'store-' + (idx < 0 ? 0 : idx % 6);
 }
 
 function esc(str) {
@@ -1590,8 +1610,8 @@ function updateTransferDirection() {
   const from = document.getElementById('transferFrom').value;
   const toEl = document.getElementById('transferTo');
   if (from === toEl.value) {
-    const loc = LOCATIONS.find(item => item.id === from);
-    const other = LOCATIONS.find(item => item.kind === loc.kind && item.store !== loc.store) || LOCATIONS.find(item => item.id !== from);
+    const loc = locations().find(item => item.id === from);
+    const other = locations().find(item => loc && item.kind === loc.kind && item.storeId !== loc.storeId) || locations().find(item => item.id !== from);
     if (other) toEl.value = other.id;
   }
   if (typeof renderTransferPreview === 'function') renderTransferPreview();
@@ -1651,32 +1671,15 @@ function submitTransfer() {
   if (valid.length === 0) { showToast('Add at least one dish with a quantity'); return; }
 
   invRef.once('value').then(snap => {
-    const data = snap.val() || {};
-    const updates = {};
-    const logItems = [];
-    let short = false;
-
-    valid.forEach(item => {
-      const dk = dishKey(item.name);
-      const dishData = data[dk] || {};
-      const lots = Object.keys(dishData).map(ubKey => ({
-        useBy: ubKey,
-        qty: parseInt(dishData[ubKey] && dishData[ubKey][from], 10) || 0
-      }));
-      const plan = ZedSplit.allocateOldestFirst(lots, item.qty, today());
-      plan.moves.forEach(move => {
-        const locData = dishData[move.useBy] || {};
-        const available = parseInt(locData[from], 10) || 0;
-        const currentTo = parseInt(locData[to], 10) || 0;
-        updates[dk + '/' + move.useBy + '/' + from] = available - move.qty;
-        updates[dk + '/' + move.useBy + '/' + to] = currentTo + move.qty;
-        logItems.push({ dish: dk, dishName: item.name, useBy: move.useBy, qty: move.qty });
-      });
-      if (plan.shortfall > 0) {
-        short = true;
-        logItems.push({ dish: dk, dishName: item.name, useBy: 'n/a', qty: 0, note: 'Short ' + plan.shortfall + ' units' });
-      }
+    const result = ZedSplit.applyTransfer(snap.val() || {}, {
+      from: from,
+      to: to,
+      today: today(),
+      lines: valid.map(item => ({ dishKey: dishKey(item.name), name: item.name, qty: item.qty }))
     });
+    const updates = result.updates;
+    const logItems = result.logItems;
+    const short = result.short;
 
     if (Object.keys(updates).length === 0) {
       showToast('No inventory found to transfer from ' + locLabel(from));
@@ -1772,7 +1775,7 @@ function submitAdjustment() {
   const isAdding = (adjustReason === 'received' || adjustReason === 'correction');
 
   if (adjustReason === 'orange_star') {
-    const store = loc === 'rim' || loc === 'rim_backstock' ? 'rim' : 'colonnade';
+    const store = ZedSplit.storeIdFromLocation(loc);
     const items = valid.map(item => ({ dish: dishKey(item.name), dishName: item.name, qty: item.qty }));
     adjRef.push({
       reason: 'orange_star',
@@ -2187,8 +2190,11 @@ function loadHistory() {
       let detail = '';
 
       if (entry.logType === 'split') {
-        const names = (entry.items || []).map(i => (i.dishName || i.dish) + ' ' + (i.colonnade || 0) + '/' + (i.rim || 0)).slice(0, 3).join(', ');
-        detail = `<strong>Split</strong> for plate date ${esc(entry.plateDate || '')}. Colonnade/Rim: ${names}`;
+        const names = (entry.items || []).map(i => {
+          const parts = (i.allocations || []).map(slot => slot.name + ' ' + (slot.caseQty || 0) + (slot.backstock ? '+' + slot.backstock : ''));
+          return (i.dishName || i.dish) + (parts.length ? ' ' + parts.join(' / ') : '');
+        }).slice(0, 3).join(', ');
+        detail = `<strong>Split</strong> for plate date ${esc(entry.plateDate || '')}. ${names}`;
       } else if (entry.logType === 'transfer') {
         const names = (entry.items || []).map(i => i.dishName || i.dish).slice(0, 3).join(', ');
         const extra = (entry.items || []).length > 3 ? ' +' + ((entry.items || []).length - 3) + ' more' : '';
@@ -2244,7 +2250,7 @@ function switchSection(section) {
 
   const labels = {
     dashboard: 'Dashboard', enter: 'Enter Inventory', transfer: 'Log Transfer',
-    receive: 'Receive', backstock: 'Backstock', split: 'Split',
+    receive: 'Receive', backstock: 'Backstock', split: 'Split', stores: 'Stores',
     adjustment: 'Log Adjustment', stockout: 'Log Stockout', count: 'Physical Count',
     shelflife: 'Shelf Life', history: 'Log History', caseconfig: 'Case Config'
   };
@@ -2276,6 +2282,7 @@ function switchSection(section) {
   if (section === 'count') buildCountSheet();
   if (section === 'shelflife') buildShelfLifeTable();
   if (section === 'history') { historyLimit = 30; loadHistory(); }
+  if (section === 'stores' && typeof renderStoresEditor === 'function') renderStoresEditor();
   if (section === 'caseconfig') buildCaseConfigUI();
   if (typeof onInventorySection === 'function') onInventorySection(section);
 }
@@ -2303,7 +2310,7 @@ function init() {
   document.getElementById('historyFrom').value = weekAgo.getFullYear() + '-' + String(weekAgo.getMonth()+1).padStart(2,'0') + '-' + String(weekAgo.getDate()).padStart(2,'0');
   document.getElementById('historyTo').value = today();
 
-  seedSampleData(false).then(() => Promise.all([loadCaseConfig(), loadShelfLifeConfig(), installInventoryFeatures()])).then(() => {
+  installInventoryFeatures().then(() => seedSampleData(false)).then(() => Promise.all([loadCaseConfig(), loadShelfLifeConfig()])).then(() => {
     refreshDashboard();
     listenForConfigChanges();
     invRef.on('value', snap => {
@@ -2350,7 +2357,27 @@ function saveLogin(pin) {
 function showApp() {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('main-content').style.display = 'block';
-  init();
+  const banner = document.getElementById('stagingBanner');
+  ZedRemote.openDatabase(window.ZEDOPS_FIREBASE_CONFIG, {
+    createLocal: function () {
+      return ZedLocal.createInventoryDb({
+        storage: window.localStorage,
+        storageKey: 'zedops_staging_inv_local_v1'
+      });
+    }
+  }).then(function (opened) {
+    bindRefs(opened.db);
+    dataMode = opened.mode;
+    window.dataMode = opened.mode;
+    if (banner) {
+      if (opened.mode === 'remote') banner.textContent = 'STAGING Firebase project ' + opened.projectId + '. The live Production Hub is not connected.';
+      else if (opened.reason === 'live-project-blocked') banner.textContent = 'That config is the live Production Hub, so this page stayed in this browser. Paste a new staging project into firebase-config.js.';
+      else if (opened.reason === 'remote-failed') banner.textContent = 'The staging project did not connect. Counts stay in this browser. The live Production Hub was not contacted.';
+      else banner.textContent = 'LOCAL STAGING COPY — counts stay in this browser until a new staging Firebase project is pasted into firebase-config.js. The live Production Hub is not connected.';
+    }
+    watchConnection();
+    init();
+  });
 }
 
 // ============================================================

@@ -1,85 +1,135 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('fs');
+const path = require('path');
 const z = require('./split.js');
 
 const cfg = {
-  colonnadeShare: 0.6,
-  stackRegular: 6,
-  stackSmall: 7,
-  smallMatchers: ['1/2#'],
+  stackHeight: 6,
   leaveAtLeast: 5,
-  skipList: ['Beef Taco Skillet']
+  skipList: ['Beef Taco Skillet'],
+  stores: z.DEFAULT_STORES
 };
 
-test('default share is 60/40 and stacks are 6 regular / 7 small', () => {
-  assert.equal(z.DEFAULT_CONFIG.colonnadeShare, 0.6);
+function byId(row, id) {
+  return row.allocations.find(item => item.id === id);
+}
+
+test('default stores are a config list and stack height is 6 for every dish', () => {
+  assert.equal(z.DEFAULT_CONFIG.stackHeight, 6);
   assert.equal(z.stackSizeFor('Tex Mex Turkey Picadillo (1)', cfg), 6);
-  assert.equal(z.stackSizeFor('1/2# Turkey Chorizo (1)', cfg), 7);
-  assert.equal(z.asShare(60, 0.5), 0.6);
+  assert.equal(z.stackSizeFor('1/2# Turkey Chorizo (1)', cfg), 6);
+  assert.equal(z.stackSizeFor('1/2# Turkey Chorizo (1)', { stackHeight: 8 }), 8);
+  assert.equal(z.sharesStatus(z.DEFAULT_STORES).ok, true);
+  assert.equal(z.sharesStatus(z.DEFAULT_STORES).sum, 100);
+  const hub = z.DEFAULT_STORES.filter(store => store.isDeliveryHub);
+  assert.equal(hub.length, 1);
 });
 
-test('walk-in split rounds colonnade to a stack and still sums to plated', () => {
+test('walk-in split rounds the first store to a stack, sums, and caps the case', () => {
   const row = z.splitDish({ dish: 'Tex Mex Turkey Picadillo (1)', plated: 100 }, cfg);
-  assert.equal(row.colonnade + row.rim, 100);
-  assert.equal(row.colonnade, 60);
-  assert.equal(row.rim, 40);
-  assert.ok(row.colonnade >= 6 && row.rim >= 6);
-  assert.equal(row.warnings.length, 0);
+  const first = byId(row, z.DEFAULT_STORES[0].id);
+  const second = byId(row, z.DEFAULT_STORES[1].id);
+  assert.equal(z.allocationTotal(row), 100);
+  assert.equal(first.total, 60);
+  assert.equal(second.total, 40);
+  assert.equal(first.caseQty, 36);
+  assert.equal(first.backstock, 24);
+  assert.equal(second.caseQty, 36);
+  assert.equal(second.backstock, 4);
+  assert.ok(first.caseQty <= first.capacity);
+  assert.ok(second.caseQty <= second.capacity);
+  assert.ok(row.warnings.some(w => /backstock/.test(w)));
 });
 
-test('prepaid pickups stay at their store and deliveries go to the Rim', () => {
+test('pickups stay at their store and deliveries go to the delivery hub', () => {
+  const hub = z.DEFAULT_STORES.find(store => store.isDeliveryHub);
+  const other = z.DEFAULT_STORES.find(store => !store.isDeliveryHub);
   const row = z.splitDish({
     dish: 'Rustic Chicken Parmesan (2)',
     plated: 100,
-    prepaidColonnade: 10,
-    prepaidRim: 4,
+    pickups: { [other.id]: 10, [hub.id]: 4 },
     delivery: 6
   }, cfg);
-  assert.equal(row.prepaidColonnade, 10);
-  assert.equal(row.prepaidRim, 4);
-  assert.equal(row.delivery, 6);
-  assert.equal(row.colonnade + row.rim, 100);
-  // Rest is 80. 60% of 80 is 48, already a stack. Rim walk-in is 32, plus 4 pickup + 6 delivery.
-  assert.equal(row.walkInColonnade, 48);
-  assert.equal(row.walkInRim, 32);
-  assert.equal(row.colonnade, 58);
-  assert.equal(row.rim, 42);
-  assert.ok(row.colonnade >= row.prepaidColonnade);
-  assert.ok(row.rim >= row.prepaidRim + row.delivery);
+  const a = byId(row, other.id);
+  const b = byId(row, hub.id);
+  assert.equal(a.prepaid, 10);
+  assert.equal(b.prepaid, 4);
+  assert.equal(b.delivery, 6);
+  assert.equal(row.deliveryStoreId, hub.id);
+  assert.equal(z.allocationTotal(row), 100);
+  assert.equal(a.walkIn, 48);
+  assert.equal(b.walkIn, 32);
+  assert.equal(a.total, 58);
+  assert.equal(b.total, 42);
+  assert.ok(a.total >= a.prepaid);
+  assert.ok(b.total >= b.prepaid + b.delivery);
+  assert.ok(a.caseQty <= a.capacity && b.caseQty <= b.capacity);
+  assert.equal(a.caseQty + a.backstock, a.total);
 });
 
-test('minimum stack is not stolen from the other store\'s prepaid', () => {
+test('a store with no uncommitted plates is not given another store\'s prepaid', () => {
+  const first = z.DEFAULT_STORES[0].id;
   const row = z.splitDish({
     dish: 'Greek Chicken Bowl',
     plated: 20,
-    prepaidColonnade: 20
+    pickups: { [first]: 20 }
   }, cfg);
-  assert.equal(row.colonnade, 20);
-  assert.equal(row.rim, 0);
-  assert.equal(row.colonnade + row.rim, 20);
-  assert.ok(row.warnings.some(w => /1 stack/.test(w)));
+  assert.equal(byId(row, first).total, 20);
+  assert.equal(byId(row, z.DEFAULT_STORES[1].id).total, 0);
+  assert.equal(z.allocationTotal(row), 20);
+  assert.ok(row.warnings.some(w => /every store/.test(w)));
 });
 
-test('each store gets a stack when there are enough uncommitted plates', () => {
-  const row = z.splitDish({ dish: 'Chili Mac', plated: 18, colonnadeShare: 0.9 }, cfg);
-  assert.equal(row.colonnade + row.rim, 18);
-  assert.ok(row.colonnade >= 6);
-  assert.ok(row.rim >= 6);
+test('each store gets the dish when walk-in plates can move', () => {
+  const stores = z.normalizeStores(z.DEFAULT_STORES).map(store => {
+    store.share = store.isDeliveryHub ? 10 : 90;
+    return store;
+  });
+  const row = z.splitDish({ dish: 'Chili Mac', plated: 18 }, { stores: stores, stackHeight: 6 });
+  assert.equal(z.allocationTotal(row), 18);
+  row.allocations.forEach(slot => assert.ok(slot.total >= 1, slot.name));
 });
 
-test('small stack of 7 is used for half-pound proteins', () => {
+test('stack height is one setting, including half-pound dishes', () => {
   const row = z.splitDish({ dish: '1/2# Turkey Chorizo (1)', plated: 21 }, cfg);
-  assert.equal(row.stackSize, 7);
-  assert.equal(row.colonnade + row.rim, 21);
-  assert.ok(row.colonnade >= 7 && row.rim >= 7);
-  assert.equal(row.colonnade % 7, 0);
+  const first = byId(row, z.DEFAULT_STORES[0].id);
+  assert.equal(row.stackSize, 6);
+  assert.equal(z.allocationTotal(row), 21);
+  assert.equal(first.total % 6, 0);
+  row.allocations.forEach(slot => assert.ok(slot.total > 0));
 });
 
-test('plated below two stacks is not forced and still sums', () => {
+test('a short plate still sums and does not invent a minimum stack', () => {
   const row = z.splitDish({ dish: '1/2# Baked Chicken (1)', plated: 10 }, cfg);
-  assert.equal(row.stackSize, 7);
-  assert.equal(row.colonnade + row.rim, 10);
-  assert.ok(row.warnings.some(w => /below two stacks/.test(w)));
+  assert.equal(row.stackSize, 6);
+  assert.equal(z.allocationTotal(row), 10);
+  assert.equal(row.warnings.some(w => /two stacks|1 stack/.test(w)), false);
+});
+
+test('door capacity comes from that store\'s door, and overflow is backstock', () => {
+  const tight = z.DEFAULT_STORES[0];
+  const open = z.DEFAULT_STORES[1];
+  const door = tight.doors.find(item => item.id === '6');
+  assert.equal(door.half, 24);
+  assert.equal(open.doors.find(item => item.id === '6').half, 36);
+  const plan = { '1/2# Turkey Chorizo (1)': { door: '6', share: 'half' } };
+  const row = z.splitDish({ dish: '1/2# Turkey Chorizo (1)', plated: 80 }, {
+    stores: z.DEFAULT_STORES,
+    stackHeight: 6,
+    shelfPlan: plan
+  });
+  const a = byId(row, tight.id);
+  const b = byId(row, open.id);
+  assert.equal(a.capacity, 24);
+  assert.equal(b.capacity, 36);
+  assert.equal(a.total, 48);
+  assert.equal(a.caseQty, 24);
+  assert.equal(a.backstock, 24);
+  assert.equal(b.total, 32);
+  assert.equal(b.caseQty, 32);
+  assert.equal(b.backstock, 0);
+  assert.ok(a.caseQty <= a.capacity && b.caseQty <= b.capacity);
 });
 
 test('skip list is Beef Taco Skillet only; Orange Chicken is back in stock', () => {
@@ -92,17 +142,14 @@ test('skip list is Beef Taco Skillet only; Orange Chicken is back in stock', () 
     { dish: 'Arroz Con Pollo (2)', plated: 90 }
   ], cfg);
   assert.equal(batch[0].skipped, true);
-  assert.equal(batch[0].colonnade, 0);
-  const orange = batch[1];
-  assert.equal(orange.skipped, false);
-  assert.equal(orange.colonnade + orange.rim, 18);
-  assert.ok(orange.colonnade >= 6 && orange.rim >= 6);
-  assert.equal(batch[2].skipped, false);
-  assert.equal(batch[2].colonnade + batch[2].rim, 90);
-  assert.ok(batch[2].colonnade >= 6 && batch[2].rim >= 6);
+  assert.equal(z.allocationTotal(batch[0]), 0);
+  assert.equal(batch[1].skipped, false);
+  assert.equal(z.allocationTotal(batch[1]), 18);
+  batch[1].allocations.forEach(slot => assert.ok(slot.total >= 1));
+  assert.equal(z.allocationTotal(batch[2]), 90);
 });
 
-test('a week of dishes sums exactly and keeps a stack when plated allows it', () => {
+test('a week of dishes sums exactly and keeps case qty inside capacity', () => {
   const plate = [
     ['Tex Mex Turkey Picadillo (1)', 115],
     ['Bacon & Gruyere Egg Bites w/ Cauliflower Hash (2)', 51],
@@ -119,41 +166,46 @@ test('a week of dishes sums exactly and keeps a stack when plated allows it', ()
   results.forEach(row => {
     if (row.skipped) {
       assert.equal(row.dish.indexOf('Taco') !== -1, true);
-      assert.equal(row.colonnade + row.rim, 0);
+      assert.equal(z.allocationTotal(row), 0);
       return;
     }
-    assert.equal(row.colonnade + row.rim, row.plated, row.dish);
-    if (row.plated >= row.stackSize * 2) {
-      assert.ok(row.colonnade >= row.stackSize && row.rim >= row.stackSize, row.dish);
+    assert.equal(z.allocationTotal(row), row.plated, row.dish);
+    row.allocations.forEach(slot => {
+      assert.ok(slot.caseQty <= slot.capacity, row.dish);
+      assert.equal(slot.caseQty + slot.backstock, slot.total);
+    });
+    if (row.plated >= row.allocations.length) {
+      const zeros = row.allocations.filter(slot => slot.total === 0);
+      if (zeros.length) assert.ok(row.warnings.some(w => /every store|0%/.test(w)));
     }
   });
   const orange = results.find(row => row.dish === 'Orange Chicken');
   assert.equal(orange.skipped, false);
-  assert.equal(orange.colonnade + orange.rim, 36);
+  assert.equal(z.allocationTotal(orange), 36);
 });
 
-test('rebalance moves half and leaves at least 5, oldest first is separate', () => {
+test('rebalance moves half and leaves at least 5', () => {
+  const a = z.DEFAULT_STORES[0].id;
+  const b = z.DEFAULT_STORES[1].id;
   const before = [
-    { name: '1/2# Turkey Chorizo (1)', colonnade: 25, rim: 0 },
-    { name: '1/2# Baked Chicken (1)', colonnade: 4, rim: 0, orangeStarColonnade: 4 },
-    { name: 'Greek Chicken Bowl', colonnade: 5, rim: 0 },
-    { name: 'Beef Taco Skillet (2)', colonnade: 20, rim: 0 },
-    { name: 'Picadillo', colonnade: 0, rim: 9 }
+    { name: '1/2# Turkey Chorizo (1)', onHand: { [a]: 25, [b]: 0 } },
+    { name: '1/2# Baked Chicken (1)', onHand: { [a]: 4, [b]: 0 }, orangeStar: { [a]: 4 } },
+    { name: 'Greek Chicken Bowl', onHand: { [a]: 5, [b]: 0 } },
+    { name: 'Beef Taco Skillet (2)', onHand: { [a]: 20, [b]: 0 } },
+    { name: 'Picadillo', onHand: { [a]: 0, [b]: 9 } }
   ];
   const snapshot = JSON.parse(JSON.stringify(before));
-  const suggestions = z.rebalanceSuggestions({ dishes: before, leaveAtLeast: 5, skipList: cfg.skipList });
+  const suggestions = z.rebalanceSuggestions({ dishes: before, leaveAtLeast: 5, skipList: cfg.skipList, stores: z.DEFAULT_STORES });
   assert.deepEqual(before, snapshot);
 
   const chorizo = suggestions.find(s => s.name.indexOf('Turkey Chorizo') !== -1 && s.reason === 'surplus');
-  assert.ok(chorizo);
-  assert.equal(chorizo.from, 'colonnade');
-  assert.equal(chorizo.to, 'rim');
+  assert.equal(chorizo.from, a);
+  assert.equal(chorizo.to, b);
   assert.equal(chorizo.qty, 12);
 
   const baked = suggestions.find(s => s.name.indexOf('Baked Chicken') !== -1);
-  assert.ok(baked);
-  assert.equal(baked.from, 'colonnade');
-  assert.equal(baked.to, 'rim');
+  assert.equal(baked.from, a);
+  assert.equal(baked.to, b);
   assert.equal(baked.reason, 'orange-star');
   assert.equal(baked.qty, 2);
 
@@ -161,33 +213,44 @@ test('rebalance moves half and leaves at least 5, oldest first is separate', () 
   assert.equal(suggestions.find(s => s.name.indexOf('Taco') !== -1), undefined);
 
   const otherWay = suggestions.find(s => s.name === 'Picadillo' && s.reason === 'surplus');
-  assert.equal(otherWay.from, 'rim');
-  assert.equal(otherWay.to, 'colonnade');
+  assert.equal(otherWay.from, b);
+  assert.equal(otherWay.to, a);
   assert.equal(otherWay.qty, 4);
 });
 
-test('empty case with backstock suggests a pull before a transfer', () => {
+test('empty case with backstock suggests a pull, and overflow stays off a full case', () => {
+  const a = z.DEFAULT_STORES[0].id;
+  const b = z.DEFAULT_STORES[1].id;
   const suggestions = z.rebalanceSuggestions({
-    dishes: [{ name: 'Chili Mac', colonnade: 0, rim: 12, colonnadeBackstock: 8 }],
+    dishes: [{
+      name: 'Chili Mac',
+      onHand: { [a]: 0, [b]: 12 },
+      backstock: { [a]: 8 },
+      capacity: { [a]: 4, [b]: 36 }
+    }],
     leaveAtLeast: 5,
-    skipList: []
+    skipList: [],
+    stores: z.DEFAULT_STORES
   });
   const pull = suggestions.find(s => s.reason === 'backstock');
   const move = suggestions.find(s => s.reason === 'surplus');
-  assert.equal(pull.from, 'colonnade_backstock');
-  assert.equal(pull.to, 'colonnade');
-  assert.equal(pull.qty, 8);
-  assert.equal(move.from, 'rim');
-  assert.equal(move.to, 'colonnade');
-  assert.equal(move.qty, 6);
+  const overflow = suggestions.find(s => s.reason === 'overflow');
+  assert.equal(pull.from, z.backstockLocationId(a));
+  assert.equal(pull.to, a);
+  assert.equal(pull.qty, 4);
+  assert.equal(move.from, b);
+  assert.equal(move.to, a);
+  assert.equal(move.qty, 4);
+  assert.equal(overflow.to, z.backstockLocationId(a));
+  assert.equal(overflow.qty, 2);
 });
 
 test('share shift moves one stack toward the out and away from orange star', () => {
+  const a = z.DEFAULT_STORES[0].id;
+  const b = z.DEFAULT_STORES[1].id;
   const proposals = z.proposeShareShifts({
-    colonnadeShare: 0.6,
-    stackRegular: 6,
-    stackSmall: 7,
-    smallMatchers: ['1/2#'],
+    stores: z.DEFAULT_STORES,
+    stackHeight: 6,
     skipList: cfg.skipList,
     dishes: [
       { name: '1/2# Turkey Chorizo (1)', plated: 20 },
@@ -195,37 +258,40 @@ test('share shift moves one stack toward the out and away from orange star', () 
       { name: 'Orange Chicken', plated: 40 }
     ],
     stockouts: [
-      { name: '1/2# Turkey Chorizo (1)', store: 'rim' },
-      { name: 'Rustic Chicken Parmesan (2)', store: 'colonnade' }
+      { name: '1/2# Turkey Chorizo (1)', store: b },
+      { name: 'Rustic Chicken Parmesan (2)', store: a }
     ],
     orangeStar: [
-      { name: '1/2# Turkey Chorizo (1)', store: 'colonnade', qty: 25 },
-      { name: 'Rustic Chicken Parmesan (2)', store: 'rim', qty: 16 }
+      { name: '1/2# Turkey Chorizo (1)', store: a, qty: 25 },
+      { name: 'Rustic Chicken Parmesan (2)', store: b, qty: 16 }
     ]
   });
   const chorizo = proposals.find(p => p.dish.indexOf('Turkey Chorizo') !== -1);
-  assert.equal(chorizo.direction, 'rim');
-  assert.ok(chorizo.next < chorizo.current);
-  assert.equal(Math.round((chorizo.current - chorizo.next) * 20), 7);
+  assert.equal(chorizo.direction, b);
+  assert.ok(chorizo.nextShares[b] > chorizo.currentShares[b]);
+  assert.equal(Math.round(chorizo.currentShares[a] - chorizo.nextShares[a]), 30);
 
   const rustic = proposals.find(p => p.dish.indexOf('Rustic') !== -1);
-  assert.equal(rustic.direction, 'colonnade');
-  assert.ok(rustic.next > rustic.current);
+  assert.equal(rustic.direction, a);
+  assert.ok(rustic.nextShares[a] > rustic.currentShares[a]);
+  const sum = Object.values(rustic.nextShares).reduce((total, n) => total + n, 0);
+  assert.ok(Math.abs(sum - 100) < 0.001);
 
   assert.equal(proposals.find(p => p.dish === 'Orange Chicken'), undefined);
 });
 
 test('conflicting out and orange-star signals are not applied', () => {
+  const b = z.DEFAULT_STORES[1].id;
   const proposals = z.proposeShareShifts({
-    colonnadeShare: 0.6,
-    stackRegular: 6,
+    stores: z.DEFAULT_STORES,
+    stackHeight: 6,
     dishes: [{ name: 'Mahi', plated: 100 }],
-    stockouts: [{ name: 'Mahi', store: 'rim' }],
-    orangeStar: [{ name: 'Mahi', store: 'rim', qty: 9 }]
+    stockouts: [{ name: 'Mahi', store: b }],
+    orangeStar: [{ name: 'Mahi', store: b, qty: 9 }]
   });
   assert.equal(proposals.length, 1);
   assert.equal(proposals[0].direction, 'none');
-  assert.equal(proposals[0].next, proposals[0].current);
+  assert.deepEqual(proposals[0].nextShares, proposals[0].currentShares);
 });
 
 test('oldest use-by moves first, including across the new year', () => {
@@ -254,23 +320,41 @@ test('use-by keys pick the year inside the shelf-life window', () => {
   assert.equal(z.isoToUseByKey('2026-10-30'), '10-30');
 });
 
-test('prepaid CSV: pickups follow the store, deliveries count toward the Rim', () => {
+test('prepaid CSV follows store names from the config, deliveries stay a hub total', () => {
+  const first = z.DEFAULT_STORES[0];
+  const hub = z.DEFAULT_STORES.find(store => store.isDeliveryHub);
   const parsed = z.parsePrepaidCsv([
     'dish,store,qty,type',
-    'Tex Mex Turkey Picadillo (1),Colonnade,4,pickup',
-    'Tex Mex Turkey Picadillo (1),Rim,6,pickup',
-    '"Arroz Con Pollo (2)",Colonnade,3,delivery',
-    'Greek Chicken Bowl,rim,2'
-  ].join('\n'));
+    'Tex Mex Turkey Picadillo (1),' + first.name + ',4,pickup',
+    'Tex Mex Turkey Picadillo (1),' + hub.name + ',6,pickup',
+    '"Arroz Con Pollo (2)",' + first.name + ',3,delivery',
+    'Greek Chicken Bowl,' + hub.id + ',2'
+  ].join('\n'), z.DEFAULT_STORES);
   const totals = z.aggregateOrders(parsed);
   const pic = totals.find(r => r.dish.indexOf('Picadillo') !== -1);
-  assert.equal(pic.prepaidColonnade, 4);
-  assert.equal(pic.prepaidRim, 6);
+  assert.equal(pic.pickups[first.id], 4);
+  assert.equal(pic.pickups[hub.id], 6);
   const arroz = totals.find(r => r.dish.indexOf('Arroz') !== -1);
   assert.equal(arroz.delivery, 3);
-  assert.equal(arroz.prepaidColonnade, 0);
+  assert.equal(arroz.pickups[first.id], undefined);
   const greek = totals.find(r => r.dish.indexOf('Greek') !== -1);
-  assert.equal(greek.prepaidRim, 2);
+  assert.equal(greek.pickups[hub.id], 2);
+});
+
+test('Shopify SKU CSV maps a scanned UPC, and a manual link is only the fallback', () => {
+  const csv = [
+    'Handle,Title,Variant SKU,Variant Barcode',
+    'picadillo,Tex Mex Turkey Picadillo (1),012345678905,012345678905',
+    'orange,Orange Chicken,999111,999111'
+  ].join('\n');
+  const rows = z.parseSkuCsv(csv);
+  assert.equal(rows[0].dish, 'Tex Mex Turkey Picadillo (1)');
+  const skuMap = z.skuMapFromRows(rows);
+  const manual = { '555': { dishName: 'Greek Chicken Bowl' } };
+  assert.equal(z.lookupBarcode('012345678905', manual, skuMap).dish, 'Tex Mex Turkey Picadillo (1)');
+  assert.equal(z.lookupBarcode('12345678905', manual, skuMap).dish, 'Tex Mex Turkey Picadillo (1)');
+  assert.equal(z.lookupBarcode('555', manual, skuMap).dish, 'Greek Chicken Bowl');
+  assert.equal(z.lookupBarcode('000', manual, skuMap), null);
 });
 
 test('plated import uses finalCount and falls back to ordered, without double-counting a carry', () => {
@@ -296,11 +380,20 @@ test('plated import uses finalCount and falls back to ordered, without double-co
   assert.equal(by['Chili Mac'].plated, 80);
 });
 
-test('barcode lookup ignores spaces and leading zeros', () => {
-  const map = { '012345678905': { dish: 'Tex Mex Turkey Picadillo (1)' } };
-  assert.equal(z.lookupBarcode('012345678905', map).dish, 'Tex Mex Turkey Picadillo (1)');
-  assert.equal(z.lookupBarcode('*012345678905*', map).dish, 'Tex Mex Turkey Picadillo (1)');
-  assert.equal(z.lookupBarcode('12345678905', map).dish, 'Tex Mex Turkey Picadillo (1)');
-  assert.equal(z.lookupBarcode('999', map), null);
-  assert.equal(z.normalizeBarcode(' 12 3* '), '123');
+test('the inventory page does not hardcode store names', () => {
+  ['inventory.html', 'inventory-features.js', 'inventory-remote.js', 'firebase-config.js', 'inventory-store.js'].forEach(file => {
+    const text = fs.readFileSync(path.join(__dirname, file), 'utf8');
+    assert.equal(/\bcolonnade\b/i.test(text), false, file);
+    assert.equal(/\brim\b/i.test(text), false, file);
+  });
+});
+
+test('store names are config data, not branches in the split logic', () => {
+  const src = fs.readFileSync(path.join(__dirname, 'split.js'), 'utf8');
+  const start = src.indexOf('var DEFAULT_STORES');
+  const end = src.indexOf('var DEFAULT_CONFIG');
+  assert.ok(start >= 0 && end > start);
+  const logic = src.slice(0, start) + src.slice(end);
+  assert.equal(/\bcolonnade\b/i.test(logic), false);
+  assert.equal(/\brim\b/i.test(logic), false);
 });

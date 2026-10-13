@@ -52,14 +52,50 @@ test('local store persists and reloads without a network', async () => {
   assert.equal((await second.ref('staging_inv_barcodes/012345678905/dishName').once('value')).val(), 'Orange Chicken');
 });
 
-test('inventory page does not connect to the live Firebase project', () => {
-  const html = fs.readFileSync(path.join(__dirname, 'inventory.html'), 'utf8');
-  const features = fs.readFileSync(path.join(__dirname, 'inventory-features.js'), 'utf8');
-  const combined = html + '\n' + features;
-  ['firebaseio.com', 'firebaseapp.com', 'initializeApp', 'gstatic.com/firebasejs', 'dishLibrary', 'signInAnonymously', 'staging_productionData'].forEach(token => {
-    assert.equal(combined.includes(token), false, token);
+test('inventory code does not contain the live Firebase project id', () => {
+  const liveId = ['zedrics', 'production-hub'].join('-');
+  ['inventory.html', 'inventory-features.js', 'inventory-store.js', 'inventory-remote.js', 'firebase-config.js', 'split.js'].forEach(file => {
+    const text = fs.readFileSync(path.join(__dirname, file), 'utf8');
+    assert.equal(text.includes(liveId), false, file);
+    assert.equal(text.includes('dishLibrary'), false, file);
+    assert.equal(text.includes('staging_productionData'), false, file);
   });
+  const html = fs.readFileSync(path.join(__dirname, 'inventory.html'), 'utf8');
+  const cfg = fs.readFileSync(path.join(__dirname, 'firebase-config.js'), 'utf8');
   assert.equal(html.includes('createInventoryDb'), true);
   assert.equal(html.includes('Beef Taco Skillet'), true);
   assert.equal(html.includes("skipList: ['Beef Taco Skillet', 'Orange Chicken']"), false);
+  assert.match(cfg, /projectId:\s*""/);
+});
+
+test('empty config stays local and a live project config is refused', async () => {
+  const remote = require('./inventory-remote.js');
+  assert.equal(remote.classifyFirebaseConfig({ projectId: '', databaseURL: '' }).mode, 'local');
+  const live = {
+    projectId: ['zedrics', 'production-hub'].join('-'),
+    databaseURL: 'https://' + ['zedrics', 'production-hub'].join('-') + '-default-rtdb.firebaseio.com'
+  };
+  assert.equal(remote.classifyFirebaseConfig(live).reason, 'live-project-blocked');
+  let loaded = false;
+  const blocked = await remote.openDatabase(live, {
+    createLocal: function () { return { ServerValue: { TIMESTAMP: 1 }, ref: function () { return {}; } }; },
+    loadSdk: function () { loaded = true; return Promise.resolve(); }
+  });
+  assert.equal(blocked.mode, 'local');
+  assert.equal(loaded, false);
+  const opened = await remote.openDatabase({
+    projectId: 'zedops-staging-example',
+    databaseURL: 'https://zedops-staging-example.firebaseio.com'
+  }, {
+    createLocal: function () { return { ServerValue: {} }; },
+    loadSdk: function () {
+      return Promise.resolve({
+        apps: [],
+        initializeApp: function () { this.apps.push({}); },
+        database: function () { return { ServerValue: { TIMESTAMP: { '.sv': 'timestamp' } } }; }
+      });
+    }
+  });
+  assert.equal(opened.mode, 'remote');
+  assert.equal(opened.projectId, 'zedops-staging-example');
 });

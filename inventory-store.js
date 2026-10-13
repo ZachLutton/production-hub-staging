@@ -1,6 +1,5 @@
 // Local stand-in for the inventory Realtime Database refs.
-// staging inventory.html points at the live project zedrics-production-hub,
-// so this branch never loads the Firebase SDK and never reads or writes it.
+// Used when the staging Firebase config is empty, and in tests.
 (function (root, factory) {
   var api = factory();
   if (typeof module === 'object' && module.exports) module.exports = api;

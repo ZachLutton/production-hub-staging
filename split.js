@@ -1,16 +1,54 @@
-// Pure split, rebalance, and oldest-first helpers for ZedOps inventory.
-// No Firebase and no DOM. The inventory page and node:test both load this file.
+// Split, rebalance, shelf capacity, and transfers for ZedOps inventory.
+// Stores come from a config list. This file has no Firebase and no DOM.
 (function (root, factory) {
   var api = factory();
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (root) root.ZedSplit = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+  function defaultDoors(overrides) {
+    var doors = ['2', '3', '4', '5', '6'].map(function (id) {
+      return { id: id, name: 'Door ' + id, full: 72, half: 36 };
+    });
+    (overrides || []).forEach(function (extra) {
+      doors.forEach(function (door) {
+        if (String(door.id) === String(extra.id)) {
+          if (extra.full != null) door.full = extra.full;
+          if (extra.half != null) door.half = extra.half;
+          if (extra.name) door.name = extra.name;
+        }
+      });
+    });
+    return doors;
+  }
+
+  // Current stores. Add store 3 or a commissary with addStore — do not branch on these ids.
+  var DEFAULT_STORES = [
+    {
+      id: 'colonnade',
+      name: 'Colonnade',
+      share: 60,
+      hasPickup: true,
+      isDeliveryHub: false,
+      isProductionKitchen: false,
+      backstock: true,
+      doors: defaultDoors([{ id: '6', full: 48, half: 24 }])
+    },
+    {
+      id: 'rim',
+      name: 'Rim',
+      share: 40,
+      hasPickup: true,
+      isDeliveryHub: true,
+      isProductionKitchen: false,
+      backstock: true,
+      doors: defaultDoors()
+    }
+  ];
+
   var DEFAULT_CONFIG = {
-    colonnadeShare: 0.6,
-    stackRegular: 6,
-    stackSmall: 7,
-    smallMatchers: ['1/2#'],
+    stackHeight: 6,
     leaveAtLeast: 5,
+    productionMin: 50,
     skipList: ['Beef Taco Skillet']
   };
 
@@ -18,11 +56,8 @@
     return Math.min(hi, Math.max(lo, n));
   }
 
-  function asShare(value, fallback) {
-    var n = Number(value);
-    if (!isFinite(n)) return fallback;
-    if (n > 1) n = n / 100;
-    return clamp(n, 0, 1);
+  function clone(value) {
+    return JSON.parse(JSON.stringify(value));
   }
 
   function roundToStack(qty, stack) {
@@ -40,6 +75,11 @@
     return String(value || '').replace(/[\s*]/g, '').trim();
   }
 
+  function slugId(value) {
+    var id = String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    return id || 'store';
+  }
+
   function isSkipped(name, skipList) {
     var n = normalizeName(name);
     if (!n) return false;
@@ -51,120 +91,393 @@
     });
   }
 
-  function isSmallDish(name, matchers) {
-    var n = String(name || '').toLowerCase();
-    var list = matchers && matchers.length ? matchers : ['1/2#'];
-    return list.some(function (m) { return n.indexOf(String(m).toLowerCase()) !== -1; });
-  }
-
   function stackSizeFor(name, config) {
     var cfg = config || DEFAULT_CONFIG;
-    var regular = Math.max(1, Math.round(Number(cfg.stackRegular) || DEFAULT_CONFIG.stackRegular));
-    var small = Math.max(1, Math.round(Number(cfg.stackSmall) || DEFAULT_CONFIG.stackSmall));
-    return isSmallDish(name, cfg.smallMatchers) ? small : regular;
+    var height = cfg.stackHeight != null ? cfg.stackHeight : DEFAULT_CONFIG.stackHeight;
+    return Math.max(1, Math.round(Number(height) || DEFAULT_CONFIG.stackHeight));
   }
 
-  function colonnadeShareFor(row, config) {
-    var cfg = config || DEFAULT_CONFIG;
-    if (row && row.colonnadeShare != null && row.colonnadeShare !== '') return asShare(row.colonnadeShare, cfg.colonnadeShare);
-    if (row && cfg.perDish && cfg.perDish[row.dish] != null) return asShare(cfg.perDish[row.dish], cfg.colonnadeShare);
-    return asShare(cfg.colonnadeShare, DEFAULT_CONFIG.colonnadeShare);
+  function copyDoors(doors) {
+    return (doors || []).map(function (door) {
+      return {
+        id: String(door.id),
+        name: door.name || ('Door ' + door.id),
+        full: Math.max(0, Math.round(Number(door.full != null ? door.full : 72))),
+        half: Math.max(0, Math.round(Number(door.half != null ? door.half : 36)))
+      };
+    });
   }
 
-  // Prepaid pickups stay at the store the customer chose. Delivery units are
-  // committed to the Rim, because deliveries leave from the Rim. The walk-in
-  // remainder is split by share and rounded to stacks. The two stores always
-  // add up to the plated count. A minimum stack is taken only from walk-in
-  // plates, never from another store's prepaid pickup.
+  function normalizeStores(input) {
+    var raw = input;
+    if (raw && !Array.isArray(raw) && typeof raw === 'object') {
+      raw = Object.keys(raw).map(function (key) { return raw[key]; }).filter(function (store) {
+        return store && typeof store === 'object' && store.id;
+      });
+    }
+    var source = raw && raw.length ? raw : DEFAULT_STORES;
+    var list = source.map(function (store) {
+      return {
+        id: String(store.id),
+        name: String(store.name || store.id),
+        share: Number(store.share) || 0,
+        hasPickup: !!store.hasPickup,
+        isDeliveryHub: !!store.isDeliveryHub,
+        isProductionKitchen: !!store.isProductionKitchen,
+        backstock: store.backstock !== false,
+        doors: store.doors && store.doors.length ? copyDoors(store.doors) : defaultDoors()
+      };
+    });
+    var seenHub = false;
+    list.forEach(function (store) {
+      if (!store.isDeliveryHub) return;
+      if (seenHub) store.isDeliveryHub = false;
+      else seenHub = true;
+    });
+    return list;
+  }
+
+  function splitTargets(stores) {
+    return normalizeStores(stores).filter(function (store) {
+      if (store.isProductionKitchen && !(Number(store.share) > 0)) return false;
+      return true;
+    });
+  }
+
+function sharesStatus(stores) {
+  var targets = splitTargets(stores);
+  var sum = targets.reduce(function (total, store) { return total + (Number(store.share) || 0); }, 0);
+  sum = Math.round(sum * 1000) / 1000;
+  var missing = targets.filter(function (store) { return !(Number(store.share) > 0); }).map(function (store) { return store.name; });
+  return {
+    ok: Math.abs(sum - 100) < 0.001 && missing.length === 0,
+    sum: sum,
+    missing: missing,
+    targets: targets
+  };
+}
+
+  function addStore(stores, draft) {
+    var list = normalizeStores(stores);
+    var seed = slugId((draft && (draft.id || draft.name)) || 'store');
+    var id = seed;
+    var n = 2;
+    while (list.some(function (store) { return store.id === id; })) {
+      id = seed + '-' + n;
+      n += 1;
+    }
+    var kitchen = !!(draft && draft.isProductionKitchen);
+    var store = {
+      id: id,
+      name: String((draft && draft.name) || id).trim() || id,
+      share: Number(draft && draft.share) || 0,
+      hasPickup: kitchen ? !!(draft && draft.hasPickup) : draft && draft.hasPickup === false ? false : true,
+      isDeliveryHub: !!(draft && draft.isDeliveryHub),
+      isProductionKitchen: kitchen,
+      backstock: !draft || draft.backstock !== false,
+      doors: draft && draft.doors && draft.doors.length ? copyDoors(draft.doors) : defaultDoors()
+    };
+    if (store.isDeliveryHub) list.forEach(function (item) { item.isDeliveryHub = false; });
+    list.push(store);
+    return normalizeStores(list);
+  }
+
+  function backstockLocationId(storeId) {
+    return String(storeId) + '_backstock';
+  }
+
+  function storeIdFromLocation(locationId) {
+    var id = String(locationId || '');
+    var suffix = '_backstock';
+    if (id.length > suffix.length && id.slice(-suffix.length) === suffix) return id.slice(0, -suffix.length);
+    return id;
+  }
+
+  function locationsFor(stores) {
+    var list = [];
+    normalizeStores(stores).forEach(function (store) {
+      list.push({ id: store.id, storeId: store.id, kind: 'case', label: store.name + ' case' });
+      if (store.backstock) {
+        list.push({
+          id: backstockLocationId(store.id),
+          storeId: store.id,
+          kind: 'backstock',
+          label: store.name + ' backstock'
+        });
+      }
+    });
+    return list;
+  }
+
+  function doorsInSection(sectionName) {
+    var match = String(sectionName || '').match(/cases?\s+(\d+)(?:\s*-\s*(\d+))?/i);
+    if (!match) return [];
+    var start = parseInt(match[1], 10);
+    var end = match[2] ? parseInt(match[2], 10) : start;
+    var doors = [];
+    for (var door = start; door <= end; door++) doors.push(String(door));
+    return doors;
+  }
+
+  function defaultShelfPlan(sections) {
+    var byDoor = {};
+    Object.keys(sections || {}).forEach(function (section) {
+      var doors = doorsInSection(section);
+      if (!doors.length) doors = ['other'];
+      (sections[section] || []).forEach(function (dish, index) {
+        var door = doors[index % doors.length];
+        byDoor[door] = byDoor[door] || [];
+        byDoor[door].push(dish);
+      });
+    });
+    var plan = {};
+    Object.keys(byDoor).forEach(function (door) {
+      var list = byDoor[door];
+      for (var i = 0; i < list.length; i += 2) {
+        if (i + 1 < list.length) {
+          plan[list[i]] = { door: door, share: 'half' };
+          plan[list[i + 1]] = { door: door, share: 'half' };
+        } else {
+          plan[list[i]] = { door: door, share: 'full' };
+        }
+      }
+    });
+    return plan;
+  }
+
+  function shelfSlot(dish, config) {
+    var plan = config && config.shelfPlan;
+    if (!plan && config && config.sections) plan = defaultShelfPlan(config.sections);
+    if (plan && plan[dish]) return plan[dish];
+    if (plan) {
+      var key = normalizeName(dish);
+      var names = Object.keys(plan);
+      for (var i = 0; i < names.length; i++) {
+        if (normalizeName(names[i]) === key) return plan[names[i]];
+      }
+    }
+    return { door: '3', share: 'half' };
+  }
+
+  function shelfCapacity(store, slot) {
+    var doorId = slot && slot.door ? String(slot.door) : '3';
+    var share = slot && slot.share === 'full' ? 'full' : 'half';
+    var doors = (store && store.doors) || [];
+    var door = null;
+    for (var i = 0; i < doors.length; i++) {
+      if (String(doors[i].id) === doorId) door = doors[i];
+    }
+    var full = door && door.full != null ? door.full : 72;
+    var half = door && door.half != null ? door.half : 36;
+    return share === 'full' ? full : half;
+  }
+
+  function storeById(stores, id) {
+    for (var i = 0; i < stores.length; i++) if (stores[i].id === id) return stores[i];
+    return null;
+  }
+
+  function applyPerDishShares(stores, perDish) {
+    if (!perDish || typeof perDish !== 'object' || Array.isArray(perDish)) return stores;
+    return stores.map(function (store) {
+      if (perDish[store.id] == null) return store;
+      var next = clone(store);
+      next.share = Number(perDish[store.id]) || 0;
+      return next;
+    });
+  }
+
+  function fractionsFor(targets) {
+    var sum = targets.reduce(function (total, store) { return total + (Number(store.share) || 0); }, 0);
+    if (sum <= 0) return targets.map(function () { return 1 / targets.length; });
+    return targets.map(function (store) { return (Number(store.share) || 0) / sum; });
+  }
+
+  // Pickups stay at the store on the order. Delivery goes to the store flagged
+  // as the delivery hub. Walk-in plates follow each store's percent. Percents
+  // for stores in the split should add up to 100. Case quantities never exceed
+  // that store's shelf for the dish; the rest is backstock. Every split store
+  // gets the dish when uncommitted plates allow it.
   function splitDish(row, config) {
-    var cfg = config || DEFAULT_CONFIG;
+    var cfg = config || {};
     var name = row && row.dish ? String(row.dish) : '';
     var stackSize = stackSizeFor(name, cfg);
     var plated = Math.max(0, Math.round(Number(row && row.plated) || 0));
     var skipList = cfg.skipList || DEFAULT_CONFIG.skipList;
-    var requestedPickupC = Math.max(0, Math.round(Number(row && row.prepaidColonnade) || 0));
-    var requestedPickupR = Math.max(0, Math.round(Number(row && row.prepaidRim) || 0));
-    var requestedDelivery = Math.max(0, Math.round(Number(row && row.delivery) || 0));
-    var share = colonnadeShareFor(row, cfg);
+    var allStores = normalizeStores(cfg.stores || (row && row.stores));
+    var perDish = cfg.perDish && cfg.perDish[name];
+    if (perDish && typeof perDish === 'object') allStores = applyPerDishShares(allStores, perDish);
+    var targets = splitTargets(allStores);
+    var hub = null;
+    allStores.forEach(function (store) { if (store.isDeliveryHub && !hub) hub = store; });
+    var shareInfo = sharesStatus(allStores);
     var warnings = [];
+    var slot = shelfSlot(name, cfg);
+    var emptyAllocations = targets.map(function (store) {
+      return blankAllocation(store, slot);
+    });
 
     if (isSkipped(name, skipList)) {
       return {
-        dish: name, skipped: true, plated: plated, colonnade: 0, rim: 0,
-        prepaidColonnade: 0, prepaidRim: 0, delivery: 0,
-        walkInColonnade: 0, walkInRim: 0, stackSize: stackSize,
-        colonnadeShare: share, warnings: ['On the skip list']
+        dish: name, skipped: true, plated: plated, stackSize: stackSize,
+        delivery: 0, deliveryStoreId: hub ? hub.id : '',
+        allocations: emptyAllocations.map(function (slotRow) {
+          slotRow.total = 0; slotRow.caseQty = 0; slotRow.backstock = 0;
+          return slotRow;
+        }),
+        warnings: ['On the skip list']
       };
     }
 
-    var pickupNeed = requestedPickupC + requestedPickupR;
-    var pc, pr, del, rest;
+    if (!shareInfo.ok) warnings.push('Store shares add up to ' + shareInfo.sum + '%, not 100%');
+    targets.forEach(function (store) {
+      if (!(Number(store.share) > 0)) warnings.push(store.name + ' has a 0% share');
+    });
+
+    var requestedPickups = {};
+    var pickupSource = (row && (row.pickups || row.prepaid)) || {};
+    Object.keys(pickupSource).forEach(function (id) {
+      requestedPickups[id] = Math.max(0, Math.round(Number(pickupSource[id]) || 0));
+    });
+    var requestedDelivery = Math.max(0, Math.round(Number(row && row.delivery) || 0));
+    var pickupIds = Object.keys(requestedPickups);
+    var pickupNeed = pickupIds.reduce(function (sum, id) { return sum + requestedPickups[id]; }, 0);
+    var pickups = {};
+    var delivery = 0;
+    targets.forEach(function (store) { pickups[store.id] = 0; });
+
     if (pickupNeed > plated) {
-      if (pickupNeed === 0) { pc = 0; pr = 0; }
-      else {
-        pc = Math.floor(plated * requestedPickupC / pickupNeed);
-        pr = plated - pc;
-      }
-      del = 0;
-      rest = 0;
+      var given = 0;
+      pickupIds.forEach(function (id, index) {
+        if (!storeById(targets, id)) return;
+        var qty = index === pickupIds.length - 1 && given < plated
+          ? Math.max(0, Math.min(requestedPickups[id], plated - given))
+          : Math.floor(plated * requestedPickups[id] / pickupNeed);
+        if (given + qty > plated) qty = plated - given;
+        pickups[id] = qty;
+        given += qty;
+      });
       warnings.push('Plated count does not cover prepaid pickups');
     } else {
-      pc = requestedPickupC;
-      pr = requestedPickupR;
-      var afterPickup = plated - pc - pr;
-      del = Math.min(requestedDelivery, afterPickup);
-      rest = afterPickup - del;
-      if (del < requestedDelivery) warnings.push('Plated count does not cover delivery orders');
+      pickupIds.forEach(function (id) {
+        if (!storeById(targets, id)) {
+          warnings.push('Pickup store is not in the split');
+          return;
+        }
+        pickups[id] = requestedPickups[id];
+      });
+      var pickupSum = targets.reduce(function (sum, store) { return sum + (pickups[store.id] || 0); }, 0);
+      var afterPickup = plated - pickupSum;
+      delivery = Math.min(requestedDelivery, afterPickup);
+      if (delivery < requestedDelivery) warnings.push('Plated count does not cover delivery orders');
+      if (delivery > 0 && !hub) {
+        warnings.push('No delivery hub is set, so delivery orders were split with walk-in');
+        delivery = 0;
+      } else if (delivery > 0 && !storeById(targets, hub.id)) {
+        warnings.push('Delivery hub is not in the split, so delivery orders were split with walk-in');
+        delivery = 0;
+      }
     }
 
-    var walkC = roundToStack(rest * share, stackSize);
-    if (walkC > rest) walkC = Math.floor(rest / stackSize) * stackSize;
-    if (walkC < 0) walkC = 0;
-    var walkR = rest - walkC;
+    var committed = targets.reduce(function (sum, store) { return sum + (pickups[store.id] || 0); }, 0) + delivery;
+    var rest = Math.max(0, plated - committed);
+    var fractions = fractionsFor(targets);
+    var walk = {};
+    var left = rest;
+    targets.forEach(function (store, index) {
+      if (index === targets.length - 1) {
+        walk[store.id] = left;
+        return;
+      }
+      var rounded = roundToStack(rest * fractions[index], stackSize);
+      if (rounded > left) rounded = Math.floor(left / stackSize) * stackSize;
+      walk[store.id] = rounded;
+      left -= rounded;
+    });
 
-    var colonnade = pc + walkC;
-    var rim = pr + del + walkR;
+    var totals = {};
+    targets.forEach(function (store) {
+      var hubQty = hub && store.id === hub.id ? delivery : 0;
+      totals[store.id] = (pickups[store.id] || 0) + (walk[store.id] || 0) + hubQty;
+    });
 
-    if (plated >= stackSize * 2) {
-      if (colonnade < stackSize) {
-        var needC = stackSize - colonnade;
-        var moveC = Math.min(needC, walkR);
-        walkR -= moveC;
-        walkC += moveC;
-        colonnade += moveC;
-        rim -= moveC;
+    if (plated >= targets.length) {
+      var guard = 0;
+      var stuck = false;
+      while (guard < 50 && !stuck) {
+        guard += 1;
+        var empty = null;
+        targets.forEach(function (store) { if (!empty && totals[store.id] === 0) empty = store; });
+        if (!empty) break;
+        var donor = null;
+        targets.forEach(function (store) {
+          if (donor || store.id === empty.id) return;
+          if ((walk[store.id] || 0) > 0 && totals[store.id] > 1) donor = store;
+        });
+        if (!donor) { stuck = true; break; }
+        walk[donor.id] -= 1;
+        walk[empty.id] = (walk[empty.id] || 0) + 1;
+        totals[donor.id] -= 1;
+        totals[empty.id] += 1;
       }
-      if (rim < stackSize) {
-        var needR = stackSize - rim;
-        var moveR = Math.min(needR, walkC);
-        walkC -= moveR;
-        walkR += moveR;
-        rim += moveR;
-        colonnade -= moveR;
-      }
-      if (colonnade < stackSize || rim < stackSize) {
-        warnings.push('Not enough uncommitted plates for 1 stack at each store');
-      }
-    } else if (plated > 0 && (colonnade < stackSize || rim < stackSize)) {
-      warnings.push('Plated count is below two stacks');
+      if (stuck) warnings.push('Not enough uncommitted plates for every store');
     }
 
-    if (colonnade + rim !== plated) warnings.push('Split does not add up to plated count');
+    var allocations = targets.map(function (store) {
+      var cap = shelfCapacity(store, slot);
+      var total = totals[store.id] || 0;
+      var caseQty = Math.min(total, cap);
+      var back = total - caseQty;
+      if (back > 0) {
+        warnings.push(store.name + ' case holds ' + cap + ' (door ' + slot.door + ' ' + slot.share + ' shelf). ' + back + ' go to backstock');
+      }
+      return {
+        id: store.id,
+        name: store.name,
+        share: Number(store.share) || 0,
+        total: total,
+        caseQty: caseQty,
+        backstock: back,
+        prepaid: pickups[store.id] || 0,
+        walkIn: walk[store.id] || 0,
+        delivery: hub && store.id === hub.id ? delivery : 0,
+        capacity: cap,
+        door: String(slot.door),
+        shelf: slot.share,
+        backstockId: store.backstock ? backstockLocationId(store.id) : ''
+      };
+    });
+
+    var allocated = allocations.reduce(function (sum, item) { return sum + item.total; }, 0);
+    if (allocated !== plated) warnings.push('Split does not add up to plated count');
 
     return {
       dish: name,
       skipped: false,
       plated: plated,
-      colonnade: colonnade,
-      rim: rim,
-      prepaidColonnade: pc,
-      prepaidRim: pr,
-      delivery: del,
-      walkInColonnade: walkC,
-      walkInRim: walkR,
       stackSize: stackSize,
-      colonnadeShare: share,
+      delivery: delivery,
+      deliveryStoreId: hub ? hub.id : '',
+      allocations: allocations,
       warnings: warnings
+    };
+  }
+
+  function blankAllocation(store, slot) {
+    return {
+      id: store.id,
+      name: store.name,
+      share: Number(store.share) || 0,
+      total: 0,
+      caseQty: 0,
+      backstock: 0,
+      prepaid: 0,
+      walkIn: 0,
+      delivery: 0,
+      capacity: shelfCapacity(store, slot),
+      door: String(slot.door || '3'),
+      shelf: slot.share || 'half',
+      backstockId: store.backstock ? backstockLocationId(store.id) : ''
     };
   }
 
@@ -172,10 +485,10 @@
     return (rows || []).map(function (row) { return splitDish(row, config); });
   }
 
-  // Move floor(onHand / 2), but never leave fewer than `leaveAtLeast` when the
-  // stocked store is at or above that line. Orange-star meals at a store whose
-  // partner is out still suggest a move when the case is under that line,
-  // leaving at least 1. Suggestions only — this does not change quantities.
+  function allocationTotal(result) {
+    return (result && result.allocations || []).reduce(function (sum, item) { return sum + item.total; }, 0);
+  }
+
   function storeTransferQty(fromQty, orangeStar, leaveAtLeast) {
     var qty = Math.max(0, Math.round(Number(fromQty) || 0));
     var star = Math.max(0, Math.round(Number(orangeStar) || 0));
@@ -193,116 +506,183 @@
     var dishes = (input && input.dishes) || [];
     var leaveAtLeast = input && input.leaveAtLeast != null ? input.leaveAtLeast : DEFAULT_CONFIG.leaveAtLeast;
     var skipList = (input && input.skipList) || [];
+    var stores = normalizeStores(input && input.stores);
     var suggestions = [];
 
     dishes.forEach(function (dish) {
       var name = dish.name || dish.dish;
       if (!name || isSkipped(name, skipList)) return;
-      var caseC = Math.max(0, Math.round(Number(dish.colonnade) || 0));
-      var caseR = Math.max(0, Math.round(Number(dish.rim) || 0));
-      var backC = Math.max(0, Math.round(Number(dish.colonnadeBackstock) || 0));
-      var backR = Math.max(0, Math.round(Number(dish.rimBackstock) || 0));
+      var onHand = dish.onHand || {};
+      var back = dish.backstock || {};
+      var stars = dish.orangeStar || {};
+      var capacity = dish.capacity || null;
 
-      [['colonnade', caseC, backC], ['rim', caseR, backR]].forEach(function (pair) {
-        if (pair[1] <= 0 && pair[2] > 0) {
+      stores.forEach(function (store) {
+        var onCase = Math.max(0, Math.round(Number(onHand[store.id]) || 0));
+        var cooler = Math.max(0, Math.round(Number(back[store.id]) || 0));
+        if (onCase > 0 || cooler <= 0 || !store.backstock) return;
+        var room = capacity && capacity[store.id] != null ? Math.max(0, Math.round(Number(capacity[store.id])) - onCase) : cooler;
+        var pull = Math.min(cooler, room);
+        if (pull > 0) {
           suggestions.push({
             name: name,
-            from: pair[0] + '_backstock',
-            to: pair[0],
-            qty: pair[2],
+            from: backstockLocationId(store.id),
+            to: store.id,
+            qty: pull,
             reason: 'backstock',
             note: 'Case is empty. Pull from this store\'s backstock cooler, oldest first. Edit the quantity before logging.'
           });
         }
       });
 
-      function consider(fromQty, toQty, star, from, to) {
-        if (toQty > 0) return;
-        var move = storeTransferQty(fromQty, star, leaveAtLeast);
-        if (move.qty < 1) return;
-        suggestions.push({
-          name: name,
-          from: from,
-          to: to,
-          qty: move.qty,
-          reason: move.reason,
-          note: move.reason === 'orange-star'
-            ? 'Other store is out and this store has orange-star meals. Move oldest first.'
-            : 'Out at one store and ' + leaveAtLeast + ' or more at the other. Move half, leave at least ' + leaveAtLeast + ', oldest first.'
+      stores.forEach(function (donor) {
+        var fromQty = Math.max(0, Math.round(Number(onHand[donor.id]) || 0));
+        var move = storeTransferQty(fromQty, stars[donor.id], leaveAtLeast);
+        var left = move.qty;
+        if (left < 1) return;
+        stores.forEach(function (dest) {
+          if (left < 1 || dest.id === donor.id) return;
+          if (Math.round(Number(onHand[dest.id]) || 0) > 0) return;
+          var room = capacity && capacity[dest.id] != null ? Math.max(0, Math.round(Number(capacity[dest.id]))) : left;
+          var toCase = Math.min(left, room);
+          if (toCase > 0) {
+            suggestions.push({
+              name: name,
+              from: donor.id,
+              to: dest.id,
+              qty: toCase,
+              reason: move.reason,
+              note: move.reason === 'orange-star'
+                ? 'Another store is out and this store has orange-star meals. Move oldest first.'
+                : 'Out at one store and ' + leaveAtLeast + ' or more at another. Move half, leave at least ' + leaveAtLeast + ', oldest first.'
+            });
+            left -= toCase;
+          }
+          if (left > 0 && capacity && capacity[dest.id] != null && dest.backstock) {
+            suggestions.push({
+              name: name,
+              from: donor.id,
+              to: backstockLocationId(dest.id),
+              qty: left,
+              reason: 'overflow',
+              note: dest.name + ' case is at capacity. The rest goes to that store\'s backstock.'
+            });
+            left = 0;
+          }
         });
-      }
-
-      consider(caseC, caseR, dish.orangeStarColonnade, 'colonnade', 'rim');
-      consider(caseR, caseC, dish.orangeStarRim, 'rim', 'colonnade');
+      });
     });
 
     return suggestions;
   }
 
-  // One stack of share toward outs and away from orange star. Agreed signals
-  // still move a single stack. Conflicting signals are left unchanged.
   function proposeShareShifts(input) {
     var cfg = input || {};
-    var baseShare = asShare(cfg.colonnadeShare, DEFAULT_CONFIG.colonnadeShare);
-    var perDish = cfg.perDish || {};
+    var stores = normalizeStores(cfg.stores);
+    var targets = splitTargets(stores);
     var skipList = cfg.skipList || [];
+    var perDish = cfg.perDish || {};
     var outs = {};
     var stars = {};
 
-    (cfg.stockouts || []).forEach(function (row) {
+    function remember(bucket, row, addQty) {
       var name = row.name || row.dishName || row.dish;
-      var store = row.store || row.location;
-      if (!name || (store !== 'colonnade' && store !== 'rim')) return;
-      if (store.indexOf('backstock') !== -1) return;
-      outs[name] = outs[name] || { colonnade: false, rim: false };
-      outs[name][store] = true;
-    });
-    (cfg.orangeStar || []).forEach(function (row) {
-      var name = row.name || row.dishName || row.dish;
-      var store = row.store || row.location;
-      if (!name || (store !== 'colonnade' && store !== 'rim')) return;
-      stars[name] = stars[name] || { colonnade: 0, rim: 0 };
-      stars[name][store] += Math.max(0, Math.round(Number(row.qty) || 0));
-    });
+      var store = storeIdFromLocation(row.store || row.location);
+      if (!name || !storeById(targets, store)) return;
+      bucket[name] = bucket[name] || {};
+      if (addQty) bucket[name][store] = (bucket[name][store] || 0) + Math.max(0, Math.round(Number(row.qty) || 0));
+      else bucket[name][store] = true;
+    }
+    (cfg.stockouts || []).forEach(function (row) { remember(outs, row, false); });
+    (cfg.orangeStar || []).forEach(function (row) { remember(stars, row, true); });
 
     var names = {};
-    (cfg.dishes || []).forEach(function (d) { if (d && (d.name || d.dish)) names[d.name || d.dish] = d; });
-    Object.keys(outs).forEach(function (n) { names[n] = names[n] || { name: n }; });
-    Object.keys(stars).forEach(function (n) { names[n] = names[n] || { name: n }; });
+    (cfg.dishes || []).forEach(function (dish) {
+      var label = dish && (dish.name || dish.dish);
+      if (label) names[label] = dish;
+    });
+    Object.keys(outs).forEach(function (name) { names[name] = names[name] || { name: name }; });
+    Object.keys(stars).forEach(function (name) { names[name] = names[name] || { name: name }; });
 
     return Object.keys(names).sort().map(function (name) {
       var dish = names[name];
       var label = dish.name || dish.dish || name;
       if (isSkipped(label, skipList)) return null;
-      var o = outs[name] || outs[label] || { colonnade: false, rim: false };
-      var s = stars[name] || stars[label] || { colonnade: 0, rim: 0 };
-      var towardRim = 0;
-      var towardCol = 0;
-      if (o.rim && !o.colonnade) towardRim += 1;
-      if (o.colonnade && !o.rim) towardCol += 1;
-      if (s.colonnade > 0 && !(s.rim > 0)) towardRim += 1;
-      if (s.rim > 0 && !(s.colonnade > 0)) towardCol += 1;
-      var current = perDish[label] != null ? asShare(perDish[label], baseShare) : baseShare;
-      if (towardRim && towardCol) {
-        return { dish: label, current: current, next: current, direction: 'none', note: 'Outs and orange star point different ways. No change.' };
+      var currentStores = targets;
+      if (perDish[label] && typeof perDish[label] === 'object') currentStores = applyPerDishShares(targets, perDish[label]);
+      var current = {};
+      currentStores.forEach(function (store) { current[store.id] = Number(store.share) || 0; });
+      var outRow = outs[name] || outs[label] || {};
+      var starRow = stars[name] || stars[label] || {};
+      var outIds = currentStores.filter(function (store) { return outRow[store.id]; }).map(function (store) { return store.id; });
+      var starIds = currentStores.filter(function (store) { return starRow[store.id] > 0; }).map(function (store) { return store.id; });
+      var towardId = outIds.length === 1 ? outIds[0] : '';
+      var awayId = starIds.length === 1 ? starIds[0] : '';
+      var conflict = false;
+      if (outIds.length > 1 || starIds.length > 1) conflict = true;
+      if (towardId && awayId && towardId === awayId) conflict = true;
+      if (!towardId && !awayId) return null;
+      if (conflict) {
+        return {
+          dish: label,
+          currentShares: current,
+          nextShares: clone(current),
+          direction: 'none',
+          note: 'Outs and orange star point different ways. No change.'
+        };
       }
-      if (!towardRim && !towardCol) return null;
       var stack = stackSizeFor(label, cfg);
       var plated = Math.max(0, Math.round(Number(dish.plated) || 0));
       var basis = plated > 0 ? plated : 100;
-      var delta = stack / basis;
-      var next = clamp(current + (towardCol ? delta : -delta), 0.05, 0.95);
+      var points = (stack / basis) * 100;
+      var next = shiftShares(current, towardId, awayId, points);
+      var changed = currentStores.some(function (store) {
+        return Math.abs((next[store.id] || 0) - (current[store.id] || 0)) > 0.0001;
+      });
+      if (!changed) return null;
+      var direction = towardId || awayId;
+      var directionName = (storeById(currentStores, direction) || {}).name || direction;
       return {
         dish: label,
-        current: current,
-        next: next,
-        delta: next - current,
+        currentShares: current,
+        nextShares: next,
+        direction: towardId || ('away:' + awayId),
         stack: stack,
         basis: basis,
-        direction: towardCol ? 'colonnade' : 'rim',
-        note: 'Shift 1 stack toward ' + (towardCol ? 'Colonnade' : 'the Rim') + '.'
+        note: towardId
+          ? 'Shift 1 stack toward ' + directionName + '.'
+          : 'Shift 1 stack away from ' + directionName + '.'
       };
-    }).filter(Boolean).filter(function (row) { return row.direction === 'none' || Math.abs(row.next - row.current) > 0.0001; });
+    }).filter(Boolean);
+  }
+
+  function shiftShares(current, towardId, awayId, points) {
+    var next = clone(current);
+    var ids = Object.keys(next);
+    if (towardId && next[towardId] != null) {
+      var others = ids.filter(function (id) { return id !== towardId; });
+      var pool = others.reduce(function (sum, id) { return sum + next[id]; }, 0);
+      var keep = others.length * 1;
+      var move = Math.min(points, Math.max(0, pool - keep));
+      if (move > 0 && pool > 0) {
+        others.forEach(function (id) { next[id] -= move * (current[id] / pool); });
+        next[towardId] += move;
+      }
+      return next;
+    }
+    if (awayId && next[awayId] != null) {
+      var receivers = ids.filter(function (id) { return id !== awayId; });
+      var receiverPool = receivers.reduce(function (sum, id) { return sum + next[id]; }, 0);
+      var give = Math.min(points, Math.max(0, next[awayId] - 1));
+      if (give > 0 && receivers.length) {
+        next[awayId] -= give;
+        receivers.forEach(function (id) {
+          var portion = receiverPool > 0 ? current[id] / receiverPool : 1 / receivers.length;
+          next[id] += give * portion;
+        });
+      }
+    }
+    return next;
   }
 
   function pad(n) { return String(n).padStart(2, '0'); }
@@ -367,6 +747,40 @@
     return { moves: moves, moved: moved, shortfall: left };
   }
 
+  function applyTransfer(inventory, request) {
+    var data = clone(inventory || {});
+    var from = request && request.from;
+    var to = request && request.to;
+    var updates = {};
+    var logItems = [];
+    var short = false;
+    (request && request.lines || []).forEach(function (line) {
+      var dk = line.dishKey;
+      if (!dk || !from || !to || from === to) return;
+      data[dk] = data[dk] || {};
+      var lots = Object.keys(data[dk]).map(function (useBy) {
+        return { useBy: useBy, qty: Math.round(Number(data[dk][useBy] && data[dk][useBy][from]) || 0) };
+      });
+      var plan = allocateOldestFirst(lots, line.qty, request.today);
+      plan.moves.forEach(function (move) {
+        var locData = data[dk][move.useBy] || {};
+        var available = Math.round(Number(locData[from]) || 0);
+        var currentTo = Math.round(Number(locData[to]) || 0);
+        locData[from] = available - move.qty;
+        locData[to] = currentTo + move.qty;
+        data[dk][move.useBy] = locData;
+        updates[dk + '/' + move.useBy + '/' + from] = locData[from];
+        updates[dk + '/' + move.useBy + '/' + to] = locData[to];
+        logItems.push({ dish: dk, dishName: line.name || dk, useBy: move.useBy, qty: move.qty });
+      });
+      if (plan.shortfall > 0) {
+        short = true;
+        logItems.push({ dish: dk, dishName: line.name || dk, useBy: 'n/a', qty: 0, note: 'Short ' + plan.shortfall + ' units' });
+      }
+    });
+    return { inventory: data, updates: updates, logItems: logItems, short: short };
+  }
+
   function splitCsvLine(line) {
     var out = [];
     var cur = '';
@@ -381,10 +795,13 @@
     return out;
   }
 
-  function normalizeStore(value) {
-    var s = String(value || '').toLowerCase().trim();
-    if (s === 'rim' || s === 'r' || s === 'the rim') return 'rim';
-    if (s === 'colonnade' || s === 'col' || s === 'c' || s === 'colonade') return 'colonnade';
+  function matchStore(value, stores) {
+    var raw = String(value || '').toLowerCase().trim();
+    if (!raw) return '';
+    var list = normalizeStores(stores);
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].id.toLowerCase() === raw || list[i].name.toLowerCase() === raw) return list[i].id;
+    }
     return '';
   }
 
@@ -394,12 +811,12 @@
     return 'pickup';
   }
 
-  function parsePrepaidCsv(text) {
-    var lines = String(text || '').split(/\r?\n/).map(function (l) { return l.trim(); }).filter(Boolean);
+  function parsePrepaidCsv(text, stores) {
+    var lines = String(text || '').split(/\r?\n/).map(function (line) { return line.trim(); }).filter(Boolean);
     if (!lines.length) return [];
-    var header = splitCsvLine(lines[0]).map(function (h) { return h.toLowerCase(); });
+    var header = splitCsvLine(lines[0]).map(function (cell) { return cell.toLowerCase(); });
     var known = { dish: 1, name: 1, store: 1, location: 1, qty: 1, quantity: 1, type: 1, channel: 1 };
-    var hasHeader = header.some(function (h) { return known[h]; });
+    var hasHeader = header.some(function (cell) { return known[cell]; });
     function col(names, fallback) {
       if (!hasHeader) return fallback;
       for (var i = 0; i < names.length; i++) {
@@ -420,7 +837,7 @@
       if (!dish || qty === 0) continue;
       rows.push({
         dish: dish,
-        store: normalizeStore(storeCol >= 0 ? cells[storeCol] : ''),
+        store: matchStore(storeCol >= 0 ? cells[storeCol] : '', stores),
         qty: Math.abs(qty),
         type: normalizeChannel(typeCol >= 0 ? cells[typeCol] : '')
       });
@@ -432,13 +849,77 @@
     var by = {};
     (rows || []).forEach(function (row) {
       if (!row || !row.dish) return;
-      if (!by[row.dish]) by[row.dish] = { dish: row.dish, prepaidColonnade: 0, prepaidRim: 0, delivery: 0 };
+      if (!by[row.dish]) by[row.dish] = { dish: row.dish, pickups: {}, delivery: 0 };
       var qty = Math.max(0, Math.round(Number(row.qty) || 0));
       if (row.type === 'delivery') by[row.dish].delivery += qty;
-      else if (row.store === 'rim') by[row.dish].prepaidRim += qty;
-      else by[row.dish].prepaidColonnade += qty;
+      else if (row.store) by[row.dish].pickups[row.store] = (by[row.dish].pickups[row.store] || 0) + qty;
     });
-    return Object.keys(by).map(function (k) { return by[k]; });
+    return Object.keys(by).map(function (key) { return by[key]; });
+  }
+
+  function headerIndex(header, names) {
+    for (var i = 0; i < names.length; i++) {
+      var at = header.indexOf(names[i]);
+      if (at >= 0) return at;
+    }
+    return -1;
+  }
+
+  function parseSkuCsv(text) {
+    var lines = String(text || '').split(/\r?\n/).map(function (line) { return line.trim(); }).filter(Boolean);
+    if (!lines.length) return [];
+    var header = splitCsvLine(lines[0]).map(function (cell) { return cell.toLowerCase(); });
+    var skuCol = headerIndex(header, ['variant sku', 'sku']);
+    var titleCol = headerIndex(header, ['title', 'product title', 'dish', 'name']);
+    var barcodeCol = headerIndex(header, ['variant barcode', 'barcode', 'upc']);
+    var start = skuCol >= 0 || titleCol >= 0 ? 1 : 0;
+    if (skuCol < 0) skuCol = 0;
+    if (titleCol < 0) titleCol = 1;
+    var rows = [];
+    for (var i = start; i < lines.length; i++) {
+      var cells = splitCsvLine(lines[i]);
+      var sku = normalizeBarcode(cells[skuCol] || '');
+      var dish = cells[titleCol] || '';
+      var barcode = barcodeCol >= 0 ? normalizeBarcode(cells[barcodeCol] || '') : '';
+      if (!sku || !dish) continue;
+      rows.push({ sku: sku, dish: dish, barcode: barcode });
+    }
+    return rows;
+  }
+
+  function skuMapFromRows(rows) {
+    var map = {};
+    (rows || []).forEach(function (row) {
+      if (!row || !row.sku || !row.dish) return;
+      map[normalizeBarcode(row.sku)] = { dish: row.dish, source: 'sku' };
+      if (row.barcode) map[normalizeBarcode(row.barcode)] = { dish: row.dish, source: 'sku' };
+    });
+    return map;
+  }
+
+  function findInMap(norm, map) {
+    if (!norm || !map) return null;
+    if (map[norm]) {
+      var direct = map[norm];
+      return { code: norm, dish: direct.dish || direct.dishName || direct, source: direct.source || 'manual' };
+    }
+    var stripped = norm.replace(/^0+/, '');
+    var keys = Object.keys(map);
+    for (var i = 0; i < keys.length; i++) {
+      var keyNorm = normalizeBarcode(keys[i]).replace(/^0+/, '');
+      if (stripped && keyNorm === stripped) {
+        var hit = map[keys[i]];
+        return { code: keys[i], dish: hit.dish || hit.dishName || hit, source: hit.source || 'manual' };
+      }
+    }
+    return null;
+  }
+
+  function lookupBarcode(code, manualMap, skuMap) {
+    var norm = normalizeBarcode(code);
+    var skuHit = findInMap(norm, skuMap);
+    if (skuHit) return skuHit;
+    return findInMap(norm, manualMap);
   }
 
   function platedFromProduction(data, dayKeys) {
@@ -468,36 +949,31 @@
         });
       });
     });
-    return Object.keys(map).map(function (k) { return map[k]; });
-  }
-
-  function lookupBarcode(code, map) {
-    var norm = normalizeBarcode(code);
-    if (!norm || !map) return null;
-    if (map[norm]) return { code: norm, dish: map[norm].dish || map[norm].dishName || map[norm] };
-    var stripped = norm.replace(/^0+/, '');
-    var keys = Object.keys(map);
-    for (var i = 0; i < keys.length; i++) {
-      var keyNorm = normalizeBarcode(keys[i]).replace(/^0+/, '');
-      if (stripped && keyNorm === stripped) {
-        var hit = map[keys[i]];
-        return { code: keys[i], dish: hit.dish || hit.dishName || hit };
-      }
-    }
-    return null;
+    return Object.keys(map).map(function (key) { return map[key]; });
   }
 
   return {
+    DEFAULT_STORES: DEFAULT_STORES,
     DEFAULT_CONFIG: DEFAULT_CONFIG,
-    asShare: asShare,
+    defaultDoors: defaultDoors,
+    normalizeStores: normalizeStores,
+    splitTargets: splitTargets,
+    sharesStatus: sharesStatus,
+    addStore: addStore,
+    backstockLocationId: backstockLocationId,
+    storeIdFromLocation: storeIdFromLocation,
+    locationsFor: locationsFor,
+    defaultShelfPlan: defaultShelfPlan,
+    shelfCapacity: shelfCapacity,
+    shelfSlot: shelfSlot,
     roundToStack: roundToStack,
     normalizeName: normalizeName,
     normalizeBarcode: normalizeBarcode,
     isSkipped: isSkipped,
-    isSmallDish: isSmallDish,
     stackSizeFor: stackSizeFor,
     splitDish: splitDish,
     splitBatch: splitBatch,
+    allocationTotal: allocationTotal,
     storeTransferQty: storeTransferQty,
     rebalanceSuggestions: rebalanceSuggestions,
     proposeShareShifts: proposeShareShifts,
@@ -505,9 +981,12 @@
     isoToUseByKey: isoToUseByKey,
     useByKeyToIso: useByKeyToIso,
     allocateOldestFirst: allocateOldestFirst,
+    applyTransfer: applyTransfer,
     parsePrepaidCsv: parsePrepaidCsv,
     aggregateOrders: aggregateOrders,
-    platedFromProduction: platedFromProduction,
-    lookupBarcode: lookupBarcode
+    parseSkuCsv: parseSkuCsv,
+    skuMapFromRows: skuMapFromRows,
+    lookupBarcode: lookupBarcode,
+    platedFromProduction: platedFromProduction
   };
 });
