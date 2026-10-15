@@ -1,10 +1,10 @@
 # Weight check — how to try it
 
-This is on the staging Production Hub (`index.html` on this branch). The production page matches the live hub as of commit `5146318` (13 Oct 2026, “Schedule the Rim reminder for 09:00 UTC on Tuesdays”), with two staging differences: the yellow STAGING banner, and saves go to `staging_productionData`, `staging_dishLibrary`, and `staging_history` instead of the live nodes.
+This is on the staging Production Hub (`index.html` on this branch). The production page matches the live hub as of commit `5146318` (13 Oct 2026, “Schedule the Rim reminder for 09:00 UTC on Tuesdays”), with these staging differences: the yellow STAGING banner, saves go to `staging_productionData`, `staging_dishLibrary`, and `staging_history`, and the page reads Firebase only from `firebase-config.js`. It will not start if that file names the live project.
 
-Weight checks are a new staging feature on that page. They are not on the live hub. They are not saved in the live Firebase project.
+Weight checks are a new staging feature on that page. They are not on the live hub. They are not saved in the live Firebase project. With an empty `firebase-config.js` they stay in this browser (`staging_weight` is used only after the ZedOps Staging project is pasted in).
 
-The public staging site (https://zachlutton.github.io/production-hub-staging/) is still the older `main` copy. It does not have this sheet yet. Open `index.html` from this branch on your computer.
+The public staging site is this branch: https://zachlutton.github.io/production-hub-staging/ . Open that, or open `index.html` from this branch on your computer. `main` and the live Production Hub are a different site and must not be used for this test.
 
 ## What you are checking
 

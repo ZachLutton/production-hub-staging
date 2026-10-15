@@ -136,7 +136,20 @@ test('weight checks stay off the live hub database', async () => {
     projectId: liveId,
     databaseURL: 'https://' + liveId + '-default-rtdb.firebaseio.com'
   });
-  assert.equal(blocked.mode, 'local');
+  assert.equal(blocked.mode, 'blocked');
+  let started = false;
+  const refused = await store.open({
+    config: {
+      projectId: liveId,
+      databaseURL: 'https://' + liveId + '-default-rtdb.firebaseio.com'
+    },
+    firebase: {
+      apps: [],
+      initializeApp: function () { started = true; }
+    }
+  });
+  assert.equal(refused.mode, 'blocked');
+  assert.equal(started, false);
   let named = null;
   const opened = await store.open({
     config: { projectId: 'zedops-staging-example', databaseURL: 'https://zedops-staging-example.firebaseio.com' },

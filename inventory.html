@@ -8,6 +8,7 @@
 <script src="split.js"></script>
 <script src="inventory-store.js"></script>
 <script src="inventory-remote.js"></script>
+<script src="staging-boot.js"></script>
 <script src="inventory-features.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
@@ -324,7 +325,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 
 <!-- MAIN CONTENT (hidden until login) -->
 <div id="main-content">
-<div class="staging-banner" id="stagingBanner">LOCAL STAGING COPY — counts stay in this browser until a new staging Firebase project is pasted into firebase-config.js. The live Production Hub is not connected.</div>
+<div class="staging-banner" id="stagingBanner">BROWSER ONLY — counts stay in this browser until the ZedOps Staging project is pasted into firebase-config.js. The live Production Hub is not connected.</div>
 
 <div class="header">
   <div>
@@ -2366,14 +2367,18 @@ function showApp() {
       });
     }
   }).then(function (opened) {
+    if (opened.mode === 'blocked' || opened.reason === 'live-project-blocked' || !opened.db) {
+      if (window.ZedBoot) ZedBoot.showBlocked();
+      return;
+    }
     bindRefs(opened.db);
     dataMode = opened.mode;
     window.dataMode = opened.mode;
     if (banner) {
       if (opened.mode === 'remote') banner.textContent = 'STAGING Firebase project ' + opened.projectId + '. The live Production Hub is not connected.';
-      else if (opened.reason === 'live-project-blocked') banner.textContent = 'That config is the live Production Hub, so this page stayed in this browser. Paste a new staging project into firebase-config.js.';
       else if (opened.reason === 'remote-failed') banner.textContent = 'The staging project did not connect. Counts stay in this browser. The live Production Hub was not contacted.';
-      else banner.textContent = 'LOCAL STAGING COPY — counts stay in this browser until a new staging Firebase project is pasted into firebase-config.js. The live Production Hub is not connected.';
+      else banner.textContent = 'BROWSER ONLY — counts stay in this browser until the ZedOps Staging project is pasted into firebase-config.js. The live Production Hub is not connected.';
+      if (window.ZedBoot) ZedBoot.showBanner(banner.textContent);
     }
     watchConnection();
     init();
@@ -2521,8 +2526,15 @@ document.getElementById('pin-input').addEventListener('input', function() {
   }
 });
 
-// On page load: check if already logged in within 24h
-if (isLoginValid()) showApp();
+// On page load: the live Production Hub project never starts this page.
+var stagingDecision = ZedRemote.classifyFirebaseConfig(window.ZEDOPS_FIREBASE_CONFIG);
+if (stagingDecision.mode === 'blocked') {
+  window.ZEDOPS_STAGING = stagingDecision;
+  if (window.ZedBoot) ZedBoot.showBlocked();
+} else {
+  if (stagingDecision.mode === 'local' && window.ZedBoot) ZedBoot.showBanner(ZedBoot.LOCAL_BANNER);
+  if (isLoginValid()) showApp();
+}
 </script>
 
 </body>

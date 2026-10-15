@@ -9,8 +9,10 @@
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
-<script src="hub-auth.js?v=2"></script>
 <script src="firebase-config.js"></script>
+<script src="inventory-store.js"></script>
+<script src="staging-boot.js"></script>
+<script src="hub-auth.js?v=2"></script>
 <script src="weight-check.js"></script>
 <script src="weight-check-store.js"></script>
 <script src="weight-check-ui.js"></script>
@@ -413,19 +415,12 @@ const PRODUCTION_DATA = {
   }
 };
 
-// --- Firebase Real-Time Sync ---
-const firebaseConfig = {
-  apiKey: "AIzaSyDUveUlxrNDIU4yDUpbzjv8-X625S-l0Po",
-  authDomain: "zedrics-production-hub.firebaseapp.com",
-  databaseURL: "https://zedrics-production-hub-default-rtdb.firebaseio.com",
-  projectId: "zedrics-production-hub",
-  storageBucket: "zedrics-production-hub.firebasestorage.app",
-  messagingSenderId: "1000819775934",
-  appId: "1:1000819775934:web:6a0f14f54f797b092841ef"
-};
-firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
-const auth = firebase.auth();
+// --- Firebase or this browser. Settings come only from firebase-config.js. ---
+var boot = ZedBoot.start({ storageKey: 'zedops_staging_hub_local_v1' });
+if (boot.mode === 'blocked') {
+  throw new Error('Refusing to start. firebase-config.js points at the live Production Hub.');
+}
+const db = boot.db;
 const dataRef = db.ref('staging_productionData');
 const dishLibraryRef = db.ref('staging_dishLibrary');
 let isRemoteUpdate = false;
@@ -711,8 +706,12 @@ function onProductionDataGate(snapshot) { productionDataLoaded = true; onProduct
 
 // Connection status indicator
 db.ref('.info/connected').on('value', (snap) => {
-  const dot = document.getElementById('syncDot');
   const status = document.getElementById('syncStatus');
+  if (window.ZEDOPS_STAGING && window.ZEDOPS_STAGING.mode === 'local') {
+    status.innerHTML = '<span class="sync-dot connected" id="syncDot"></span>This browser only';
+    return;
+  }
+  const dot = document.getElementById('syncDot');
   if (snap.val() === true) {
     dot.className = 'sync-dot connected';
     status.innerHTML = '<span class="sync-dot connected" id="syncDot"></span>Live sync on';

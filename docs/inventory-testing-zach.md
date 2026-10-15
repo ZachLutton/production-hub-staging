@@ -2,7 +2,7 @@
 
 This is the staging inventory page only (`inventory.html` on branch `cursor/feat-plate-split-56a8`). It is not deployed. It does not read or write the live Production Hub.
 
-The live project id is `zedrics-production-hub`. Do not paste that project into `firebase-config.js`. The page refuses it and stays in this browser. A test fails if that id shows up in the inventory code.
+The live project id is `zedrics-production-hub`. Do not paste that project into `firebase-config.js`. The page refuses to start and shows an error. It does not open a database. A test fails if that id shows up in the inventory code.
 
 ## What changed
 
@@ -29,7 +29,7 @@ Do this when you want two tablets to share the staging counts. Until then, skip 
 
 1. Go to [console.firebase.google.com](https://console.firebase.google.com) and sign in with the Google account that should own the staging project.
 2. Click **Add project**. Name it something like ZedOps Staging. Turn off Google Analytics if it asks. You do not need it.
-3. Do not open the existing Production Hub project. If the project id or database URL contains that live id, this page will not connect.
+3. Do not open the existing Production Hub project. If the project id or database URL contains that live id, this page shows an error and does not start.
 4. In the new project, open **Build → Realtime Database → Create Database**. Pick a US region. Start in **locked mode**.
 5. Open the **Rules** tab, replace the rules with the block below, and click **Publish**.
 
@@ -56,7 +56,7 @@ These rules are for that empty staging project only. They are not the live hub's
 
 6. Click the gear, then **Project settings → Your apps → Web** (`</>`). Register the app as "ZedOps inventory". Skip Hosting. Copy the config it shows.
 7. On this branch, open `firebase-config.js`. Paste `apiKey`, `authDomain`, `databaseURL`, `projectId`, `storageBucket`, `messagingSenderId`, and `appId` inside the quotes. Leave `projectId` empty if you are not ready. Do not commit the live project's config.
-8. Reload `inventory.html`. The banner should name the staging project. If it still says this browser, the config is empty, the page blocked the live project, or the scripts could not load.
+8. Reload `inventory.html`. The banner should name the staging project. If it says this browser, the config is empty or the scripts could not load. If the config is the live project, the page shows a full-screen error and does not start. The full staging rules file is `database.rules.staging.json`. See `docs/staging-checklist.md`.
 9. Counts already in the browser do not move themselves. Download a backup first, then **Import backup** after the banner shows the staging project, if you want those counts there.
 
 ## 1. Stores, including a third store and a commissary

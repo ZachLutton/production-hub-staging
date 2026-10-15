@@ -106,9 +106,10 @@
       var clean = partsOf(path).join('/');
       var api = {
         path: clean,
-        once: function () {
-          if (clean === '.info/connected') return Promise.resolve(new Snapshot(true, null));
-          return Promise.resolve(new Snapshot(read(clean), null));
+        once: function (_event, cb) {
+          var snap = clean === '.info/connected' ? new Snapshot(true, null) : new Snapshot(read(clean), null);
+          if (typeof cb === 'function') Promise.resolve().then(function () { cb(snap); });
+          return Promise.resolve(snap);
         },
         on: function (_event, cb) {
           if (clean === '.info/connected') {
@@ -119,7 +120,19 @@
           cb(new Snapshot(read(clean), null));
           return cb;
         },
-        off: function () {},
+        off: function (_event, cb) {
+          listeners = listeners.filter(function (listener) {
+            if (listener.path !== clean) return true;
+            if (typeof cb === 'function') return listener.cb !== cb;
+            return false;
+          });
+        },
+        remove: function () {
+          write(clean, null);
+          persist();
+          notify(clean);
+          return Promise.resolve();
+        },
         set: function (value) {
           var stored = applySentinels(clone(value), clock());
           write(clean, stored);
@@ -167,6 +180,22 @@
           return {
             limitToLast: function (limit) { return query(field, limit); },
             once: function () { return query(field, Infinity).once(); }
+          };
+        },
+        orderByKey: function () {
+          return {
+            once: function (_event, cb) {
+              var node = read(clean);
+              var ordered = null;
+              if (node && typeof node === 'object') {
+                ordered = {};
+                Object.keys(node).sort().forEach(function (key) { ordered[key] = node[key]; });
+                if (!Object.keys(ordered).length) ordered = null;
+              }
+              var snap = new Snapshot(ordered, null);
+              if (typeof cb === 'function') Promise.resolve().then(function () { cb(snap); });
+              return Promise.resolve(snap);
+            }
           };
         }
       };

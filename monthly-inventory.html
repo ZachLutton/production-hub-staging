@@ -7,6 +7,9 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="firebase-config.js"></script>
+    <script src="inventory-store.js"></script>
+    <script src="staging-boot.js"></script>
     <script src="hub-auth.js?v=2"></script>
     <style>
         * {
@@ -1278,19 +1281,13 @@
             }
         }
 
-        // ==================== FIREBASE SETUP ====================
-        const firebaseConfig = {
-            apiKey: "AIzaSyDUveUlxrNDIU4yDUpbzjv8-X625S-l0Po",
-            authDomain: "zedrics-production-hub.firebaseapp.com",
-            databaseURL: "https://zedrics-production-hub-default-rtdb.firebaseio.com",
-            projectId: "zedrics-production-hub",
-            storageBucket: "zedrics-production-hub.firebasestorage.app",
-            messagingSenderId: "1000819775934",
-            appId: "1:1000819775934:web:6a0f14f54f797b092841ef"
-        };
-
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.database();
+        // ==================== FIREBASE OR THIS BROWSER ====================
+        // Settings come only from firebase-config.js.
+        var boot = ZedBoot.start({ storageKey: 'zedops_staging_monthly_local_v1' });
+        if (boot.mode === 'blocked') {
+            throw new Error('Refusing to start. firebase-config.js points at the live Production Hub.');
+        }
+        const db = boot.db;
         let currentMonthKey = '';
         let currentLocation = '';
         let monthRef = null;
@@ -1310,6 +1307,10 @@
 
         function setSyncStatus(connected) {
             const el = document.getElementById('syncStatus');
+            if (window.ZEDOPS_STAGING && window.ZEDOPS_STAGING.mode === 'local') {
+                el.innerHTML = '<span style="color:#F9A825;">&#9679;</span> This browser only';
+                return;
+            }
             if (connected) {
                 el.innerHTML = '<span style="color:#4CAF50;">&#9679;</span> Live sync on';
             } else {

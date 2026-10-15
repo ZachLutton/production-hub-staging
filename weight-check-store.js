@@ -16,11 +16,11 @@
   function classifyConfig(cfg) {
     var projectId = String(cfg && cfg.projectId || '').trim();
     var databaseURL = String(cfg && cfg.databaseURL || '').trim();
-    if (!projectId || !databaseURL) return { mode: 'local', reason: 'empty' };
-    var blob = (projectId + ' ' + databaseURL + ' ' + String(cfg.authDomain || '')).toLowerCase();
+    var blob = (projectId + ' ' + databaseURL + ' ' + String(cfg && cfg.authDomain || '') + ' ' + String(cfg && cfg.storageBucket || '')).toLowerCase();
     if (blob.indexOf('zedrics') !== -1 && blob.indexOf('production-hub') !== -1) {
-      return { mode: 'local', reason: 'live-blocked' };
+      return { mode: 'blocked', reason: 'live-blocked' };
     }
+    if (!projectId || !databaseURL) return { mode: 'local', reason: 'empty' };
     return { mode: 'remote', reason: 'config', projectId: projectId };
   }
 
@@ -50,6 +50,14 @@
   function open(options) {
     var opts = options || {};
     var decision = classifyConfig(opts.config);
+    if (decision.mode === 'blocked') {
+      return Promise.resolve({
+        mode: 'blocked',
+        reason: decision.reason,
+        load: function () { return Promise.reject(new Error('live project blocked')); },
+        save: function () { return Promise.reject(new Error('live project blocked')); }
+      });
+    }
     if (decision.mode !== 'remote') {
       var local = createLocalStore(opts.storage);
       local.reason = decision.reason;

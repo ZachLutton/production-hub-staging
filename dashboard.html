@@ -114,6 +114,8 @@
     </style>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="firebase-config.js"></script>
+    <script src="staging-boot.js"></script>
     <script src="hub-auth.js?v=2"></script>
 </head>
 <body>
@@ -183,16 +185,11 @@
     </div>
 
     <script>
-        // PINs are checked by Firebase (see hub-auth.js); they are not stored in this page.
-        firebase.initializeApp({
-            apiKey: "AIzaSyDUveUlxrNDIU4yDUpbzjv8-X625S-l0Po",
-            authDomain: "zedrics-production-hub.firebaseapp.com",
-            databaseURL: "https://zedrics-production-hub-default-rtdb.firebaseio.com",
-            projectId: "zedrics-production-hub",
-            storageBucket: "zedrics-production-hub.firebasestorage.app",
-            messagingSenderId: "1000819775934",
-            appId: "1:1000819775934:web:6a0f14f54f797b092841ef"
-        });
+        // PINs are checked by Firebase when a ZedOps Staging project is configured (see hub-auth.js).
+        var boot = ZedBoot.start();
+        if (boot.mode === 'blocked') {
+            throw new Error('Refusing to start. firebase-config.js points at the live Production Hub.');
+        }
 
         function logout() {
             HubAuth.signOut().then(() => location.reload());

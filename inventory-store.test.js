@@ -50,6 +50,27 @@ test('local store persists and reloads without a network', async () => {
   assert.equal((await second.ref('staging_inv_barcodes').once('value')).val(), null);
   await second.importAll(exported);
   assert.equal((await second.ref('staging_inv_barcodes/012345678905/dishName').once('value')).val(), 'Orange Chicken');
+
+  await second.ref('staging_inv_barcodes/012345678905').remove();
+  assert.equal((await second.ref('staging_inv_barcodes/012345678905').once('value')).val(), null);
+
+  const seen = [];
+  const unsub = second.ref('staging_inv_barcodes').on('value', function (snap) { seen.push(snap.val()); });
+  second.ref('staging_inv_barcodes').off('value', unsub);
+  await second.ref('staging_inv_barcodes').set({ keep: true });
+  assert.equal(seen.length, 1);
+
+  await second.ref('staging_history').set({ '2026-01-02': { weekLabel: 'older' }, '2026-03-01': { weekLabel: 'newer' } });
+  const listed = await second.ref('staging_history').orderByKey().once('value');
+  assert.deepEqual(Object.keys(listed.val()), ['2026-01-02', '2026-03-01']);
+  let fromCallback = null;
+  await new Promise(function (resolve) {
+    second.ref('staging_history').orderByKey().once('value', function (snap) {
+      fromCallback = Object.keys(snap.val());
+      resolve();
+    });
+  });
+  assert.deepEqual(fromCallback, ['2026-01-02', '2026-03-01']);
 });
 
 test('inventory code does not contain the live Firebase project id', () => {
@@ -81,7 +102,8 @@ test('empty config stays local and a live project config is refused', async () =
     createLocal: function () { return { ServerValue: { TIMESTAMP: 1 }, ref: function () { return {}; } }; },
     loadSdk: function () { loaded = true; return Promise.resolve(); }
   });
-  assert.equal(blocked.mode, 'local');
+  assert.equal(blocked.mode, 'blocked');
+  assert.equal(blocked.db, null);
   assert.equal(loaded, false);
   const opened = await remote.openDatabase({
     projectId: 'zedops-staging-example',

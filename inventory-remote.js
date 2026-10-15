@@ -9,11 +9,11 @@
   function classifyFirebaseConfig(cfg) {
     var projectId = String(cfg && cfg.projectId || '').trim();
     var databaseURL = String(cfg && cfg.databaseURL || '').trim();
-    if (!projectId || !databaseURL) return { mode: 'local', reason: 'empty', projectId: '' };
-    var blob = (projectId + ' ' + databaseURL + ' ' + String(cfg.authDomain || '')).toLowerCase();
+    var blob = (projectId + ' ' + databaseURL + ' ' + String(cfg && cfg.authDomain || '') + ' ' + String(cfg && cfg.storageBucket || '')).toLowerCase();
     if (blob.indexOf('zedrics') !== -1 && blob.indexOf('production-hub') !== -1) {
-      return { mode: 'local', reason: 'live-project-blocked', projectId: '' };
+      return { mode: 'blocked', reason: 'live-project-blocked', projectId: '' };
     }
+    if (!projectId || !databaseURL) return { mode: 'local', reason: 'empty', projectId: '' };
     return { mode: 'remote', reason: 'config', projectId: projectId };
   }
 
@@ -51,6 +51,15 @@
         db: local,
         serverValue: local && local.ServerValue ? local.ServerValue : { TIMESTAMP: { '.sv': 'timestamp' } }
       };
+    }
+    if (decision.mode === 'blocked') {
+      return Promise.resolve({
+        mode: 'blocked',
+        reason: decision.reason,
+        projectId: '',
+        db: null,
+        serverValue: null
+      });
     }
     if (decision.mode !== 'remote') return Promise.resolve(localResult(decision.reason));
     var loader = (options && options.loadSdk) || loadFirebaseSdk;
