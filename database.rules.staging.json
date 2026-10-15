@@ -1,0 +1,78 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "staging_productionData": {
+      ".read": true,
+      ".write": true
+    },
+    "staging_dishLibrary": {
+      ".read": true,
+      ".write": true
+    },
+    "staging_history": {
+      ".read": true,
+      ".write": true
+    },
+    "staging_weight": {
+      ".read": true,
+      ".write": true
+    },
+    "staging_inventory": {
+      ".read": true,
+      ".write": true
+    },
+    "staging_weekly_orders": {
+      ".read": true,
+      ".write": true
+    },
+    "staging_inv_inventory": {
+      ".read": true,
+      ".write": true
+    },
+    "staging_inv_adjustments": {
+      ".read": true,
+      ".write": true
+    },
+    "staging_inv_counts": {
+      ".read": true,
+      ".write": true
+    },
+    "staging_inv_caseConfig": {
+      ".read": true,
+      ".write": true
+    },
+    "staging_inv_transfers": {
+      ".read": true,
+      ".write": true
+    },
+    "staging_inv_stockouts": {
+      ".read": true,
+      ".write": true
+    },
+    "staging_inv_shelfLife": {
+      ".read": true,
+      ".write": true
+    },
+    "staging_inv_splitConfig": {
+      ".read": true,
+      ".write": true
+    },
+    "staging_inv_barcodes": {
+      ".read": true,
+      ".write": true
+    },
+    "staging_inv_skipList": {
+      ".read": true,
+      ".write": true
+    },
+    "staging_inv_stores": {
+      ".read": true,
+      ".write": true
+    },
+    "staging_inv_skuMap": {
+      ".read": true,
+      ".write": true
+    }
+  }
+}

@@ -4,9 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Zedric's ZedOps — Inventory</title>
-<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="split.js"></script>
+<script src="inventory-store.js"></script>
+<script src="inventory-remote.js"></script>
+<script src="staging-boot.js"></script>
+<script src="inventory-features.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <style>
@@ -14,7 +17,7 @@
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; color: #1a1a1a; }
 
 /* Staging banner */
-.staging-banner { background: #E65100; color: white; text-align: center; padding: 6px; font-weight: 700; font-size: 12px; letter-spacing: 1px; }
+.staging-banner { background: #E65100; color: white; text-align: center; padding: 8px 12px; font-weight: 700; font-size: 12px; letter-spacing: 0.2px; line-height: 1.35; }
 
 /* Header */
 .header { background: linear-gradient(135deg, #1B5E20, #2E7D32); color: white; padding: 14px 20px; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.15); display: flex; justify-content: space-between; align-items: center; }
@@ -63,8 +66,13 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .badge.yellow { background: #FFF9C4; color: #F57F17; }
 .badge.green { background: #C8E6C9; color: #2E7D32; }
 .loc-pill { padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
-.loc-pill.colonnade { background: #E3F2FD; color: #1565C0; }
-.loc-pill.rim { background: #FFF3E0; color: #E65100; }
+.loc-pill.backstock { background: #EDE7F6; color: #4527A0; }
+.loc-pill.store-0 { background: #E3F2FD; color: #1565C0; }
+.loc-pill.store-1 { background: #FFF3E0; color: #E65100; }
+.loc-pill.store-2 { background: #E8F5E9; color: #1B5E20; }
+.loc-pill.store-3 { background: #FCE4EC; color: #AD1457; }
+.loc-pill.store-4 { background: #E0F7FA; color: #006064; }
+.loc-pill.store-5 { background: #FFF8E1; color: #F57F17; }
 
 /* Inventory table */
 .inv-table { width: 100%; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.08); margin-bottom: 20px; }
@@ -262,6 +270,44 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .history-empty { text-align: center; padding: 40px; color: #999; font-size: 14px; }
 .load-more-btn { display: block; width: 100%; padding: 12px; background: white; border: 2px dashed #ddd; border-radius: 10px; font-size: 14px; font-weight: 600; color: #888; cursor: pointer; text-align: center; margin-top: 8px; }
 .load-more-btn:hover { border-color: #1B5E20; color: #1B5E20; }
+.history-entry .entry-type.split { background: #E3F2FD; color: #1565C0; }
+
+.scan-bar { position: sticky; top: 108px; z-index: 98; background: #1B5E20; color: white; padding: 8px 12px; }
+.scan-bar-row { display: flex; gap: 8px; align-items: center; }
+.scan-bar label { font-size: 11px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; }
+.scan-bar input[type="text"] { flex: 1; min-width: 0; font-size: 16px; padding: 10px 12px; border: none; border-radius: 8px; }
+.scan-bar input[type="number"] { width: 72px; font-size: 16px; padding: 10px; border: none; border-radius: 8px; text-align: center; font-weight: 700; }
+.scan-last { font-size: 13px; margin-top: 6px; min-height: 18px; }
+.scan-hit { background: #E8F5E9 !important; }
+.hint { color: #777; font-size: 12px; font-weight: 500; line-height: 1.4; }
+.preview-line { background: white; border-radius: 8px; padding: 8px 10px; margin-top: 8px; font-size: 13px; }
+.preview-short { color: #C62828; font-weight: 700; }
+.local-tools { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 16px; }
+.reason-chip.orange { border-color: #FFE082; color: #F57F17; }
+.reason-chip.orange.active { background: #F57F17; color: white; border-color: #F57F17; }
+.split-config, .split-actions, .split-inputs { display: flex; flex-wrap: wrap; gap: 8px; }
+.split-field, .split-inputs label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; font-weight: 700; color: #666; text-transform: uppercase; min-width: 120px; flex: 1; }
+.split-field input, .split-inputs input, .skip-box textarea { font-size: 16px; padding: 8px 10px; border: 1.5px solid #ddd; border-radius: 8px; font-family: inherit; width: 100%; }
+.split-card { background: white; border-radius: 12px; padding: 12px; margin: 10px 0; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+.split-card-head { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.split-result { margin-top: 8px; font-size: 14px; }
+.skip-box, .skip-details { background: white; border-radius: 12px; padding: 12px; margin: 12px 0; }
+.skip-box textarea { min-height: 72px; text-transform: none; font-weight: 600; }
+.link-dish, .barcode-row { display: flex; width: 100%; text-align: left; gap: 8px; justify-content: space-between; padding: 10px 12px; border: none; border-bottom: 1px solid #f0f0f0; background: white; font-size: 14px; font-weight: 600; cursor: pointer; }
+#rebalanceCard { margin-bottom: 16px; }
+#rebalanceCard h3, #transferPreview h3, #shareProposals h3 { font-size: 14px; margin-bottom: 8px; }
+#transferPreview { margin-top: 8px; }
+
+@media (max-width: 720px) {
+  .header { position: static; flex-wrap: wrap; gap: 8px; }
+  .header h1 { font-size: 18px; }
+  .subnav { top: 0; }
+  .scan-bar { top: 49px; }
+  .content { padding: 12px; }
+  .count-dish, .transfer-item, .alert-row { align-items: flex-start; }
+  .count-dish input, .transfer-item input { min-height: 44px; font-size: 16px; }
+  .btn { min-height: 44px; }
+}
 </style>
 </head>
 <body>
@@ -271,7 +317,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
   <div class="login-box">
     <h1>ZedOps — Inventory</h1>
     <p style="font-size:11px;color:#E65100;font-weight:700;margin-bottom:8px;">STAGING ENVIRONMENT</p>
-    <p>Enter team PIN to continue</p>
+    <p>Enter team PIN to continue. It stays in this browser and is not checked online.</p>
     <input type="password" id="pin-input" class="pin-input" maxlength="4" inputmode="numeric" pattern="[0-9]*" autofocus>
     <div class="pin-error" id="pin-error"></div>
   </div>
@@ -279,7 +325,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 
 <!-- MAIN CONTENT (hidden until login) -->
 <div id="main-content">
-<div class="staging-banner">STAGING ENVIRONMENT — Inventory Development</div>
+<div class="staging-banner" id="stagingBanner">BROWSER ONLY — counts stay in this browser until the ZedOps Staging project is pasted into firebase-config.js. The live Production Hub is not connected.</div>
 
 <div class="header">
   <div>
@@ -296,12 +342,26 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
   <button class="subnav-btn active" onclick="switchSection('dashboard')">Dashboard</button>
   <button class="subnav-btn" onclick="switchSection('enter')">Enter Inventory</button>
   <button class="subnav-btn" onclick="switchSection('transfer')">Log Transfer</button>
+  <button class="subnav-btn" onclick="switchSection('receive')">Receive</button>
+  <button class="subnav-btn" onclick="switchSection('backstock')">Backstock</button>
+  <button class="subnav-btn" onclick="switchSection('split')">Split</button>
   <button class="subnav-btn" onclick="switchSection('adjustment')">Log Adjustment</button>
   <button class="subnav-btn" onclick="switchSection('stockout')">Log Stockout</button>
   <button class="subnav-btn" onclick="switchSection('count')">Physical Count</button>
   <button class="subnav-btn" onclick="switchSection('shelflife')">Shelf Life</button>
   <button class="subnav-btn" onclick="switchSection('history')">Log History</button>
+  <button class="subnav-btn" onclick="switchSection('stores')">Stores</button>
   <button class="subnav-btn admin-only" id="caseConfigBtn" onclick="switchSection('caseconfig')" style="display:none">Case Config</button>
+</div>
+
+<div id="scanBar" class="scan-bar" style="display:none">
+  <div class="scan-bar-row">
+    <label for="scanInput">Scan</label>
+    <input id="scanInput" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Barcode, then Enter" inputmode="none">
+    <label for="scanQty">Qty</label>
+    <input id="scanQty" type="number" min="1" value="1" inputmode="numeric">
+  </div>
+  <div id="scanLast" class="scan-last">Scanner types the code and presses Enter. Same item again adds 1, or type a qty first.</div>
 </div>
 
 <div class="content">
@@ -315,10 +375,17 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
       <div class="card"><div class="card-label">Total Units</div><div class="card-value green" id="cardTotal">0</div></div>
     </div>
 
-    <div class="loc-toggle">
-      <button class="loc-btn active" onclick="setDashLoc('both',this)">Both</button>
-      <button class="loc-btn" onclick="setDashLoc('colonnade',this)">Colonnade</button>
-      <button class="loc-btn" onclick="setDashLoc('rim',this)">RIM</button>
+    <div class="loc-toggle" id="dashLocToggle">
+      <button class="loc-btn active" onclick="setDashLoc('all',this)">All</button>
+      <button class="loc-btn" onclick="setDashLoc('backstock',this)">Backstock</button>
+    </div>
+
+    <div id="rebalanceCard"></div>
+    <div class="local-tools">
+      <button class="btn btn-secondary" onclick="downloadLocalBackup()">Download backup</button>
+      <button class="btn btn-secondary" onclick="document.getElementById('importBackup').click()">Import backup</button>
+      <input id="importBackup" type="file" accept="application/json,.json" hidden onchange="importLocalBackup(this)">
+      <button class="btn btn-secondary" onclick="resetSampleData()">Reset sample data</button>
     </div>
 
     <div class="alert-section" id="expiryAlerts"></div>
@@ -339,10 +406,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
     <div class="form-header">
       <div class="form-group">
         <label>Location</label>
-        <select id="enterLoc">
-          <option value="colonnade">Colonnade</option>
-          <option value="rim">RIM</option>
-        </select>
+        <select id="enterLoc"></select>
       </div>
       <div class="form-group">
         <label>Default Date</label>
@@ -382,18 +446,12 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
       <div class="transfer-arrow">
         <div class="form-group">
           <label>From</label>
-          <select id="transferFrom" onchange="updateTransferDirection()">
-            <option value="colonnade">Colonnade</option>
-            <option value="rim">RIM</option>
-          </select>
+          <select id="transferFrom" onchange="updateTransferDirection()"></select>
         </div>
         <span class="arrow">→</span>
         <div class="form-group">
           <label>To</label>
-          <select id="transferTo" onchange="updateTransferDirection()">
-            <option value="rim">RIM</option>
-            <option value="colonnade">Colonnade</option>
-          </select>
+          <select id="transferTo" onchange="updateTransferDirection()"></select>
         </div>
       </div>
 
@@ -406,6 +464,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
       </div>
 
       <div id="transferItems" class="transfer-items"></div>
+      <div id="transferPreview"></div>
     </div>
 
     <div class="submit-bar" id="transferSubmitBar" style="display:none;">
@@ -426,14 +485,12 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
         <button class="reason-chip damaged" onclick="setAdjustReason('damaged',this)">Damaged</button>
         <button class="reason-chip received" onclick="setAdjustReason('received',this)">Received / Delivery</button>
         <button class="reason-chip correction" onclick="setAdjustReason('correction',this)">Correction</button>
+        <button class="reason-chip orange" onclick="setAdjustReason('orange_star',this)">Orange star</button>
       </div>
 
       <div class="form-group" style="margin-bottom:12px;">
         <label>Location</label>
-        <select id="adjustLoc">
-          <option value="colonnade">Colonnade</option>
-          <option value="rim">RIM</option>
-        </select>
+        <select id="adjustLoc"></select>
       </div>
 
       <div class="form-group" style="margin-bottom:12px;">
@@ -465,10 +522,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 
     <div class="form-group" style="margin-bottom:12px;">
       <label>Location</label>
-      <select id="stockoutLoc" onchange="buildStockoutList()">
-        <option value="colonnade">Colonnade</option>
-        <option value="rim">RIM</option>
-      </select>
+      <select id="stockoutLoc" onchange="buildStockoutList()"></select>
     </div>
 
     <div class="stockout-list" id="stockoutList"></div>
@@ -487,10 +541,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
     <div style="display:flex;gap:12px;align-items:flex-end;margin-bottom:16px;flex-wrap:wrap;">
       <div class="form-group">
         <label>Location</label>
-        <select id="countLoc" onchange="buildCountSheet()">
-          <option value="colonnade">Colonnade</option>
-          <option value="rim">RIM</option>
-        </select>
+        <select id="countLoc" onchange="buildCountSheet()"></select>
       </div>
     </div>
 
@@ -526,6 +577,75 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
     </div>
   </div>
 
+  <!-- ===== RECEIVE ===== -->
+  <div class="section" id="sec-receive">
+    <h2 style="font-size:18px;margin-bottom:4px;">Receive</h2>
+    <p class="hint" style="margin-bottom:12px;">Scan labels as meals come in. The Shopify SKU on the product is the UPC on the label, so a scan picks the dish from the SKU list. Link a code by hand only when that list has no match. Each scan adds 1 unless you type a quantity first.</p>
+    <div class="split-actions" style="margin-bottom:12px;">
+      <button class="btn btn-secondary" type="button" onclick="document.getElementById('skuCsv').click()">Import Shopify SKU CSV</button>
+      <input id="skuCsv" type="file" accept=".csv,text/csv" hidden onchange="importSkuFile(this)">
+    </div>
+    <div class="form-header">
+      <div class="form-group">
+        <label>Into</label>
+        <select id="receiveLoc"></select>
+      </div>
+      <div class="form-group">
+        <label>Plate date</label>
+        <input type="date" id="receivePlateDate">
+      </div>
+    </div>
+    <div class="form-group dish-search-wrap" style="margin-bottom:12px;">
+      <label>Or search a dish</label>
+      <input type="text" id="receiveSearch" placeholder="Type a dish name" oninput="searchReceiveDish(this.value)" autocomplete="off">
+      <div class="dish-search-results" id="receiveSearchResults"></div>
+    </div>
+    <div id="receiveItems" class="transfer-items"></div>
+    <details style="margin-top:12px;"><summary>Linked barcodes</summary><div id="barcodeList"></div></details>
+    <div class="submit-bar" id="receiveSubmitBar" style="display:none;">
+      <button class="btn btn-secondary" onclick="switchSection('dashboard')">Cancel</button>
+      <button class="btn btn-success" onclick="submitReceive()">Save receipt</button>
+    </div>
+  </div>
+
+  <!-- ===== BACKSTOCK ===== -->
+  <div class="section" id="sec-backstock">
+    <h2 style="font-size:18px;margin-bottom:4px;">Backstock cooler</h2>
+    <p class="hint" style="margin-bottom:12px;">Daily count for the cooler, since it is not in the case photos. Pick the store, then scan. Scanning the same meal again adds 1.</p>
+    <div class="form-header">
+      <div class="form-group">
+        <label>Cooler</label>
+        <select id="backstockLoc" onchange="renderBackstock()"></select>
+      </div>
+    </div>
+    <label class="hint" style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">
+      <input type="checkbox" id="backstockZero"> Set unscanned dishes in this cooler to 0
+    </label>
+    <div id="backstockItems" class="transfer-items"></div>
+    <div class="submit-bar" id="backstockSubmitBar" style="display:none;">
+      <button class="btn btn-secondary" onclick="switchSection('dashboard')">Cancel</button>
+      <button class="btn btn-success" onclick="submitBackstock()">Save backstock count</button>
+    </div>
+  </div>
+
+  <!-- ===== SPLIT ===== -->
+  <div class="section" id="sec-split">
+    <h2 style="font-size:18px;margin-bottom:4px;">Split the week</h2>
+    <p class="hint" style="margin-bottom:12px;">Enter or import plated counts. Pickup orders stay at the store on the order. Deliveries go to the delivery hub. Apply writes the suggestion only after you confirm.</p>
+    <div id="splitRoot"></div>
+    <div class="submit-bar" id="splitSubmitBar" style="display:none;">
+      <button class="btn btn-secondary" onclick="switchSection('dashboard')">Cancel</button>
+      <button class="btn btn-success" onclick="applySplit()">Apply split</button>
+    </div>
+  </div>
+
+  <!-- ===== STORES ===== -->
+  <div class="section" id="sec-stores">
+    <h2 style="font-size:18px;margin-bottom:4px;">Stores</h2>
+    <p class="hint" style="margin-bottom:12px;">The starting list is the stores you have now. Add another store or a commissary here. Each store has an id, a name, pickup, a delivery-hub flag, a production-kitchen flag, door shelves, and a backstock cooler. Shares for stores in the split must add up to 100. Transfers can move between any two locations, including a commissary.</p>
+    <div id="storesRoot"></div>
+  </div>
+
   <!-- ===== LOG HISTORY ===== -->
   <div class="section" id="sec-history">
     <h2 style="font-size:18px;margin-bottom:4px;">Log History</h2>
@@ -537,6 +657,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
         <select id="historyType" onchange="loadHistory()">
           <option value="all">All Types</option>
           <option value="transfer">Transfers</option>
+          <option value="split">Splits</option>
           <option value="adjustment">Adjustments</option>
           <option value="stockout">Stockouts</option>
           <option value="count">Counts</option>
@@ -578,6 +699,22 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
   </div>
 </div>
 
+<!-- Link barcode -->
+<div class="modal-overlay" id="barcodeModal">
+  <div class="modal">
+    <h3>Link this barcode</h3>
+    <div class="modal-subtitle">Code <strong id="barcodeCodeLabel"></strong> is not in the Shopify SKU list. Pick the dish once. The next scan of this code adds that dish.</div>
+    <div class="modal-field">
+      <label>Dish</label>
+      <input type="text" id="barcodeDishSearch" placeholder="Search dishes" oninput="searchBarcodeDish(this.value)" autocomplete="off">
+    </div>
+    <div id="barcodeDishResults"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeLinkBarcode()">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <!-- Add New Dish Modal -->
 <div class="modal-overlay" id="newDishModal">
   <div class="modal">
@@ -614,38 +751,84 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 
 <script>
 // ============================================================
-// Firebase Setup — STAGING paths
+// Staging data. Empty firebase-config.js stays in this browser.
+// A pasted config must be a new project. The live hub is refused.
 // ============================================================
-const firebaseConfig = {
-  apiKey: "AIzaSyDUveUlxrNDIU4yDUpbzjv8-X625S-l0Po",
-  authDomain: "zedrics-production-hub.firebaseapp.com",
-  databaseURL: "https://zedrics-production-hub-default-rtdb.firebaseio.com",
-  projectId: "zedrics-production-hub",
-  storageBucket: "zedrics-production-hub.firebasestorage.app",
-  messagingSenderId: "1000819775934",
-  appId: "1:1000819775934:web:6a0f14f54f797b092841ef"
-};
-firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
+var db = null;
+var ServerValue = { TIMESTAMP: { '.sv': 'timestamp' } };
+var dataMode = 'local';
+window.dataMode = 'local';
+var invRef, adjRef, countsRef, configRef, transfersRef, stockoutsRef, shelfLifeRef, splitConfigRef, barcodesRef, skipListRef, storesRef, skuMapRef;
 
-// STAGING paths — completely isolated from production
-const invRef = db.ref('staging_inv_inventory');
-const adjRef = db.ref('staging_inv_adjustments');
-const countsRef = db.ref('staging_inv_counts');
-const configRef = db.ref('staging_inv_caseConfig');
-const transfersRef = db.ref('staging_inv_transfers');
-const stockoutsRef = db.ref('staging_inv_stockouts');
-const shelfLifeRef = db.ref('staging_inv_shelfLife');
-const dishLibRef = db.ref('dishLibrary'); // read-only, shared with production for shelf life
+var stores = ZedSplit.normalizeStores(ZedSplit.DEFAULT_STORES);
+function getStores() { return stores; }
+function setStores(next) { stores = ZedSplit.normalizeStores(next); }
+function locations() { return ZedSplit.locationsFor(stores); }
 
-// Sync indicator
-const connRef = db.ref('.info/connected');
-connRef.on('value', snap => {
-  const dot = document.getElementById('syncDot');
-  const label = document.getElementById('syncLabel');
-  if (snap.val()) { dot.classList.remove('off'); label.textContent = 'Live sync on'; }
-  else { dot.classList.add('off'); label.textContent = 'Offline'; }
-});
+function bindRefs(nextDb) {
+  db = nextDb;
+  ServerValue = nextDb.ServerValue || ServerValue;
+  invRef = db.ref('staging_inv_inventory');
+  adjRef = db.ref('staging_inv_adjustments');
+  countsRef = db.ref('staging_inv_counts');
+  configRef = db.ref('staging_inv_caseConfig');
+  transfersRef = db.ref('staging_inv_transfers');
+  stockoutsRef = db.ref('staging_inv_stockouts');
+  shelfLifeRef = db.ref('staging_inv_shelfLife');
+  splitConfigRef = db.ref('staging_inv_splitConfig');
+  barcodesRef = db.ref('staging_inv_barcodes');
+  skipListRef = db.ref('staging_inv_skipList');
+  storesRef = db.ref('staging_inv_stores');
+  skuMapRef = db.ref('staging_inv_skuMap');
+}
+
+function watchConnection() {
+  db.ref('.info/connected').on('value', snap => {
+    const dot = document.getElementById('syncDot');
+    const label = document.getElementById('syncLabel');
+    if (!snap.val()) { dot.classList.add('off'); label.textContent = 'Offline'; return; }
+    dot.classList.remove('off');
+    label.textContent = dataMode === 'remote' ? 'Staging project' : 'Saved on this device';
+  });
+}
+
+function fillLocationSelect(id, filter) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const current = el.value;
+  const options = locations().filter(loc => {
+    if (filter === 'case') return loc.kind === 'case';
+    if (filter === 'backstock') return loc.kind === 'backstock';
+    return true;
+  });
+  el.innerHTML = options.map(loc => '<option value="' + loc.id + '">' + esc(loc.label) + '</option>').join('');
+  if (current && options.some(loc => loc.id === current)) el.value = current;
+}
+
+function fillAllLocationSelects() {
+  ['enterLoc', 'transferFrom', 'transferTo', 'adjustLoc', 'countLoc', 'receiveLoc'].forEach(id => fillLocationSelect(id));
+  fillLocationSelect('stockoutLoc', 'case');
+  fillLocationSelect('backstockLoc', 'backstock');
+  const from = document.getElementById('transferFrom');
+  const to = document.getElementById('transferTo');
+  if (from && to && from.value === to.value) {
+    const other = locations().find(loc => loc.id !== from.value);
+    if (other) to.value = other.id;
+  }
+  renderDashToggles();
+}
+
+function renderDashToggles() {
+  const wrap = document.getElementById('dashLocToggle');
+  if (!wrap) return;
+  const buttons = [{ id: 'all', label: 'All' }];
+  getStores().forEach(store => buttons.push({ id: store.id, label: store.name }));
+  buttons.push({ id: 'backstock', label: 'Backstock' });
+  wrap.innerHTML = buttons.map(btn => {
+    const active = dashLoc === btn.id || (dashLoc === 'both' && btn.id === 'all');
+    return '<button class="loc-btn' + (active ? ' active' : '') + '" onclick="setDashLoc(\'' + btn.id + '\', this)">' + esc(btn.label) + '</button>';
+  }).join('');
+}
 
 // ============================================================
 // Role Management
@@ -688,6 +871,7 @@ const DEFAULT_DISH_SECTIONS = {
     "Grilled Salmon (3)",
     "Herb Chicken w/ Carrots & Broccolini (3)",
     "Korean Beef BBQ Tenderloin (2)",
+    "Orange Chicken",
     "Parmesan Crusted Chop Steak (2)",
     "Ranch Chicken w/ Mozzarella & Bacon (2)",
     "Roasted Turkey w/ Cajun Butter (3)",
@@ -819,6 +1003,7 @@ function toFbKey(isoDate) {
 }
 
 function fromFbKey(fbKey) {
+  if (window.ZedSplit) return ZedSplit.useByKeyToIso(fbKey, today());
   const parts = fbKey.split('-');
   const y = new Date().getFullYear();
   return y + '-' + parts[0].padStart(2,'0') + '-' + parts[1].padStart(2,'0');
@@ -839,7 +1024,7 @@ function formatDate(isoDate) {
 // ============================================================
 // Dashboard
 // ============================================================
-let dashLoc = 'both';
+let dashLoc = 'all';
 let invData = {};
 
 function setDashLoc(loc, btn) {
@@ -868,10 +1053,12 @@ function renderDashboard() {
       const isoDate = fromFbKey(ubKey);
       const days = daysUntil(isoDate);
 
-      ['colonnade', 'rim'].forEach(loc => {
+      locations().forEach(locInfo => {
+        const loc = locInfo.id;
         const qty = parseInt(locs[loc]) || 0;
         if (qty <= 0) return;
-        if (dashLoc !== 'both' && dashLoc !== loc) return;
+        if (dashLoc === 'backstock' && locInfo.kind !== 'backstock') return;
+        if (dashLoc !== 'all' && dashLoc !== 'both' && dashLoc !== 'backstock' && locInfo.storeId !== dashLoc) return;
 
         rows.push({ dishName: dishName || dk, dishKey: dk, location: loc, useByFb: ubKey, isoDate, days, qty });
         totalUnits += qty;
@@ -897,7 +1084,7 @@ function renderDashboard() {
       const badgeText = r.days <= 0 ? 'EXPIRED' : r.days + 'd left';
       alertHtml.push(`<div class="alert-row">
         <span class="dish-name">${esc(r.dishName)}</span>
-        <span class="loc-pill ${r.location}">${locLabel(r.location)}</span>
+        <span class="loc-pill ${locClass(r.location)}">${locLabel(r.location)}</span>
         <span class="badge ${badgeClass}">${badgeText}</span>
         <span style="font-weight:700">${r.qty} units</span>
       </div>`);
@@ -908,6 +1095,7 @@ function renderDashboard() {
   const tbody = document.getElementById('invTableBody');
   if (rows.length === 0) {
     tbody.innerHTML = '<tr><td colspan="6" class="empty-msg">No inventory data yet. Use "Enter Inventory" to get started.</td></tr>';
+    if (typeof renderRebalanceCard === 'function') renderRebalanceCard();
     return;
   }
 
@@ -918,7 +1106,7 @@ function renderDashboard() {
     const encoded = encodeURIComponent(r.dishKey);
     html += `<tr>
       <td style="font-weight:600">${esc(r.dishName)}</td>
-      <td><span class="loc-pill ${r.location}">${locLabel(r.location)}</span></td>
+      <td><span class="loc-pill ${locClass(r.location)}">${locLabel(r.location)}</span></td>
       <td>${formatDate(r.isoDate)}</td>
       <td><span class="badge ${daysBadge}">${daysText}</span></td>
       <td class="qty-cell">${r.qty}</td>
@@ -929,6 +1117,7 @@ function renderDashboard() {
     </tr>`;
   });
   tbody.innerHTML = html;
+  if (typeof renderRebalanceCard === 'function') renderRebalanceCard();
 }
 
 function findDishName(dk) {
@@ -937,7 +1126,18 @@ function findDishName(dk) {
 }
 
 function locLabel(loc) {
-  return loc === 'colonnade' ? 'Colonnade' : loc === 'rim' ? 'RIM' : loc;
+  const found = locations().find(item => item.id === loc);
+  if (found) return found.label;
+  return loc || '';
+}
+
+function locClass(loc) {
+  if (!loc) return '';
+  const found = locations().find(item => item.id === loc);
+  if (found && found.kind === 'backstock') return 'backstock';
+  const storeId = found ? found.storeId : ZedSplit.storeIdFromLocation(loc);
+  const idx = getStores().findIndex(store => store.id === storeId);
+  return 'store-' + (idx < 0 ? 0 : idx % 6);
 }
 
 function esc(str) {
@@ -993,7 +1193,7 @@ function confirmQuickAction() {
       useBy: ubKey,
       qty: delta,
       reason: quickMode === 'add' ? 'quick_add' : 'quick_remove',
-      timestamp: firebase.database.ServerValue.TIMESTAMP
+      timestamp: ServerValue.TIMESTAMP
     });
     showToast((quickMode === 'add' ? 'Added ' : 'Removed ') + qty + ' units');
     closeQuickModal();
@@ -1090,7 +1290,7 @@ function submitEnterInventory() {
       location: loc,
       entryCount: entries.length,
       items: entries.map(e => ({ dish: e.dishKey, name: e.dishName, useBy: e.useByFb, qty: e.qty })),
-      timestamp: firebase.database.ServerValue.TIMESTAMP
+      timestamp: ServerValue.TIMESTAMP
     });
 
     showToast('Saved ' + entries.length + ' entries to ' + locLabel(loc));
@@ -1405,12 +1605,17 @@ function discardConfigChanges() {
 // ============================================================
 let transferItemsList = [];
 
+let keepTransferItems = false;
+
 function updateTransferDirection() {
   const from = document.getElementById('transferFrom').value;
-  const to = document.getElementById('transferTo').value;
-  if (from === to) {
-    document.getElementById('transferTo').value = from === 'colonnade' ? 'rim' : 'colonnade';
+  const toEl = document.getElementById('transferTo');
+  if (from === toEl.value) {
+    const loc = locations().find(item => item.id === from);
+    const other = locations().find(item => loc && item.kind === loc.kind && item.storeId !== loc.storeId) || locations().find(item => item.id !== from);
+    if (other) toEl.value = other.id;
   }
+  if (typeof renderTransferPreview === 'function') renderTransferPreview();
 }
 
 function searchTransferDish(query) {
@@ -1425,11 +1630,17 @@ function searchTransferDish(query) {
   results.classList.add('show');
 }
 
-function addTransferItem(name) {
-  transferItemsList.push({ name, qty: 1 });
-  document.getElementById('transferSearch').value = '';
-  document.getElementById('transferSearchResults').classList.remove('show');
+function addTransferItem(name, qty) {
+  const add = qty || 1;
+  const existing = transferItemsList.find(item => item.name === name);
+  if (existing) existing.qty += add;
+  else transferItemsList.push({ name, qty: add });
+  const search = document.getElementById('transferSearch');
+  if (search) search.value = '';
+  const results = document.getElementById('transferSearchResults');
+  if (results) results.classList.remove('show');
   renderTransferItems();
+  if (typeof renderTransferPreview === 'function') renderTransferPreview();
 }
 
 function removeTransferItem(idx) {
@@ -1446,7 +1657,7 @@ function renderTransferItems() {
   container.innerHTML = transferItemsList.map((item, idx) =>
     `<div class="transfer-item">
       <span class="dish-name">${esc(item.name)}</span>
-      <input type="number" min="1" value="${item.qty}" oninput="transferItemsList[${idx}].qty=parseInt(this.value)||0" inputmode="numeric">
+      <input type="number" min="1" value="${item.qty}" oninput="transferItemsList[${idx}].qty=parseInt(this.value,10)||0; if (window.renderTransferPreview) renderTransferPreview();" inputmode="numeric">
       <span style="font-size:12px;color:#888;">units</span>
       <button class="remove-item" onclick="removeTransferItem(${idx})">&#10005;</button>
     </div>`
@@ -1456,75 +1667,44 @@ function renderTransferItems() {
 function submitTransfer() {
   const from = document.getElementById('transferFrom').value;
   const to = document.getElementById('transferTo').value;
+  if (from === to) { showToast('Pick two different locations'); return; }
   const valid = transferItemsList.filter(i => i.qty > 0);
   if (valid.length === 0) { showToast('Add at least one dish with a quantity'); return; }
 
-  const updates = {};
-  valid.forEach(item => {
-    const dk = dishKey(item.name);
-    // We need to get the current use-by dates for this dish — use first available
-    // For transfers, reduce from source location and add to target
-    // We'll operate on all use-by dates for the dish, starting with earliest
-  });
-
-  // Fetch current inventory to find use-by dates
   invRef.once('value').then(snap => {
-    const data = snap.val() || {};
-    const updates = {};
-    const logItems = [];
-
-    valid.forEach(item => {
-      const dk = dishKey(item.name);
-      const dishData = data[dk] || {};
-      let remaining = item.qty;
-
-      // Get use-by dates sorted earliest first
-      const ubKeys = Object.keys(dishData).sort((a, b) => {
-        const [am, ad] = a.split('-').map(Number);
-        const [bm, bd] = b.split('-').map(Number);
-        return (am * 100 + ad) - (bm * 100 + bd);
-      });
-
-      ubKeys.forEach(ubKey => {
-        if (remaining <= 0) return;
-        const locData = dishData[ubKey] || {};
-        const available = parseInt(locData[from]) || 0;
-        if (available <= 0) return;
-
-        const moveQty = Math.min(remaining, available);
-        const currentTo = parseInt(locData[to]) || 0;
-
-        updates[dk + '/' + ubKey + '/' + from] = available - moveQty;
-        updates[dk + '/' + ubKey + '/' + to] = currentTo + moveQty;
-
-        logItems.push({ dish: dk, dishName: item.name, useBy: ubKey, qty: moveQty });
-        remaining -= moveQty;
-      });
-
-      if (remaining > 0) {
-        // Not enough inventory — transfer what we can, note the shortfall
-        logItems.push({ dish: dk, dishName: item.name, useBy: 'n/a', qty: 0, note: 'Short ' + remaining + ' units' });
-      }
+    const result = ZedSplit.applyTransfer(snap.val() || {}, {
+      from: from,
+      to: to,
+      today: today(),
+      lines: valid.map(item => ({ dishKey: dishKey(item.name), name: item.name, qty: item.qty }))
     });
+    const updates = result.updates;
+    const logItems = result.logItems;
+    const short = result.short;
 
     if (Object.keys(updates).length === 0) {
       showToast('No inventory found to transfer from ' + locLabel(from));
       return;
     }
 
-    return invRef.update(updates).then(() => {
-      transfersRef.push({
+    const go = () => invRef.update(updates).then(() => {
+      return transfersRef.push({
         from: from,
         to: to,
         items: logItems,
         totalUnits: logItems.reduce((s, i) => s + i.qty, 0),
-        timestamp: firebase.database.ServerValue.TIMESTAMP
+        timestamp: ServerValue.TIMESTAMP
       });
+    }).then(() => {
       showToast('Transferred ' + logItems.reduce((s, i) => s + i.qty, 0) + ' units: ' + locLabel(from) + ' → ' + locLabel(to));
       transferItemsList = [];
       renderTransferItems();
+      if (window.renderTransferPreview) renderTransferPreview();
       switchSection('dashboard');
     });
+
+    if (short && !confirm('Some dishes are short at ' + locLabel(from) + '. Transfer what is there and log the shortfall?')) return;
+    return go();
   }).catch(err => showToast('Error: ' + err.message));
 }
 
@@ -1595,6 +1775,26 @@ function submitAdjustment() {
 
   const isAdding = (adjustReason === 'received' || adjustReason === 'correction');
 
+  if (adjustReason === 'orange_star') {
+    const store = ZedSplit.storeIdFromLocation(loc);
+    const items = valid.map(item => ({ dish: dishKey(item.name), dishName: item.name, qty: item.qty }));
+    adjRef.push({
+      reason: 'orange_star',
+      location: store,
+      items: items,
+      notes: notes,
+      totalUnits: items.reduce((s, i) => s + i.qty, 0),
+      timestamp: ServerValue.TIMESTAMP
+    }).then(() => {
+      showToast('Logged orange star. On-hand counts were not changed.');
+      adjustItemsList = [];
+      renderAdjustItems();
+      document.getElementById('adjustNotes').value = '';
+      switchSection('dashboard');
+    }).catch(err => showToast('Error: ' + err.message));
+    return;
+  }
+
   invRef.once('value').then(snap => {
     const data = snap.val() || {};
     const updates = {};
@@ -1614,24 +1814,15 @@ function submitAdjustment() {
         updates[dk + '/' + ubKey + '/' + loc] = current + item.qty;
         logItems.push({ dish: dk, dishName: item.name, useBy: ubKey, qty: item.qty, direction: 'add' });
       } else {
-        // For waste/damaged: remove from earliest use-by dates
-        let remaining = item.qty;
-        const ubKeys = Object.keys(dishData).sort((a, b) => {
-          const [am, ad] = a.split('-').map(Number);
-          const [bm, bd] = b.split('-').map(Number);
-          return (am * 100 + ad) - (bm * 100 + bd);
-        });
-
-        ubKeys.forEach(ubKey => {
-          if (remaining <= 0) return;
-          const locData = dishData[ubKey] || {};
-          const available = parseInt(locData[loc]) || 0;
-          if (available <= 0) return;
-
-          const removeQty = Math.min(remaining, available);
-          updates[dk + '/' + ubKey + '/' + loc] = available - removeQty;
-          logItems.push({ dish: dk, dishName: item.name, useBy: ubKey, qty: removeQty, direction: 'remove' });
-          remaining -= removeQty;
+        const lots = Object.keys(dishData).map(ubKey => ({
+          useBy: ubKey,
+          qty: parseInt(dishData[ubKey] && dishData[ubKey][loc], 10) || 0
+        }));
+        const plan = ZedSplit.allocateOldestFirst(lots, item.qty, today());
+        plan.moves.forEach(move => {
+          const available = parseInt(dishData[move.useBy] && dishData[move.useBy][loc], 10) || 0;
+          updates[dk + '/' + move.useBy + '/' + loc] = available - move.qty;
+          logItems.push({ dish: dk, dishName: item.name, useBy: move.useBy, qty: move.qty, direction: 'remove' });
         });
       }
     });
@@ -1643,7 +1834,7 @@ function submitAdjustment() {
         items: logItems,
         notes: notes,
         totalUnits: logItems.reduce((s, i) => s + i.qty, 0),
-        timestamp: firebase.database.ServerValue.TIMESTAMP
+        timestamp: ServerValue.TIMESTAMP
       });
       const verb = isAdding ? 'Added' : 'Removed';
       showToast(verb + ' ' + logItems.reduce((s, i) => s + i.qty, 0) + ' units (' + adjustReason + ')');
@@ -1703,7 +1894,7 @@ function submitStockout() {
     location: loc,
     items: items,
     count: items.length,
-    timestamp: firebase.database.ServerValue.TIMESTAMP
+    timestamp: ServerValue.TIMESTAMP
   }).then(() => {
     showToast('Logged ' + items.length + ' stockout(s) at ' + locLabel(loc));
     stockoutSelections = new Set();
@@ -1788,78 +1979,78 @@ function updateCountSummary() {
   diffEl.className = 'stat-value ' + (totalDiff === 0 ? 'green' : totalDiff > 0 ? 'blue' : 'red');
 }
 
-function submitCount() {
-  const loc = document.getElementById('countLoc').value;
-  const items = [];
-  let totalCounted = 0;
-
-  document.querySelectorAll('.count-input').forEach(input => {
-    const val = input.value;
-    if (val === '') return;
-    const actual = parseInt(val) || 0;
-    const dk = input.dataset.dish;
-    const expected = countExpected[dk] || 0;
-    items.push({ dish: dk, dishName: findDishName(dk), expected, actual, variance: actual - expected });
-    totalCounted += actual;
-  });
-
-  if (items.length === 0) { showToast('Enter at least one count'); return; }
-
-  // Log the count
-  countsRef.push({
+function applyLocationCount(loc, items) {
+  if (!items || items.length === 0) {
+    showToast('Enter at least one count');
+    return Promise.reject(new Error('empty'));
+  }
+  return countsRef.push({
     type: 'physical_count',
     location: loc,
     items: items,
-    totalCounted: totalCounted,
+    totalCounted: items.reduce((s, i) => s + i.actual, 0),
     totalVariances: items.filter(i => i.variance !== 0).length,
-    timestamp: firebase.database.ServerValue.TIMESTAMP
+    timestamp: ServerValue.TIMESTAMP
   }).then(() => {
-    // Update inventory with actual counts
-    // We replace the total for each dish at this location proportionally across use-by dates
     return invRef.once('value').then(snap => {
       const data = snap.val() || {};
       const updates = {};
-
       items.forEach(item => {
         const dishData = data[item.dish] || {};
         const ubKeys = Object.keys(dishData);
         const expectedTotal = item.expected;
         const actual = item.actual;
-
         if (expectedTotal === 0 && actual > 0) {
-          // No existing inventory — create with today's shelf life
-          const shelfDays = getShelfLife(item.dishName);
-          const useByDate = new Date();
-          useByDate.setDate(useByDate.getDate() + shelfDays);
-          const ubKey = (useByDate.getMonth() + 1) + '-' + useByDate.getDate();
+          const useBy = ZedSplit.addDaysIso(today(), getShelfLife(item.dishName));
+          const ubKey = ZedSplit.isoToUseByKey(useBy);
           updates[item.dish + '/' + ubKey + '/' + loc] = actual;
         } else if (actual === 0) {
-          // Zero out all use-by dates for this location
           ubKeys.forEach(ubKey => {
-            if (dishData[ubKey] && (parseInt(dishData[ubKey][loc]) || 0) > 0) {
+            if (dishData[ubKey] && (parseInt(dishData[ubKey][loc], 10) || 0) > 0) {
               updates[item.dish + '/' + ubKey + '/' + loc] = 0;
             }
           });
         } else if (expectedTotal > 0) {
-          // Scale proportionally
           const ratio = actual / expectedTotal;
           ubKeys.forEach(ubKey => {
-            const current = parseInt(dishData[ubKey]?.[loc]) || 0;
-            if (current > 0) {
-              updates[item.dish + '/' + ubKey + '/' + loc] = Math.round(current * ratio);
-            }
+            const current = parseInt(dishData[ubKey] && dishData[ubKey][loc], 10) || 0;
+            if (current > 0) updates[item.dish + '/' + ubKey + '/' + loc] = Math.round(current * ratio);
           });
         }
       });
-
-      if (Object.keys(updates).length > 0) {
-        return invRef.update(updates);
-      }
+      if (Object.keys(updates).length > 0) return invRef.update(updates);
     });
-  }).then(() => {
+  });
+}
+
+function submitCount() {
+  const loc = document.getElementById('countLoc').value;
+  const items = [];
+  document.querySelectorAll('.count-input').forEach(input => {
+    const val = input.value;
+    if (val === '') return;
+    const actual = parseInt(val, 10) || 0;
+    const dk = input.dataset.dish;
+    const expected = countExpected[dk] || 0;
+    items.push({ dish: dk, dishName: findDishName(dk), expected, actual, variance: actual - expected });
+  });
+  applyLocationCount(loc, items).then(() => {
     showToast('Physical count saved — ' + items.length + ' dishes counted');
     switchSection('dashboard');
-  }).catch(err => showToast('Error: ' + err.message));
+  }).catch(err => {
+    if (err && err.message === 'empty') return;
+    showToast('Error: ' + err.message);
+  });
+}
+
+function searchReceiveDish(query) {
+  const results = document.getElementById('receiveSearchResults');
+  if (!query) { results.classList.remove('show'); return; }
+  const q = query.toLowerCase();
+  const matches = getAllDishNames().filter(n => n.toLowerCase().includes(q)).slice(0, 8);
+  if (!matches.length) { results.classList.remove('show'); return; }
+  results.innerHTML = matches.map(n => `<div onclick="addReceiveItem('${esc(n).replace(/'/g, "\\'")}', 1); document.getElementById('receiveSearch').value=''; this.parentNode.classList.remove('show');">${esc(n)}</div>`).join('');
+  results.classList.add('show');
 }
 
 // ============================================================
@@ -1930,10 +2121,14 @@ function loadHistory() {
   // Collect from all log sources
   const promises = [];
 
-  if (typeFilter === 'all' || typeFilter === 'transfer') {
+  if (typeFilter === 'all' || typeFilter === 'transfer' || typeFilter === 'split') {
     promises.push(transfersRef.orderByChild('timestamp').limitToLast(50).once('value').then(snap => {
       const items = [];
-      snap.forEach(child => { items.push({ ...child.val(), id: child.key, logType: 'transfer' }); });
+      snap.forEach(child => {
+        const val = child.val() || {};
+        const lt = val.kind === 'split' ? 'split' : 'transfer';
+        if (typeFilter === 'all' || typeFilter === lt) items.push({ ...val, id: child.key, logType: lt });
+      });
       return items;
     }));
   }
@@ -1995,14 +2190,20 @@ function loadHistory() {
       const time = entry.timestamp ? new Date(entry.timestamp).toLocaleString() : 'Unknown';
       let detail = '';
 
-      if (entry.logType === 'transfer') {
+      if (entry.logType === 'split') {
+        const names = (entry.items || []).map(i => {
+          const parts = (i.allocations || []).map(slot => slot.name + ' ' + (slot.caseQty || 0) + (slot.backstock ? '+' + slot.backstock : ''));
+          return (i.dishName || i.dish) + (parts.length ? ' ' + parts.join(' / ') : '');
+        }).slice(0, 3).join(', ');
+        detail = `<strong>Split</strong> for plate date ${esc(entry.plateDate || '')}. ${names}`;
+      } else if (entry.logType === 'transfer') {
         const names = (entry.items || []).map(i => i.dishName || i.dish).slice(0, 3).join(', ');
         const extra = (entry.items || []).length > 3 ? ' +' + ((entry.items || []).length - 3) + ' more' : '';
         detail = `<strong>${entry.totalUnits || 0} units</strong> moved from <strong>${locLabel(entry.from)}</strong> → <strong>${locLabel(entry.to)}</strong><br>${names}${extra}`;
       } else if (entry.logType === 'adjustment') {
         const names = (entry.items || []).map(i => i.dishName || i.dish).slice(0, 3).join(', ');
         const extra = (entry.items || []).length > 3 ? ' +' + ((entry.items || []).length - 3) + ' more' : '';
-        const reasonLabel = { waste: 'Waste/Expired', damaged: 'Damaged', received: 'Received', correction: 'Correction', quick_add: 'Quick Add', quick_remove: 'Quick Remove' };
+        const reasonLabel = { waste: 'Waste/Expired', damaged: 'Damaged', received: 'Received', correction: 'Correction', quick_add: 'Quick Add', quick_remove: 'Quick Remove', orange_star: 'Orange star' };
         detail = `<strong>${reasonLabel[entry.reason] || entry.reason}</strong> — ${entry.totalUnits || entry.qty || 0} units at <strong>${locLabel(entry.location)}</strong><br>${names}${extra}`;
         if (entry.notes) detail += `<br><em style="color:#888;">${esc(entry.notes)}</em>`;
       } else if (entry.logType === 'stockout') {
@@ -2050,6 +2251,7 @@ function switchSection(section) {
 
   const labels = {
     dashboard: 'Dashboard', enter: 'Enter Inventory', transfer: 'Log Transfer',
+    receive: 'Receive', backstock: 'Backstock', split: 'Split', stores: 'Stores',
     adjustment: 'Log Adjustment', stockout: 'Log Stockout', count: 'Physical Count',
     shelflife: 'Shelf Life', history: 'Log History', caseconfig: 'Case Config'
   };
@@ -2058,26 +2260,32 @@ function switchSection(section) {
   });
 
   // Hide all submit bars
-  const bars = ['enterSubmitBar','transferSubmitBar','adjustSubmitBar','stockoutSubmitBar','countSubmitBar','shelflifeSubmitBar'];
+  const bars = ['enterSubmitBar','transferSubmitBar','adjustSubmitBar','stockoutSubmitBar','countSubmitBar','shelflifeSubmitBar','receiveSubmitBar','backstockSubmitBar','splitSubmitBar'];
   bars.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
   if (section !== 'caseconfig') {
     document.getElementById('configUnsavedBar').style.display = 'none';
   }
 
   // Show relevant submit bar
-  const barMap = { enter: 'enterSubmitBar', transfer: 'transferSubmitBar', adjustment: 'adjustSubmitBar', stockout: 'stockoutSubmitBar', count: 'countSubmitBar', shelflife: 'shelflifeSubmitBar' };
+  const barMap = { enter: 'enterSubmitBar', transfer: 'transferSubmitBar', adjustment: 'adjustSubmitBar', stockout: 'stockoutSubmitBar', count: 'countSubmitBar', shelflife: 'shelflifeSubmitBar', receive: 'receiveSubmitBar', backstock: 'backstockSubmitBar', split: 'splitSubmitBar' };
   if (barMap[section]) document.getElementById(barMap[section]).style.display = 'flex';
 
   // Init sections
   if (section === 'dashboard') refreshDashboard();
   if (section === 'enter') buildEnterSheet();
-  if (section === 'transfer') { transferItemsList = []; renderTransferItems(); }
+  if (section === 'transfer') {
+    if (!keepTransferItems) transferItemsList = [];
+    keepTransferItems = false;
+    renderTransferItems();
+  }
   if (section === 'adjustment') { adjustItemsList = []; renderAdjustItems(); }
   if (section === 'stockout') buildStockoutList();
   if (section === 'count') buildCountSheet();
   if (section === 'shelflife') buildShelfLifeTable();
   if (section === 'history') { historyLimit = 30; loadHistory(); }
+  if (section === 'stores' && typeof renderStoresEditor === 'function') renderStoresEditor();
   if (section === 'caseconfig') buildCaseConfigUI();
+  if (typeof onInventorySection === 'function') onInventorySection(section);
 }
 
 // ============================================================
@@ -2095,37 +2303,35 @@ function showToast(msg) {
 // ============================================================
 function init() {
   document.getElementById('enterDefaultDate').value = today();
+  const receiveDate = document.getElementById('receivePlateDate');
+  if (receiveDate) receiveDate.value = today();
 
   // Set default history date range (last 7 days)
   const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7);
   document.getElementById('historyFrom').value = weekAgo.getFullYear() + '-' + String(weekAgo.getMonth()+1).padStart(2,'0') + '-' + String(weekAgo.getDate()).padStart(2,'0');
   document.getElementById('historyTo').value = today();
 
-  // Load case config and shelf life from Firebase, then init dashboard
-  Promise.all([loadCaseConfig(), loadShelfLifeConfig()]).then(() => {
+  installInventoryFeatures().then(() => seedSampleData(false)).then(() => Promise.all([loadCaseConfig(), loadShelfLifeConfig()])).then(() => {
     refreshDashboard();
     listenForConfigChanges();
-  });
-
-  // Listen for real-time inventory changes
-  invRef.on('value', snap => {
-    invData = snap.val() || {};
-    if (document.getElementById('sec-dashboard').classList.contains('active')) {
-      renderDashboard();
+    invRef.on('value', snap => {
+      invData = snap.val() || {};
+      if (document.getElementById('sec-dashboard').classList.contains('active')) {
+        renderDashboard();
+      }
+    });
+    if (isAdmin) {
+      document.getElementById('adminBadge').style.display = 'inline-block';
+      document.getElementById('caseConfigBtn').style.display = 'inline-block';
     }
+    const hash = (location.hash || '').replace('#', '');
+    if (hash && document.getElementById('sec-' + hash)) switchSection(hash);
   });
-
-  // Show admin features if applicable
-  if (isAdmin) {
-    document.getElementById('adminBadge').style.display = 'inline-block';
-    document.getElementById('caseConfigBtn').style.display = 'inline-block';
-  }
 }
 
 // ============================================================
-// PIN Login + Firebase Auth
+// PIN stays on this device. It is not sent anywhere.
 // ============================================================
-const auth = firebase.auth();
 const TEAM_PIN = '7590';
 const ADMIN_PIN = '6895';
 const LOGIN_KEY = 'zedops_inv_login';
@@ -2152,7 +2358,31 @@ function saveLogin(pin) {
 function showApp() {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('main-content').style.display = 'block';
-  init();
+  const banner = document.getElementById('stagingBanner');
+  ZedRemote.openDatabase(window.ZEDOPS_FIREBASE_CONFIG, {
+    createLocal: function () {
+      return ZedLocal.createInventoryDb({
+        storage: window.localStorage,
+        storageKey: 'zedops_staging_inv_local_v1'
+      });
+    }
+  }).then(function (opened) {
+    if (opened.mode === 'blocked' || opened.reason === 'live-project-blocked' || !opened.db) {
+      if (window.ZedBoot) ZedBoot.showBlocked();
+      return;
+    }
+    bindRefs(opened.db);
+    dataMode = opened.mode;
+    window.dataMode = opened.mode;
+    if (banner) {
+      if (opened.mode === 'remote') banner.textContent = 'STAGING Firebase project ' + opened.projectId + '. The live Production Hub is not connected.';
+      else if (opened.reason === 'remote-failed') banner.textContent = 'The staging project did not connect. Counts stay in this browser. The live Production Hub was not contacted.';
+      else banner.textContent = 'BROWSER ONLY — counts stay in this browser until the ZedOps Staging project is pasted into firebase-config.js. The live Production Hub is not connected.';
+      if (window.ZedBoot) ZedBoot.showBanner(banner.textContent);
+    }
+    watchConnection();
+    init();
+  });
 }
 
 // ============================================================
@@ -2271,18 +2501,13 @@ function exportStockingGuide() {
 
 function logout() {
   localStorage.removeItem(LOGIN_KEY);
-  auth.signOut();
   isAdmin = false;
   location.reload();
 }
 
 function handleLogin(pin) {
-  auth.signInAnonymously().then(() => {
-    saveLogin(pin);
-    showApp();
-  }).catch(err => {
-    document.getElementById('pin-error').textContent = 'Login error: ' + err.message;
-  });
+  saveLogin(pin);
+  showApp();
 }
 
 document.getElementById('pin-input').addEventListener('input', function() {
@@ -2301,13 +2526,14 @@ document.getElementById('pin-input').addEventListener('input', function() {
   }
 });
 
-// On page load: check if already logged in within 24h
-if (isLoginValid()) {
-  auth.signInAnonymously().then(() => {
-    showApp();
-  }).catch(() => {
-    localStorage.removeItem(LOGIN_KEY);
-  });
+// On page load: the live Production Hub project never starts this page.
+var stagingDecision = ZedRemote.classifyFirebaseConfig(window.ZEDOPS_FIREBASE_CONFIG);
+if (stagingDecision.mode === 'blocked') {
+  window.ZEDOPS_STAGING = stagingDecision;
+  if (window.ZedBoot) ZedBoot.showBlocked();
+} else {
+  if (stagingDecision.mode === 'local' && window.ZedBoot) ZedBoot.showBanner(ZedBoot.LOCAL_BANNER);
+  if (isLoginValid()) showApp();
 }
 </script>
 

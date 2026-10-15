@@ -42,7 +42,23 @@
     // Older versions stored the PIN itself in localStorage; remove it.
     try { OLD_KEYS.forEach(function (k) { localStorage.removeItem(k); }); } catch (e) {}
   }
-  function saveSession() { try { localStorage.setItem(SESSION_KEY, JSON.stringify({ time: Date.now() })); } catch (e) {} }
+  function stagingMode() {
+    try { return (window.ZEDOPS_STAGING && window.ZEDOPS_STAGING.mode) || ''; } catch (e) { return ''; }
+  }
+  function saveSession(role) {
+    try {
+      var payload = { time: Date.now() };
+      if (role) payload.localRole = role;
+      localStorage.setItem(SESSION_KEY, JSON.stringify(payload));
+    } catch (e) {}
+  }
+  function localRole() {
+    try {
+      var d = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
+      if (!d || (Date.now() - d.time) >= SESSION_MS) return null;
+      return d.localRole || null;
+    } catch (e) { return null; }
+  }
   function sessionFresh() {
     try {
       var d = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
@@ -57,6 +73,7 @@
   function friendlyError(err) {
     var c = (err && err.code) || '';
     if (c === 'hub/bad-pin') return err.hubRole === 'admin' ? 'Incorrect admin PIN' : 'Incorrect PIN';
+    if (c === 'hub/live-project') return 'This page will not start against the live Production Hub.';
     if (c === 'auth/too-many-requests') return 'Too many tries. Wait a few minutes and try again.';
     if (c === 'auth/network-request-failed') return 'No internet connection. Check Wi-Fi and try again.';
     return 'Login error: ' + ((err && err.message) || c || 'unknown');
@@ -129,6 +146,15 @@
     clearOldLogins();
     installModeSwitch();
     var acct = accountFor(role || mode);
+    if (stagingMode() === 'blocked') {
+      var blocked = new Error('This page will not start against the live Production Hub.');
+      blocked.code = 'hub/live-project';
+      return Promise.reject(blocked);
+    }
+    if (stagingMode() === 'local') {
+      saveSession(acct.role);
+      return Promise.resolve(acct.role);
+    }
     var auth = firebase.auth();
     return auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).then(function () {
       return auth.signInWithEmailAndPassword(acct.email, pinToPassword(acct.role, pin));
@@ -141,6 +167,8 @@
   // On page load: resolves with the role if this device is still signed in (within 24h), else null.
   function restore() {
     clearOldLogins();
+    if (stagingMode() === 'blocked') return Promise.resolve(null);
+    if (stagingMode() === 'local') return Promise.resolve(localRole());
     var auth = firebase.auth();
     return new Promise(function (resolve) {
       var unsub = auth.onAuthStateChanged(function (user) {
@@ -157,6 +185,8 @@
     try { localStorage.removeItem(SESSION_KEY); } catch (e) {}
     clearOldLogins();
     setMode(wantsAdminFromAddress() ? 'admin' : 'team');
+    if (stagingMode() === 'local' || stagingMode() === 'blocked') return Promise.resolve();
+    if (typeof firebase === 'undefined' || !firebase.apps || !firebase.apps.length) return Promise.resolve();
     return firebase.auth().signOut().catch(function () {});
   }
 
