@@ -86,7 +86,7 @@ test('inventory code does not contain the live Firebase project id', () => {
   assert.equal(html.includes('createInventoryDb'), true);
   assert.equal(html.includes('Beef Taco Skillet'), true);
   assert.equal(html.includes("skipList: ['Beef Taco Skillet', 'Orange Chicken']"), false);
-  assert.match(cfg, /projectId:\s*""/);
+  assert.match(cfg, /projectId:\s*"zedops-staging"/);
 });
 
 test('empty config stays local and a live project config is refused', async () => {

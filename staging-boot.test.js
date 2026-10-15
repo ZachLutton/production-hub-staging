@@ -86,7 +86,7 @@ test('pages read firebase-config.js and do not name the live project', () => {
   });
   const cfg = fs.readFileSync(path.join(__dirname, 'firebase-config.js'), 'utf8');
   assert.match(cfg, /ZedOps Staging/);
-  assert.match(cfg, /projectId:\s*""/);
+  assert.match(cfg, /projectId:\s*"zedops-staging"/);
   assert.equal(cfg.includes(LIVE_ID), false);
 });
 
