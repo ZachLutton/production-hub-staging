@@ -73,6 +73,10 @@
     "staging_inv_skuMap": {
       ".read": true,
       ".write": true
+    },
+    "staging_inv_mealCosts": {
+      ".read": true,
+      ".write": true
     }
   }
 }

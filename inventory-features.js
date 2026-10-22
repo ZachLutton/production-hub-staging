@@ -54,6 +54,7 @@ function onInventorySection(section) {
   if (section === 'split') buildSplitUI();
   if (section === 'stores') renderStoresEditor();
   if (section === 'transfer' && typeof renderTransferPreview === 'function') renderTransferPreview();
+  if (section === 'casevalue' && typeof renderCaseValue === 'function') renderCaseValue();
   if (scanHere) {
     setTimeout(function () {
       var el = document.getElementById('scanInput');
@@ -112,7 +113,7 @@ function backupNote() {
 }
 
 function exportRemotePaths() {
-  var keys = ['staging_inv_inventory', 'staging_inv_adjustments', 'staging_inv_counts', 'staging_inv_caseConfig', 'staging_inv_transfers', 'staging_inv_stockouts', 'staging_inv_shelfLife', 'staging_inv_splitConfig', 'staging_inv_barcodes', 'staging_inv_skipList', 'staging_inv_stores', 'staging_inv_skuMap'];
+  var keys = ['staging_inv_inventory', 'staging_inv_adjustments', 'staging_inv_counts', 'staging_inv_caseConfig', 'staging_inv_transfers', 'staging_inv_stockouts', 'staging_inv_shelfLife', 'staging_inv_splitConfig', 'staging_inv_barcodes', 'staging_inv_skipList', 'staging_inv_stores', 'staging_inv_skuMap', 'staging_inv_mealCosts'];
   return Promise.all(keys.map(function (key) {
     return db.ref(key).once('value').then(function (snap) {
       return { key: key, val: snap.val() };
@@ -1130,6 +1131,94 @@ function addRetailStore() {
   setStores(next);
   renderStoresEditor();
   showToast('Added ' + name + '. Set the percents so they add up to 100, then save.');
+}
+
+var caseValueCosts = { tray: 0, film: 0, gas: 0, product: {} };
+var caseValueAnchor = new Date();
+var caseValueLoaded = false;
+
+function captureCaseValueForm() {
+  var tray = document.getElementById('costTray');
+  if (!tray) return;
+  var next = TransferCost.readCosts({
+    tray: tray.value,
+    film: document.getElementById('costFilm').value,
+    gas: document.getElementById('costGas').value,
+    product: caseValueCosts.product
+  });
+  document.querySelectorAll('[data-product-dish]').forEach(function (input) {
+    var name = input.getAttribute('data-product-dish');
+    var amount = TransferCost.money(input.value);
+    if (amount == null) delete next.product[name];
+    else next.product[name] = amount;
+  });
+  caseValueCosts = next;
+}
+
+function fillCaseValueRates() {
+  var tray = document.getElementById('costTray');
+  var film = document.getElementById('costFilm');
+  var gas = document.getElementById('costGas');
+  if (tray && document.activeElement !== tray) tray.value = caseValueCosts.tray ? caseValueCosts.tray : '';
+  if (film && document.activeElement !== film) film.value = caseValueCosts.film ? caseValueCosts.film : '';
+  if (gas && document.activeElement !== gas) gas.value = caseValueCosts.gas ? caseValueCosts.gas : '';
+}
+
+function renderCaseValue() {
+  var report = document.getElementById('caseValueReport');
+  if (!report) return;
+  var draw = function () {
+    var week = TransferCost.transferWeek(caseValueAnchor);
+    var label = document.getElementById('caseValueWeekLabel');
+    if (label) label.textContent = week.label;
+    fillCaseValueRates();
+    if (!transfersRef) return;
+    transfersRef.once('value').then(function (snap) {
+      var entries = [];
+      snap.forEach(function (child) { entries.push(child.val()); });
+      report.innerHTML = TransferCost.reportHtml(TransferCost.summarize(entries, caseValueCosts, locations(), week));
+    }).catch(function (err) { report.textContent = err.message; });
+  };
+  if (caseValueLoaded || !mealCostsRef) { draw(); return; }
+  mealCostsRef.once('value').then(function (snap) {
+    caseValueCosts = TransferCost.readCosts(snap.val());
+    caseValueLoaded = true;
+    draw();
+  }).catch(function () { caseValueLoaded = true; draw(); });
+}
+
+function refreshCaseValue() {
+  captureCaseValueForm();
+  var report = document.getElementById('caseValueReport');
+  if (!report || !transfersRef) return;
+  var week = TransferCost.transferWeek(caseValueAnchor);
+  transfersRef.once('value').then(function (snap) {
+    var entries = [];
+    snap.forEach(function (child) { entries.push(child.val()); });
+    report.innerHTML = TransferCost.reportHtml(TransferCost.summarize(entries, caseValueCosts, locations(), week));
+  });
+}
+
+function shiftCaseValueWeek(delta) {
+  captureCaseValueForm();
+  var week = TransferCost.transferWeek(caseValueAnchor);
+  var moved = TransferCost.shiftWeek(week, delta);
+  caseValueAnchor = new Date(moved.start + 12 * 60 * 60 * 1000);
+  renderCaseValue();
+}
+
+function saveCaseValueCosts() {
+  captureCaseValueForm();
+  mealCostsRef.set({
+    tray: caseValueCosts.tray,
+    film: caseValueCosts.film,
+    gas: caseValueCosts.gas,
+    product: caseValueCosts.product
+  }).then(function () {
+    caseValueLoaded = true;
+    showToast('Meal costs saved. Labor is not included.');
+    renderCaseValue();
+  }).catch(function (err) { showToast('Error: ' + err.message); });
 }
 
 function addKitchen() {

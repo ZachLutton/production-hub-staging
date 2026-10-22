@@ -41,6 +41,7 @@ The file denies the root and opens read and write on each path the pages use:
 | `staging_inv_skipList` | dishes left out of the split |
 | `staging_inv_stores` | store list |
 | `staging_inv_skuMap` | Shopify SKU map |
+| `staging_inv_mealCosts` | tray, film, gas, and product cost per meal |
 
 `.info/connected` is a Firebase connection flag, not a data path, so it is not in the rules file.
 

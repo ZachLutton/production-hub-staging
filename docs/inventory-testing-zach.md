@@ -47,7 +47,8 @@ Do this when you want two tablets to share the staging counts. Until then, skip 
     "staging_inv_barcodes": { ".read": true, ".write": true },
     "staging_inv_skipList": { ".read": true, ".write": true },
     "staging_inv_stores": { ".read": true, ".write": true },
-    "staging_inv_skuMap": { ".read": true, ".write": true }
+    "staging_inv_skuMap": { ".read": true, ".write": true },
+    "staging_inv_mealCosts": { ".read": true, ".write": true }
   }
 }
 ```
@@ -58,6 +59,18 @@ These rules are for that empty staging project only. They are not the live hub's
 7. On this branch, open `firebase-config.js`. Paste `apiKey`, `authDomain`, `databaseURL`, `projectId`, `storageBucket`, `messagingSenderId`, and `appId` inside the quotes. Leave `projectId` empty if you are not ready. Do not commit the live project's config.
 8. Reload `inventory.html`. The banner should name the staging project. If it says this browser, the config is empty or the scripts could not load. If the config is the live project, the page shows a full-screen error and does not start. The full staging rules file is `database.rules.staging.json`. See `docs/staging-checklist.md`.
 9. Counts already in the browser do not move themselves. Download a backup first, then **Import backup** after the banner shows the staging project, if you want those counts there.
+
+## Case value, Thursday through Wednesday
+
+**Case value** is in the section bar.
+
+1. Log a transfer into a store case, or apply a split. Meals that only go to a backstock cooler stay off this screen.
+2. Open **Case value**. The week is Thursday through Wednesday.
+3. Enter the tray, film, and gas cost for one meal. Enter the product cost (the food) on that dish’s row.
+4. **Save costs**. The case total is meals times tray, film, gas, and product. Labor is not in the total.
+5. **Previous week** shows the Thursday-to-Wednesday week before this one.
+
+A dish with no product cost stays blank. It is not treated as $0.
 
 ## 1. Stores, including a third store and a commissary
 

@@ -24,7 +24,8 @@ const RULE_PATHS = [
   'staging_inv_barcodes',
   'staging_inv_skipList',
   'staging_inv_stores',
-  'staging_inv_skuMap'
+  'staging_inv_skuMap',
+  'staging_inv_mealCosts'
 ];
 
 test('empty config stays in the browser and the live project is refused', () => {
