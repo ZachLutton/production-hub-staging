@@ -24,7 +24,7 @@
   ];
   var SESSION_KEY = 'zedrics_hub_session';
   var SESSION_MS = 24 * 60 * 60 * 1000;
-  var OLD_KEYS = ['zedrics_hub_login', 'zedrics_inv_login', 'zedrics_order_login', 'zedrics_dash_login'];
+  var OLD_KEYS = ['zedrics_hub_login', 'zedrics_inv_login', 'zedrics_order_login', 'zedrics_dash_login', 'zedops_inv_login'];
 
   // Firebase passwords must be 6+ characters; the 4-digit PIN is the secret part.
   function pinToPassword(role, pin) { return 'zph-' + role + '-' + pin; }

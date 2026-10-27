@@ -17,9 +17,9 @@ The live project id is `zedrics-production-hub`. Do not paste that project into 
 
 ## Open it
 
-1. Open `inventory.html` from this branch (a local file, or a staging host that is not the live GitHub Pages site).
-2. Enter the team PIN. It is checked only in the browser.
-3. The orange banner should say this is a local copy. The live hub is not connected.
+1. Open `inventory.html` from this branch (this branch's staging site, or a local file). It is not the live Production Hub.
+2. Enter the team PIN. Firebase Auth checks it through the shared hub login. The page does not compare a PIN itself, and it does not open counts until that sign-in succeeds. For an admin session, tap **Admin login** under the box first.
+3. With the committed ZedOps Staging config, the banner names that project. The live hub is not connected. Monthly inventory counts stay on `staging_inventory`. This page uses the `staging_inv_*` paths only.
 
 The first open loads sample counts so you can click through. Those numbers are not this week's plate list. **Download backup** before you replace them. **Import backup** moves a file to another tablet. **Reset sample data** puts the sample back, and only in this browser.
 
@@ -31,29 +31,9 @@ Do this when you want two tablets to share the staging counts. Until then, skip 
 2. Click **Add project**. Name it something like ZedOps Staging. Turn off Google Analytics if it asks. You do not need it.
 3. Do not open the existing Production Hub project. If the project id or database URL contains that live id, this page shows an error and does not start.
 4. In the new project, open **Build → Realtime Database → Create Database**. Pick a US region. Start in **locked mode**.
-5. Open the **Rules** tab, replace the rules with the block below, and click **Publish**.
+5. Open the **Rules** tab and publish `database.rules.staging.json` from this branch. Those rules deny the root and allow each `staging_*` path only for the two hub Auth accounts. Do not paste open read/write rules. Do not publish them with `firebase deploy` from this repo: `.firebaserc` points at the live project. Enable Email/Password and create the two users described in `docs/staging-checklist.md` before expecting the page to load counts.
 
-```json
-{
-  "rules": {
-    "staging_inv_inventory": { ".read": true, ".write": true },
-    "staging_inv_adjustments": { ".read": true, ".write": true },
-    "staging_inv_counts": { ".read": true, ".write": true },
-    "staging_inv_caseConfig": { ".read": true, ".write": true },
-    "staging_inv_transfers": { ".read": true, ".write": true },
-    "staging_inv_stockouts": { ".read": true, ".write": true },
-    "staging_inv_shelfLife": { ".read": true, ".write": true },
-    "staging_inv_splitConfig": { ".read": true, ".write": true },
-    "staging_inv_barcodes": { ".read": true, ".write": true },
-    "staging_inv_skipList": { ".read": true, ".write": true },
-    "staging_inv_stores": { ".read": true, ".write": true },
-    "staging_inv_skuMap": { ".read": true, ".write": true },
-    "staging_inv_mealCosts": { ".read": true, ".write": true }
-  }
-}
-```
-
-These rules are for that empty staging project only. They are not the live hub's rules.
+These rules are for the ZedOps Staging project only. They are not the live hub's rules.
 
 6. Click the gear, then **Project settings → Your apps → Web** (`</>`). Register the app as "ZedOps inventory". Skip Hosting. Copy the config it shows.
 7. On this branch, open `firebase-config.js`. Paste `apiKey`, `authDomain`, `databaseURL`, `projectId`, `storageBucket`, `messagingSenderId`, and `appId` inside the quotes. Leave `projectId` empty if you are not ready. Do not commit the live project's config.

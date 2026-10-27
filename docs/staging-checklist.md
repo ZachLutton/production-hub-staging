@@ -8,7 +8,7 @@ It must use only its own Firebase project, named **ZedOps Staging**. It must nev
 
 Every page (`index.html`, `dashboard.html`, `weekly-order.html`, `monthly-inventory.html`, `inventory.html`, and the weight-check code those pages load) reads Firebase from `firebase-config.js` only.
 
-- That file is a placeholder. Leave the values empty until the owner pastes the ZedOps Staging web config (`apiKey`, `authDomain`, `databaseURL`, `projectId`, `storageBucket`, `messagingSenderId`, `appId`).
+- That file is the ZedOps Staging web config (`apiKey`, `authDomain`, `databaseURL`, `projectId`, `storageBucket`, `messagingSenderId`, `appId`). Do not replace it with the live project.
 - Empty config: the page keeps working in this browser and shows a yellow **BROWSER ONLY** banner. Nothing is sent to Firebase.
 - If `projectId`, `databaseURL`, `authDomain`, or `storageBucket` contains `zedrics-production-hub`, the page refuses to start and shows a full-screen error. It does not call `initializeApp`.
 - A new feature must not hardcode a project id, database URL, or API key in a page. Add the new database path to `database.rules.staging.json` and to this list.
@@ -19,7 +19,7 @@ Every page (`index.html`, `dashboard.html`, `weekly-order.html`, `monthly-invent
 
 `database.rules.staging.json` is for the ZedOps Staging project only. It is not deployed by this change. Publish it in that project's Realtime Database rules tab, or with the Firebase CLI pointed at the new project and this file. Never publish it to the live project.
 
-The file denies the root and opens read and write on each path the pages use:
+The file denies the root. On each path the pages use, read and write are allowed only for the two Email/Password accounts listed under Auth:
 
 | Path | Used by |
 | --- | --- |
@@ -45,34 +45,26 @@ The file denies the root and opens read and write on each path the pages use:
 
 `.info/connected` is a Firebase connection flag, not a data path, so it is not in the rules file.
 
-Open read and write is temporary so tablets can share data before Auth users exist. Anyone who can reach the database URL can read and write these paths.
-
-Tighter option, after the two Auth users below exist in the ZedOps Staging project: set each path's `.read` and `.write` to the same expression the live rules use, with those two emails. Anonymous and unsigned requests would then be denied. Do not copy the live rules file onto this project as-is without checking the paths above, and do not deploy that tighter file to `zedrics-production-hub`.
-
-```
-auth != null
-&& auth.token.firebase.sign_in_provider === 'password'
-&& (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com'
-    || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')
-```
+`database.rules.staging.json` denies the root. Each path above allows read and write only for a Firebase Email/Password sign-in as one of the two accounts below. Anonymous and signed-out requests are denied. Do not copy the live rules file onto this project. Do not deploy this file to `zedrics-production-hub`. Publishing it is a separate step in the ZedOps Staging console (or a CLI pointed at that project and this file). This repo's `firebase deploy` uses `.firebaserc`, which still names the live project, and `firebase.json`, which still names `database.rules.json`. Do not run it from this branch.
 
 ## Auth
 
 Yes. The staging project needs Authentication set up before PIN login works against it.
 
-These pages sign in with Firebase Auth email/password through `hub-auth.js`:
+These pages sign in with Firebase Auth email/password through `hub-auth.js` before they read or write a `staging_*` path:
 
-- `index.html` (production board and weight checks)
-- `dashboard.html`
+- `index.html` (production board). Weight checks on that page use the same signed-in default app. They do not open a second Firebase app.
+- `dashboard.html` (no database paths; the sign-in is shared with the other pages)
 - `weekly-order.html`
-- `monthly-inventory.html`
-
-`inventory.html` does not use Firebase Auth. Its PIN is checked in the browser only.
+- `monthly-inventory.html` (`staging_inventory` only)
+- `inventory.html` (the `staging_inv_*` paths only). It does not check a PIN in the browser.
 
 The accounts are not stored as passwords in the repo. `hub-auth.js` signs in as:
 
 - `team@zedrics-production-hub.firebaseapp.com` (team PIN, password `zph-team-` plus the PIN)
 - `admin@zedrics-production-hub.firebaseapp.com` (admin PIN, password `zph-admin-` plus the PIN)
+
+The PIN box starts on Team. Tap **Admin login** under the box before entering the admin PIN. A wrong PIN does not open the data. The two inventory pages stay on different paths: monthly counts use `staging_inventory`, and ZedOps inventory uses `staging_inv_*`.
 
 Enable this on the ZedOps Staging project:
 
@@ -80,6 +72,6 @@ Enable this on the ZedOps Staging project:
 2. Authentication → Users → Add user, twice, with those exact email addresses. Set each password in the console to `zph-team-` or `zph-admin-` plus the PIN. The email domain does not have to match the new project's auth domain. Firebase stores the email as the user id.
 3. Build → Realtime Database → Create database. Publish `database.rules.staging.json`.
 
-Until `firebase-config.js` is filled in, those pages do not call Auth. A PIN on the login screen is only a local session, and the banner says so. After the config is pasted, PIN login calls the ZedOps Staging project, not the live one.
+`firebase-config.js` on this branch names ZedOps Staging, so PIN login calls that project, not the live one. If every value in that file is cleared, the pages stay in this browser, show the yellow banner, and HubAuth keeps a local session without contacting Auth. With the committed config, a PIN is sent only to ZedOps Staging Auth.
 
-Weight checks do not have a separate login. They open after the production page login. Their saves use `staging_weight` on the same project, or this browser when the config is empty.
+Weight checks do not have a separate login. They open after the production page login and read `staging_weight` with that same signed-in app. A signed-out browser does not read or write that path. With an empty config they stay in this browser.

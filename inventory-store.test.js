@@ -84,6 +84,12 @@ test('inventory code does not contain the live Firebase project id', () => {
   const html = fs.readFileSync(path.join(__dirname, 'inventory.html'), 'utf8');
   const cfg = fs.readFileSync(path.join(__dirname, 'firebase-config.js'), 'utf8');
   assert.equal(html.includes('createInventoryDb'), true);
+  assert.equal(html.includes('HubAuth.signInWithPin'), true);
+  assert.equal(html.includes('HubAuth.restore'), true);
+  assert.equal(html.includes('firebase-auth-compat.js'), true);
+  assert.equal(html.includes('TEAM_PIN'), false);
+  assert.equal(html.includes('ADMIN_PIN'), false);
+  assert.equal(html.includes("db.ref('staging_inventory"), false);
   assert.equal(html.includes('Beef Taco Skillet'), true);
   assert.equal(html.includes("skipList: ['Beef Taco Skillet', 'Orange Chicken']"), false);
   assert.match(cfg, /projectId:\s*"zedops-staging"/);
@@ -120,4 +126,25 @@ test('empty config stays local and a live project config is refused', async () =
   });
   assert.equal(opened.mode, 'remote');
   assert.equal(opened.projectId, 'zedops-staging-example');
+});
+
+test('the working tree has no stored team or admin PIN and no derived password', () => {
+  const skip = new Set(['node_modules', '.git']);
+  const hits = [];
+  function walk(dir) {
+    for (const name of fs.readdirSync(dir)) {
+      if (skip.has(name)) continue;
+      const full = path.join(dir, name);
+      if (fs.statSync(full).isDirectory()) {
+        walk(full);
+        continue;
+      }
+      if (!/\.(js|html|md|json|yml|yaml|txt|css)$/.test(name)) continue;
+      const text = fs.readFileSync(full, 'utf8');
+      if (/(?:const|let|var)\s+(?:TEAM_PIN|ADMIN_PIN)\b/.test(text)) hits.push(path.relative(__dirname, full) + ':pin-constant');
+      if (/zph-(?:team|admin)-\d/.test(text)) hits.push(path.relative(__dirname, full) + ':derived-password');
+    }
+  }
+  walk(__dirname);
+  assert.deepEqual(hits, []);
 });

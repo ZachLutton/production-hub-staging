@@ -38,12 +38,22 @@
         config: window.ZEDOPS_FIREBASE_CONFIG,
         firebase: window.firebase
       }).then(function (store) {
+        if (!store || store.mode === 'blocked') {
+          var blocked = new Error(store && store.reason === 'live-blocked'
+            ? 'Weight checks will not use the live Production Hub.'
+            : 'Weight checks are not available.');
+          blocked.code = 'weight/blocked';
+          throw blocked;
+        }
         return store.load().then(function (data) {
           cache = data && data.targets ? data : { targets: {}, checks: [] };
           if (!cache.checks) cache.checks = [];
           store._cache = cache;
           return store;
         });
+      }).catch(function (err) {
+        storePromise = null;
+        throw err;
       });
     }
     return storePromise;
@@ -87,6 +97,10 @@
     stagingStore().then(function () {
       document.getElementById('weightOverlay').classList.add('show');
       showWeightTab('sheet');
+    }).catch(function (err) {
+      var message = (err && err.message) ? err.message : 'Sign in before weight checks';
+      if (typeof showSaveNotice === 'function') showSaveNotice(message);
+      else window.alert(message);
     });
   }
 
@@ -233,6 +247,8 @@
     if (!mount) return;
     stagingStore().then(function () {
       mount.innerHTML = WeightCheck.reportHtml({ checks: cache.checks, days: days || [] });
+    }).catch(function () {
+      mount.innerHTML = '<p class="weight-empty">Weight checks are not available until you are signed in.</p>';
     });
   }
 

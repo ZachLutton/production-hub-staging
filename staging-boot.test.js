@@ -91,13 +91,20 @@ test('pages read firebase-config.js and do not name the live project', () => {
   assert.equal(cfg.includes(LIVE_ID), false);
 });
 
-test('staging rules cover every app path and stay open', () => {
+test('staging rules cover every app path and require the two password accounts', () => {
   const rules = JSON.parse(fs.readFileSync(path.join(__dirname, 'database.rules.staging.json'), 'utf8')).rules;
   assert.equal(rules['.read'], false);
   assert.equal(rules['.write'], false);
+  const expr = rules.staging_weight['.read'];
+  assert.equal(typeof expr, 'string');
+  assert.match(expr, /auth != null/);
+  assert.match(expr, /sign_in_provider === 'password'/);
+  assert.equal(expr.includes('team@' + LIVE_ID + '.firebaseapp.com'), true);
+  assert.equal(expr.includes('admin@' + LIVE_ID + '.firebaseapp.com'), true);
   RULE_PATHS.forEach(function (key) {
-    assert.equal(rules[key]['.read'], true, key);
-    assert.equal(rules[key]['.write'], true, key);
+    assert.equal(rules[key]['.read'], expr, key);
+    assert.equal(rules[key]['.write'], expr, key);
+    assert.notEqual(rules[key]['.read'], true, key);
   });
   assert.equal(Object.keys(rules).filter(function (key) { return key.charAt(0) !== '.'; }).length, RULE_PATHS.length);
 });

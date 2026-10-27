@@ -2,7 +2,7 @@
 
 This is on the staging Production Hub (`index.html` on this branch). The production page matches the live hub as of commit `5146318` (13 Oct 2026, “Schedule the Rim reminder for 09:00 UTC on Tuesdays”), with these staging differences: the yellow STAGING banner, saves go to `staging_productionData`, `staging_dishLibrary`, and `staging_history`, and the page reads Firebase only from `firebase-config.js`. It will not start if that file names the live project.
 
-Weight checks are a new staging feature on that page. They are not on the live hub. They are not saved in the live Firebase project. With an empty `firebase-config.js` they stay in this browser (`staging_weight` is used only after the ZedOps Staging project is pasted in).
+Weight checks are a new staging feature on that page. They are not on the live hub. They are not saved in the live Firebase project. They read and write `staging_weight` with the same Firebase app the page signed in. They do not open a second app. With an empty `firebase-config.js` they stay in this browser. With the ZedOps Staging config, sign in on this page first; a signed-out browser cannot load or save weight checks once the locked rules are published.
 
 The public staging site is this branch: https://zachlutton.github.io/production-hub-staging/ . Open that, or open `index.html` from this branch on your computer. `main` and the live Production Hub are a different site and must not be used for this test.
 
@@ -18,7 +18,7 @@ Plating stays on paper. Nobody needs a tablet on the line.
 
 ## 1. Set the target
 
-1. Open `index.html` from this branch and sign in the way you already do.
+1. Open `index.html` from this branch. Enter the team PIN, or tap **Admin login** and enter the admin PIN. Firebase Auth on ZedOps Staging checks it. The login screen stays up if the PIN is wrong, and weight checks stay closed.
 2. Click **Weight check**.
 3. Open **Targets**.
 4. Find **Blackened Chicken Alfredo Penne (3)**.

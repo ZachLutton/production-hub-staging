@@ -4,12 +4,16 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Zedric's ZedOps — Inventory</title>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
 <script src="firebase-config.js"></script>
 <script src="split.js"></script>
 <script src="transfer-cost.js"></script>
 <script src="inventory-store.js"></script>
 <script src="inventory-remote.js"></script>
 <script src="staging-boot.js"></script>
+<script src="hub-auth.js?v=2"></script>
 <script src="inventory-features.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
@@ -324,7 +328,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
   <div class="login-box">
     <h1>ZedOps — Inventory</h1>
     <p style="font-size:11px;color:#E65100;font-weight:700;margin-bottom:8px;">STAGING ENVIRONMENT</p>
-    <p>Enter team PIN to continue. It stays in this browser and is not checked online.</p>
+    <p>Enter team PIN to continue</p>
     <input type="password" id="pin-input" class="pin-input" maxlength="4" inputmode="numeric" pattern="[0-9]*" autofocus>
     <div class="pin-error" id="pin-error"></div>
   </div>
@@ -2359,59 +2363,50 @@ function init() {
 }
 
 // ============================================================
-// PIN stays on this device. It is not sent anywhere.
+// PIN login is Firebase Auth through hub-auth.js.
+// This page does not store a PIN or compare one. Counts open
+// only after that sign-in succeeds.
 // ============================================================
-const TEAM_PIN = '7590';
-const ADMIN_PIN = '6895';
-const LOGIN_KEY = 'zedops_inv_login';
-const LOGIN_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+var boot = null;
+var appStarted = false;
 
-function isLoginValid() {
-  try {
-    const stored = localStorage.getItem(LOGIN_KEY);
-    if (!stored) return false;
-    const data = JSON.parse(stored);
-    if ((Date.now() - data.time) >= LOGIN_DURATION) return false;
-    if (data.pin === TEAM_PIN || data.pin === ADMIN_PIN) {
-      isAdmin = data.pin === ADMIN_PIN;
-      return true;
-    }
-    return false;
-  } catch(e) { return false; }
-}
-
-function saveLogin(pin) {
-  localStorage.setItem(LOGIN_KEY, JSON.stringify({ pin: pin, time: Date.now() }));
-}
-
-function showApp() {
+function showApp(role) {
+  if (appStarted) return;
+  if (!boot || boot.mode === 'blocked') {
+    if (window.ZedBoot) ZedBoot.showBlocked();
+    return;
+  }
+  var openedDb = boot.db;
+  var mode = boot.mode;
+  if (mode !== 'remote') {
+    openedDb = ZedLocal.createInventoryDb({
+      storage: window.localStorage,
+      storageKey: 'zedops_staging_inv_local_v1'
+    });
+    mode = 'local';
+  }
+  if (!openedDb) {
+    if (window.ZedBoot) ZedBoot.showBlocked();
+    return;
+  }
+  appStarted = true;
+  isAdmin = role === 'admin';
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('main-content').style.display = 'block';
-  const banner = document.getElementById('stagingBanner');
-  ZedRemote.openDatabase(window.ZEDOPS_FIREBASE_CONFIG, {
-    createLocal: function () {
-      return ZedLocal.createInventoryDb({
-        storage: window.localStorage,
-        storageKey: 'zedops_staging_inv_local_v1'
-      });
-    }
-  }).then(function (opened) {
-    if (opened.mode === 'blocked' || opened.reason === 'live-project-blocked' || !opened.db) {
-      if (window.ZedBoot) ZedBoot.showBlocked();
-      return;
-    }
-    bindRefs(opened.db);
-    dataMode = opened.mode;
-    window.dataMode = opened.mode;
-    if (banner) {
-      if (opened.mode === 'remote') banner.textContent = 'STAGING Firebase project ' + opened.projectId + '. The live Production Hub is not connected.';
-      else if (opened.reason === 'remote-failed') banner.textContent = 'The staging project did not connect. Counts stay in this browser. The live Production Hub was not contacted.';
-      else banner.textContent = 'BROWSER ONLY — counts stay in this browser until the ZedOps Staging project is pasted into firebase-config.js. The live Production Hub is not connected.';
-      if (window.ZedBoot) ZedBoot.showBanner(banner.textContent);
-    }
-    watchConnection();
-    init();
-  });
+  if (mode === 'remote' && window.firebase && firebase.database && firebase.database.ServerValue) {
+    ServerValue = firebase.database.ServerValue;
+  }
+  bindRefs(openedDb);
+  dataMode = mode;
+  window.dataMode = mode;
+  var banner = document.getElementById('stagingBanner');
+  if (banner) {
+    if (mode === 'remote') banner.textContent = 'STAGING Firebase project ' + boot.projectId + '. The live Production Hub is not connected.';
+    else banner.textContent = 'BROWSER ONLY — counts stay in this browser until the ZedOps Staging project is pasted into firebase-config.js. The live Production Hub is not connected.';
+    if (window.ZedBoot) ZedBoot.showBanner(banner.textContent);
+  }
+  watchConnection();
+  init();
 }
 
 // ============================================================
@@ -2529,40 +2524,34 @@ function exportStockingGuide() {
 }
 
 function logout() {
-  localStorage.removeItem(LOGIN_KEY);
   isAdmin = false;
-  location.reload();
-}
-
-function handleLogin(pin) {
-  saveLogin(pin);
-  showApp();
+  var done = (window.HubAuth && HubAuth.signOut) ? HubAuth.signOut() : Promise.resolve();
+  Promise.resolve(done).then(function () { location.reload(); });
 }
 
 document.getElementById('pin-input').addEventListener('input', function() {
+  var input = this;
   document.getElementById('pin-error').textContent = '';
-  if (this.value.length === 4) {
-    if (this.value === TEAM_PIN) {
-      isAdmin = false;
-      handleLogin(TEAM_PIN);
-    } else if (this.value === ADMIN_PIN) {
-      isAdmin = true;
-      handleLogin(ADMIN_PIN);
-    } else {
-      document.getElementById('pin-error').textContent = 'Incorrect PIN';
-      this.value = '';
-    }
+  if (input.value.length === 4) {
+    var pin = input.value;
+    input.disabled = true;
+    HubAuth.signInWithPin(pin).then(function (role) {
+      showApp(role);
+    }).catch(function (err) {
+      document.getElementById('pin-error').textContent = HubAuth.friendlyError(err);
+      input.value = '';
+    }).finally(function () { input.disabled = false; });
   }
 });
 
-// On page load: the live Production Hub project never starts this page.
-var stagingDecision = ZedRemote.classifyFirebaseConfig(window.ZEDOPS_FIREBASE_CONFIG);
-if (stagingDecision.mode === 'blocked') {
-  window.ZEDOPS_STAGING = stagingDecision;
-  if (window.ZedBoot) ZedBoot.showBlocked();
-} else {
-  if (stagingDecision.mode === 'local' && window.ZedBoot) ZedBoot.showBanner(ZedBoot.LOCAL_BANNER);
-  if (isLoginValid()) showApp();
+// Start the staging app before anyone can submit a PIN, so HubAuth signs
+// into the same default Firebase app the counts will use. The live project
+// is refused by ZedBoot and never opens a database.
+boot = ZedBoot.start();
+if (boot.mode !== 'blocked') {
+  HubAuth.restore().then(function (role) {
+    if (role) showApp(role);
+  });
 }
 </script>
 

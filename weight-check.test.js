@@ -127,6 +127,9 @@ test('weight checks stay off the live hub database', async () => {
   const hub = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
   assert.equal(hub.includes('openWeightCheck'), true);
   assert.equal(hub.includes("db.ref('staging_weight"), false);
+  const weightStoreText = fs.readFileSync(path.join(__dirname, 'weight-check-store.js'), 'utf8');
+  assert.equal(weightStoreText.includes('zedops-weight'), false);
+  assert.equal(weightStoreText.includes('initializeApp(opts.config, '), false);
   const memory = { bag: {}, getItem: function (k) { return this.bag[k] || null; }, setItem: function (k, v) { this.bag[k] = v; } };
   const local = store.createLocalStore(memory);
   await local.save({ targets: { Alfredo: { target: 340, tolerance: 20 } }, checks: [] });
@@ -163,6 +166,56 @@ test('weight checks stay off the live hub database', async () => {
       }
     }
   });
-  assert.equal(named, 'zedops-weight');
+  assert.equal(named, undefined);
   assert.equal(opened.mode, 'remote');
+});
+
+test('weight checks reuse the page default app and do not read while signed out', async () => {
+  let reads = 0;
+  let inits = 0;
+  const ref = {
+    once: function () {
+      reads += 1;
+      return Promise.resolve({ val: function () { return { targets: { Alfredo: { target: 340 } }, checks: [] }; } });
+    },
+    set: function (data) { return Promise.resolve(data); }
+  };
+  const shared = {
+    name: '[DEFAULT]',
+    options: { projectId: 'zedops-staging-example' },
+    database: function () { return { ref: function (path) { assert.equal(path, 'staging_weight'); return ref; } }; },
+    auth: function () { return { currentUser: { email: 'team@zedrics-production-hub.firebaseapp.com' } }; }
+  };
+  const opened = await store.open({
+    config: { projectId: 'zedops-staging-example', databaseURL: 'https://zedops-staging-example.firebaseio.com' },
+    firebase: {
+      apps: [shared],
+      initializeApp: function () { inits += 1; throw new Error('default app already exists'); }
+    }
+  });
+  assert.equal(inits, 0);
+  assert.equal(reads, 1);
+  assert.equal(opened.mode, 'remote');
+  const loaded = await opened.load();
+  assert.equal(loaded.targets.Alfredo.target, 340);
+
+  let signedOutReads = 0;
+  const signedOut = {
+    name: '[DEFAULT]',
+    options: { projectId: 'zedops-staging-example' },
+    database: function () {
+      return { ref: function () { return { once: function () { signedOutReads += 1; return Promise.resolve({ val: function () { return null; } }); } }; } };
+    },
+    auth: function () {
+      return {
+        currentUser: null,
+        onAuthStateChanged: function (cb) { cb(null); return function () {}; }
+      };
+    }
+  };
+  await assert.rejects(store.open({
+    config: { projectId: 'zedops-staging-example', databaseURL: 'https://zedops-staging-example.firebaseio.com' },
+    firebase: { apps: [signedOut], initializeApp: function () { throw new Error('should reuse default app'); } }
+  }), (err) => err && err.code === 'weight/signed-out');
+  assert.equal(signedOutReads, 0);
 });
