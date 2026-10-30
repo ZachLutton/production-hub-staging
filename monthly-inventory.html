@@ -11,6 +11,7 @@
     <script src="inventory-store.js"></script>
     <script src="staging-boot.js"></script>
     <script src="hub-auth.js?v=2"></script>
+    <script src="zedops/price-overlay.js"></script>
     <style>
         * {
             margin: 0;
@@ -892,6 +893,7 @@
             const row = document.createElement('tr');
             row.className = 'item-row';
             row.setAttribute('data-price', item.price);
+            row.setAttribute('data-base-price', item.price);
             row.setAttribute('data-section', sectionId);
             // Saved identity of this row, checked before any targeted save of this row
             row.setAttribute('data-saved-num', String(item.itemNumber || '').trim());
@@ -1455,6 +1457,38 @@
             });
 
             updateTotals();
+            applyPriceOverlayToDom();
+        }
+
+        // Approved BEK prices for this month only. No approval record: prices stay as they are.
+        function applyPriceOverlayToDom() {
+            if (!window.ZedPrice) return;
+            const approval = window.ZEDOPS_MONTH_PRICES;
+            let changed = false;
+            document.querySelectorAll('.item-row').forEach(row => {
+                if (row.querySelector('.price-display')) return;
+                const num = row.querySelector('.item-number')?.textContent?.trim() || '';
+                const baseAttr = row.getAttribute('data-base-price');
+                const base = baseAttr != null ? (parseFloat(baseAttr) || 0) : (parseFloat(row.getAttribute('data-price')) || 0);
+                const price = approval && approval.prices ? ZedPrice.approvedPrice(num, base, approval) : base;
+                if (String(row.getAttribute('data-price')) === String(price)) return;
+                row.setAttribute('data-price', String(price));
+                const cell = row.children[3];
+                if (cell) cell.textContent = '$' + price.toFixed(2);
+                changed = true;
+            });
+            if (changed) updateTotals();
+        }
+        function loadPriceOverlay(monthKey) {
+            window.ZEDOPS_MONTH_PRICES = null;
+            if (!monthKey || !db) return Promise.resolve();
+            return db.ref('staging_zedops_price_approvals/' + monthKey).once('value').then(snap => {
+                window.ZEDOPS_MONTH_PRICES = snap.val() || null;
+                applyPriceOverlayToDom();
+            }).catch(() => {
+                window.ZEDOPS_MONTH_PRICES = null;
+                applyPriceOverlayToDom();
+            });
         }
 
         // ==================== PER-LOCATION ITEM LIST ====================
@@ -1831,6 +1865,7 @@
             const path = 'staging_inventory/' + location + '/' + monthKey;
             monthRef = db.ref(path);
             console.log('[Inventory] Connected to Firebase path:', path);
+            loadPriceOverlay(monthKey);
 
             // Update the location badge in the header
             const badge = document.getElementById('locationBadge');

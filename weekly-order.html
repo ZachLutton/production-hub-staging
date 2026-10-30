@@ -11,6 +11,7 @@
     <script src="inventory-store.js"></script>
     <script src="staging-boot.js"></script>
     <script src="hub-auth.js?v=2"></script>
+    <script src="zedops/weekly-hidden.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html, body { overscroll-behavior-y: contain; }
@@ -284,17 +285,8 @@
         }
 
         // ==================== HELPERS ====================
-        function unescapeSection(k) {
-            return k.replace(/__SLASH__/g, '/').replace(/__DOT__/g, '.')
-                    .replace(/__HASH__/g, '#').replace(/__DOLLAR__/g, '$')
-                    .replace(/__LBRACK__/g, '[').replace(/__RBRACK__/g, ']');
-        }
-        function getItemKey(sectionName, item, idx) {
-            const sectionId = sectionName.replace(/[^a-zA-Z0-9]/g, '_');
-            const raw = item.itemNumber || item.name || 'item';
-            const sanitized = raw.replace(/[.#$\/\[\]]/g, '_').replace(/\s+/g, '_').substring(0, 60);
-            return 'i_' + sectionId + '_' + sanitized + '_' + idx;
-        }
+        function unescapeSection(k) { return ZedWeekly.unescapeSection(k); }
+        function getItemKey(sectionName, item, idx) { return ZedWeekly.getItemKey(sectionName, item, idx); }
 
         // Compute Tuesday date of a given date (or today), format YYYY-MM-DD
         function getTuesdayOfWeek(date) {
@@ -380,8 +372,9 @@
                     const unit = parInfo.unit;
                     const onHand = parseFloat(onHandData[key]) || 0;
                     const need = Math.max(0, par - onHand);
-                    const hidden = hiddenFromWeekly[key] === true;
-                    return { item, idx, key, par, unit, onHand, need, hidden };
+                    const hiddenOnMonthly = item.hidden === true;
+                    const hidden = ZedWeekly.isRowHidden(item, hiddenFromWeekly, key);
+                    return { item, idx, key, par, unit, onHand, need, hidden, hiddenOnMonthly };
                 }).filter(x => x);
 
                 let visible = rowsData;
@@ -439,7 +432,9 @@
 
                     let deleteCell = '';
                     if (currentRole === 'admin') {
-                        if (r.hidden) {
+                        if (r.hiddenOnMonthly) {
+                            deleteCell = `<td style="text-align:center; color:#999; font-size:12px;" title="Hidden on the monthly count">monthly</td>`;
+                        } else if (r.hidden) {
                             deleteCell = `<td style="text-align:center;"><button class="restore-item-btn" onclick="restoreItem('${r.key.replace(/'/g,"\\'")}', '${(r.item.name || '').replace(/'/g,"\\'")}')" title="Show this item on the weekly order again">↩</button></td>`;
                         } else {
                             deleteCell = `<td style="text-align:center;"><button class="delete-item-btn" onclick="hideItem('${r.key.replace(/'/g,"\\'")}', '${(r.item.name || '').replace(/'/g,"\\'")}')" title="Hide from weekly order (item stays in monthly inventory)">X</button></td>`;
@@ -531,6 +526,7 @@
             hiddenFromWeekly[key] = true;
             await db.ref('staging_weekly_orders/' + currentLocation + '/hiddenFromWeekly/' + key).set(true);
             markSaved();
+            render();
         };
 
         window.restoreItem = async function(key, itemName) {
@@ -538,6 +534,7 @@
             delete hiddenFromWeekly[key];
             await db.ref('staging_weekly_orders/' + currentLocation + '/hiddenFromWeekly/' + key).remove();
             markSaved();
+            render();
         };
 
         window.toggleShowHidden = function(checkbox) {

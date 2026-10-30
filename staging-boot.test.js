@@ -5,7 +5,7 @@ const path = require('path');
 const boot = require('./staging-boot.js');
 
 const LIVE_ID = ['zedrics', 'production-hub'].join('-');
-const PAGES = ['index.html', 'dashboard.html', 'weekly-order.html', 'monthly-inventory.html', 'inventory.html'];
+const PAGES = ['index.html', 'dashboard.html', 'weekly-order.html', 'monthly-inventory.html', 'inventory.html', 'bek-count.html', 'bek-combined.html'];
 const RULE_PATHS = [
   'staging_productionData',
   'staging_dishLibrary',
@@ -25,7 +25,15 @@ const RULE_PATHS = [
   'staging_inv_skipList',
   'staging_inv_stores',
   'staging_inv_skuMap',
-  'staging_inv_mealCosts'
+  'staging_inv_mealCosts',
+  'staging_zedops_schema',
+  'staging_zedops_locations',
+  'staging_zedops_catalog',
+  'staging_zedops_counts',
+  'staging_zedops_pars',
+  'staging_zedops_hidden',
+  'staging_zedops_drafts',
+  'staging_zedops_price_approvals'
 ];
 
 test('empty config stays in the browser and the live project is refused', () => {

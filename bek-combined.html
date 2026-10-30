@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zedric's — Weekly BEK Order</title>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="firebase-config.js"></script>
+    <script src="inventory-store.js"></script>
+    <script src="staging-boot.js"></script>
+    <script src="hub-auth.js?v=2"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; padding: 10px; }
+        #login-screen { position: fixed; inset: 0; background: linear-gradient(135deg, #2d5016 0%, #4a7c2a 100%); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+        .login-box { background: white; padding: 40px 36px; border-radius: 12px; text-align: center; max-width: 380px; width: 100%; }
+        .login-box h1 { color: #2d5016; margin-bottom: 8px; }
+        .login-box p { color: #666; margin-bottom: 24px; }
+        .pin-input { width: 100%; font-size: 32px; text-align: center; letter-spacing: 12px; padding: 12px; border: 2px solid #ccc; border-radius: 8px; }
+        .pin-error { color: #e74c3c; min-height: 20px; margin-top: 12px; }
+        #main-content { display: none; }
+        .header { background: #2d5016; color: white; padding: 20px; border-radius: 8px; margin-bottom: 16px; text-align: center; }
+        .back-btn { display: inline-block; background: white; color: #2d5016; text-decoration: none; font-weight: 700; padding: 10px 18px; border-radius: 6px; }
+        .header-controls { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 12px; }
+        .header-controls input, .header-controls button { padding: 10px 14px; font-size: 16px; border: none; border-radius: 4px; min-height: 44px; }
+        .header-controls button { background: #e8f5e0; color: #2d5016; font-weight: 700; cursor: pointer; }
+        .due { margin-top: 8px; }
+        .order-table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; }
+        .order-table th { text-align: left; font-size: 12px; text-transform: uppercase; color: #666; padding: 8px; background: #f5f5f5; }
+        .order-table td { padding: 10px 8px; border-bottom: 1px solid #eee; }
+        .item-name { font-weight: 700; color: #2d5016; }
+        .item-brand, .item-num { color: #888; font-size: 12px; }
+        .temp-badge { background: #b85400; color: white; border-radius: 4px; font-size: 11px; padding: 2px 6px; margin-left: 6px; }
+        .note { background: white; padding: 12px 16px; border-radius: 8px; margin-bottom: 12px; }
+    </style>
+</head>
+<body>
+    <div id="login-screen">
+        <div class="login-box">
+            <h1>Weekly BEK Order</h1>
+            <p>Enter team PIN to continue</p>
+            <input type="password" id="pin-input" class="pin-input" maxlength="4" inputmode="numeric" pattern="[0-9]*" autofocus>
+            <div class="pin-error" id="pin-error"></div>
+        </div>
+    </div>
+    <div id="main-content">
+        <div class="header">
+            <div style="text-align:left; margin-bottom:12px;">
+                <span style="display:inline-block;background:#F9A825;color:#333;font-size:13px;font-weight:700;padding:8px 14px;border-radius:6px;">STAGING copy. This page only reads counts. It does not change them.</span>
+            </div>
+            <div style="text-align:left; margin-bottom:12px;"><a class="back-btn" href="dashboard.html">← Back to Dashboard</a></div>
+            <h1>Weekly BEK Order <span style="background:#F9A825;color:#333;font-size:12px;padding:2px 8px;border-radius:4px;">STAGING</span></h1>
+            <div class="header-controls">
+                <label for="weekSelect">Tuesday:</label>
+                <input type="date" id="weekSelect">
+                <button type="button" id="pdfTotals">Download PDF</button>
+            </div>
+            <div class="due" id="dueLine"></div>
+        </div>
+        <div class="note">On-hand totals by BEK item number, for every store that counts plus the existing Rim weekly count. Special-order rows are included. Other-vendor checks are not. This page does not edit anything.</div>
+        <div id="order-container"></div>
+    </div>
+    <script src="zedops/catalog.js"></script>
+    <script src="zedops/schema.js"></script>
+    <script src="zedops/locations.js"></script>
+    <script src="zedops/storage.js"></script>
+    <script src="zedops/weekly-hidden.js"></script>
+    <script src="zedops/xlsx.js"></script>
+    <script src="zedops/pdf.js"></script>
+    <script src="zedops/bek.js"></script>
+    <script src="zedops/combined-page.js"></script>
+</body>
+</html>

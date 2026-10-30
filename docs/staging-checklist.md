@@ -6,7 +6,7 @@ It must use only its own Firebase project, named **ZedOps Staging**. It must nev
 
 ## One config
 
-Every page (`index.html`, `dashboard.html`, `weekly-order.html`, `monthly-inventory.html`, `inventory.html`, and the weight-check code those pages load) reads Firebase from `firebase-config.js` only.
+Every page (`index.html`, `dashboard.html`, `weekly-order.html`, `monthly-inventory.html`, `inventory.html`, `bek-count.html`, `bek-combined.html`, and the weight-check code those pages load) reads Firebase from `firebase-config.js` only.
 
 - That file is the ZedOps Staging web config (`apiKey`, `authDomain`, `databaseURL`, `projectId`, `storageBucket`, `messagingSenderId`, `appId`). Do not replace it with the live project.
 - Empty config: the page keeps working in this browser and shows a yellow **BROWSER ONLY** banner. Nothing is sent to Firebase.
@@ -42,6 +42,14 @@ The file denies the root. On each path the pages use, read and write are allowed
 | `staging_inv_stores` | store list |
 | `staging_inv_skuMap` | Shopify SKU map |
 | `staging_inv_mealCosts` | tray, film, gas, and product cost per meal |
+| `staging_zedops_schema` | ZedOps data version |
+| `staging_zedops_locations` | store list (culinary center and production hub are settings) |
+| `staging_zedops_catalog` | vendor catalog and shelf order |
+| `staging_zedops_counts` | weekly on-hand counts, one item at a time |
+| `staging_zedops_pars` | pars for the weekly BEK count |
+| `staging_zedops_hidden` | rows hidden on the weekly BEK count |
+| `staging_zedops_drafts` | a guide upload waiting for approval |
+| `staging_zedops_price_approvals` | month-end BEK prices after the owner approves them |
 
 `.info/connected` is a Firebase connection flag, not a data path, so it is not in the rules file.
 
@@ -56,7 +64,8 @@ These pages sign in with Firebase Auth email/password through `hub-auth.js` befo
 - `index.html` (production board). Weight checks on that page use the same signed-in default app. They do not open a second Firebase app.
 - `dashboard.html` (no database paths; the sign-in is shared with the other pages)
 - `weekly-order.html`
-- `monthly-inventory.html` (`staging_inventory` only)
+- `bek-count.html` and `bek-combined.html` (the `staging_zedops_*` paths, and a read of `staging_inventory` / `staging_weekly_orders` for the combined totals and the price check)
+- `monthly-inventory.html` (`staging_inventory` only, plus a read of `staging_zedops_price_approvals` for a month that has an approved price list)
 - `inventory.html` (the `staging_inv_*` paths only). It does not check a PIN in the browser.
 
 The accounts are not stored as passwords in the repo. `hub-auth.js` signs in as:

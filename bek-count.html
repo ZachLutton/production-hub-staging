@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zedric's — Weekly BEK Count</title>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="firebase-config.js"></script>
+    <script src="inventory-store.js"></script>
+    <script src="staging-boot.js"></script>
+    <script src="hub-auth.js?v=2"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; padding: 10px; }
+        #login-screen { position: fixed; inset: 0; background: linear-gradient(135deg, #2d5016 0%, #4a7c2a 100%); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+        .login-box { background: white; padding: 40px 36px; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.25); text-align: center; max-width: 380px; width: 100%; }
+        .login-box h1 { color: #2d5016; margin-bottom: 8px; font-size: 26px; }
+        .login-box p { color: #666; margin-bottom: 24px; }
+        .pin-input { width: 100%; font-size: 32px; text-align: center; letter-spacing: 12px; padding: 12px; border: 2px solid #ccc; border-radius: 8px; }
+        .pin-error { color: #e74c3c; min-height: 20px; margin-top: 12px; }
+        #main-content { display: none; }
+        .header { background: #2d5016; color: white; padding: 20px; border-radius: 8px; margin-bottom: 16px; text-align: center; }
+        .header h1 { font-size: 26px; margin-bottom: 8px; }
+        .back-btn { display: inline-block; background: white; color: #2d5016; text-decoration: none; font-weight: 700; padding: 10px 18px; border-radius: 6px; }
+        .header-controls { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; align-items: center; margin-top: 14px; }
+        .header-controls select, .header-controls input, .header-controls button, .panel button { padding: 10px 14px; font-size: 16px; border-radius: 4px; border: none; min-height: 44px; }
+        .header-controls button, .panel button { background: #e8f5e0; color: #2d5016; font-weight: 700; cursor: pointer; border: 2px solid #2d5016; }
+        .location-badge, .role-badge { display: inline-block; margin-top: 8px; padding: 4px 12px; border-radius: 20px; font-weight: 700; }
+        .location-badge { background: rgba(255,255,255,0.15); }
+        .role-badge.admin { background: #fff4e0; color: #b85400; }
+        .role-badge.team { background: #e8f5e0; color: #2d5016; }
+        .due { margin-top: 8px; }
+        .panel { background: white; border-radius: 8px; padding: 16px; margin-bottom: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.08); }
+        .panel h2, .panel h3 { color: #2d5016; margin: 10px 0; }
+        .panel ul { margin: 0 0 10px 18px; }
+        .diff-note { color: #666; margin: 8px 0; }
+        .filter-bar { background: white; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+        .section { background: white; border-radius: 8px; margin-bottom: 16px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.08); }
+        .section-header { background: #e8f5e0; padding: 14px; border-left: 5px solid #2d5016; }
+        .section-header-title { color: #2d5016; font-weight: 700; font-size: 18px; }
+        .section-header-meta { color: #666; font-size: 13px; margin-top: 4px; }
+        .order-table { width: 100%; border-collapse: collapse; }
+        .order-table th { text-align: left; font-size: 12px; text-transform: uppercase; color: #666; padding: 8px; border-bottom: 2px solid #ddd; }
+        .order-table td { padding: 10px 8px; border-bottom: 1px solid #eee; vertical-align: middle; }
+        .item-name { font-weight: 700; color: #2d5016; }
+        .item-brand, .item-num { color: #888; font-size: 12px; }
+        .onhand-input { width: 90px; padding: 8px; font-size: 16px; text-align: right; background: #fffff0; border: 1px solid #b8d4a0; border-radius: 4px; }
+        .need-order { color: #b80000; font-weight: 700; }
+        .need-zero { color: #999; }
+        .edit-par-btn, .delete-item-btn, .restore-item-btn, .remove-temp { border-radius: 4px; cursor: pointer; font-weight: 700; }
+        .edit-par-btn { background: transparent; border: 1px solid #ccc; color: #888; margin-left: 4px; }
+        .delete-item-btn { background: #e57373; color: white; border: none; padding: 6px 10px; }
+        .restore-item-btn { background: #81c784; color: white; border: none; padding: 6px 10px; }
+        .remove-temp { background: #fff4e0; color: #b85400; border: 1px solid #b85400; margin-left: 8px; padding: 4px 8px; }
+        .temp-badge { background: #b85400; color: white; border-radius: 4px; font-size: 11px; padding: 2px 6px; margin-left: 6px; }
+        tr.hidden-row { opacity: 0.7; background: #fff8f5; }
+        tr.hidden-row .item-name { text-decoration: line-through; }
+        .grand-summary { background: #2d5016; color: white; padding: 16px; border-radius: 8px; text-align: right; font-size: 18px; }
+        .grand-summary .big { font-size: 26px; font-weight: 700; margin-left: 8px; }
+        .empty-state { padding: 24px; text-align: center; color: #888; }
+        .store-row { padding: 8px 0; border-bottom: 1px solid #eee; }
+        .store-row label { margin-right: 12px; }
+        @media print {
+            .header, .filter-bar, .panel, .back-btn, .edit-par-btn, .delete-item-btn, .restore-item-btn, .remove-temp { display: none !important; }
+            .section { box-shadow: none; }
+        }
+    </style>
+</head>
+<body>
+    <div id="login-screen">
+        <div class="login-box">
+            <h1>Weekly BEK Count</h1>
+            <p>Enter team PIN to continue</p>
+            <input type="password" id="pin-input" class="pin-input" maxlength="4" inputmode="numeric" pattern="[0-9]*" autofocus>
+            <div class="pin-error" id="pin-error"></div>
+        </div>
+    </div>
+    <div id="main-content">
+        <div class="header">
+            <div style="text-align:left; margin-bottom:12px;">
+                <span style="display:inline-block;background:#F9A825;color:#333;font-size:13px;font-weight:700;padding:8px 14px;border-radius:6px;">STAGING copy. Counts save under the ZedOps staging lists. The live hub is not changed.</span>
+            </div>
+            <div style="text-align:left; margin-bottom:12px;"><a class="back-btn" href="dashboard.html">← Back to Dashboard</a></div>
+            <h1>Weekly BEK Count <span style="background:#F9A825;color:#333;font-size:12px;padding:2px 8px;border-radius:4px;">STAGING</span></h1>
+            <div class="header-controls">
+                <label for="locationSelect">Store:</label>
+                <select id="locationSelect"></select>
+                <label for="weekSelect">Tuesday:</label>
+                <input type="date" id="weekSelect">
+                <button type="button" id="pdfCount">Download PDF</button>
+                <button type="button" id="pdfSpecial">Special order PDF</button>
+                <button type="button" id="printSpecial">Print</button>
+            </div>
+            <div>
+                <span class="location-badge" id="locationBadge"></span>
+                <span class="role-badge team" id="roleBadge">Team</span>
+            </div>
+            <div class="due" id="dueLine"></div>
+            <div id="syncStatus"><span style="color:#ff6b6b;">●</span> Connecting...</div>
+            <div id="lastSaved">No changes yet</div>
+        </div>
+        <div class="filter-bar">
+            <label>Show:</label>
+            <label><input type="radio" name="filter" value="all" checked> All items</label>
+            <label><input type="radio" name="filter" value="needed"> Only items under par</label>
+            <label><input type="radio" name="filter" value="hasPar"> Only items with a par</label>
+            <label id="showHiddenLabel" style="display:none;"><input type="checkbox" id="showHiddenToggle"> Show hidden items</label>
+        </div>
+        <div id="adminTools" style="display:none;">
+            <div class="panel">
+                <h2>Monday guide upload</h2>
+                <p>Choose the BEK order guide, or the special-order sheet. You will see what moved, what was added or dropped, substitutions, and price changes. Nothing is applied until you approve.</p>
+                <input type="file" id="guideFile" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+            </div>
+            <div class="panel" id="diffPanel" style="display:none;"></div>
+            <div class="panel" id="storePanel"></div>
+        </div>
+        <div class="panel" id="pricePanel"></div>
+        <div id="order-container"></div>
+        <div class="grand-summary">Under par, in count units: <span class="big" id="totalNeeded">0</span></div>
+    </div>
+    <script src="zedops/catalog.js"></script>
+    <script src="zedops/schema.js"></script>
+    <script src="zedops/locations.js"></script>
+    <script src="zedops/storage.js"></script>
+    <script src="zedops/weekly-hidden.js"></script>
+    <script src="zedops/xlsx.js"></script>
+    <script src="zedops/pdf.js"></script>
+    <script src="zedops/price-overlay.js"></script>
+    <script src="zedops/bek.js"></script>
+    <script src="zedops/count-page.js"></script>
+</body>
+</html>

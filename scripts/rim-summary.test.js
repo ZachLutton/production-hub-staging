@@ -98,4 +98,11 @@ const msg3 = s.renderMessage({ weekKey: '2026-09-29', order: empty, fromWednesda
 assert.ok(msg3.includes('no counts found for week of Tue 9/29'));
 assert.ok(!msg3.includes('Degreaser') && !msg3.includes('short'));
 
+// The monthly X button sets item.hidden. The weekly summary has to honor that
+// even when the separate hiddenFromWeekly map does not mention the row.
+const hiddenOnItem = JSON.parse(JSON.stringify(items));
+hiddenOnItem['Front of House Supplies'][0].hidden = true;
+const orderHidden = s.buildOrder({ items: hiddenOnItem, pars, hidden: {}, counts: tue });
+assert.ok(!orderHidden.out.concat(orderHidden.low, orderHidden.uncounted).some((r) => r.name === 'Pop Chips - BBQ'));
+
 console.log('All rim-summary tests passed.');

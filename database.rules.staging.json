@@ -77,6 +77,38 @@
     "staging_inv_mealCosts": {
       ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')",
       ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')"
+    },
+    "staging_zedops_schema": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')"
+    },
+    "staging_zedops_locations": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')"
+    },
+    "staging_zedops_catalog": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')"
+    },
+    "staging_zedops_counts": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')"
+    },
+    "staging_zedops_pars": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')"
+    },
+    "staging_zedops_hidden": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')"
+    },
+    "staging_zedops_drafts": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')"
+    },
+    "staging_zedops_price_approvals": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')"
     }
   }
 }

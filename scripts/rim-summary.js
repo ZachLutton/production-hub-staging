@@ -12,21 +12,14 @@ const ZACH_SLACK_ID = 'U02KLAS8S';
 const TZ = 'America/Chicago';
 
 // --- Key helpers (same key format the weekly-order.html page uses) ---
+const weeklyKeys = require('../zedops/weekly-hidden.js');
+
 function unescapeSection(k) {
-  return k
-    .replace(/__SLASH__/g, '/')
-    .replace(/__DOT__/g, '.')
-    .replace(/__HASH__/g, '#')
-    .replace(/__DOLLAR__/g, '$')
-    .replace(/__LBRACK__/g, '[')
-    .replace(/__RBRACK__/g, ']');
+  return weeklyKeys.unescapeSection(k);
 }
 
 function getItemKey(sectionName, item, idx) {
-  const sectionId = sectionName.replace(/[^a-zA-Z0-9]/g, '_');
-  const raw = item.itemNumber || item.name || 'item';
-  const sanitized = raw.replace(/[.#$/\[\]]/g, '_').replace(/\s+/g, '_').substring(0, 60);
-  return 'i_' + sectionId + '_' + sanitized + '_' + idx;
+  return weeklyKeys.getItemKey(sectionName, item, idx);
 }
 
 function getParInfo(pars, key) {
@@ -136,7 +129,7 @@ function buildOrder({ items, pars, hidden, counts }) {
     arr.forEach((it, idx) => {
       if (!it) return;
       const key = getItemKey(secName, it, idx);
-      if (hidden && hidden[key]) return;
+      if (weeklyKeys.isRowHidden(it, hidden, key)) return;
       const par = getParInfo(pars || {}, key);
       if (!(par.value > 0)) return; // only items with a par set are part of the weekly order
       tracked++;
