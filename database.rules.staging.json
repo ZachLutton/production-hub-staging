@@ -1,0 +1,126 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "staging_productionData": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')"
+    },
+    "staging_dishLibrary": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')"
+    },
+    "staging_history": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')"
+    },
+    "staging_weight": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')"
+    },
+    "staging_inventory": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')"
+    },
+    "staging_weekly_orders": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')"
+    },
+    "staging_inv_inventory": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')"
+    },
+    "staging_inv_adjustments": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')"
+    },
+    "staging_inv_counts": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')"
+    },
+    "staging_inv_caseConfig": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')"
+    },
+    "staging_inv_transfers": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')"
+    },
+    "staging_inv_stockouts": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')"
+    },
+    "staging_inv_shelfLife": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')"
+    },
+    "staging_inv_splitConfig": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')"
+    },
+    "staging_inv_barcodes": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')"
+    },
+    "staging_inv_skipList": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')"
+    },
+    "staging_inv_stores": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')"
+    },
+    "staging_inv_skuMap": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')"
+    },
+    "staging_inv_mealCosts": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')"
+    },
+    "staging_zedops_schema": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')"
+    },
+    "staging_zedops_locations": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')"
+    },
+    "staging_zedops_catalog": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')"
+    },
+    "staging_zedops_counts": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')"
+    },
+    "staging_zedops_pars": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')"
+    },
+    "staging_zedops_hidden": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')"
+    },
+    "staging_zedops_drafts": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')"
+    },
+    "staging_zedops_ingredient_map": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')"
+    },
+    "staging_zedops_plate": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')"
+    },
+    "staging_zedops_recipe": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')"
+    },
+    "staging_zedops_price_approvals": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')"
+    }
+  }
+}

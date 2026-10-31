@@ -9,15 +9,21 @@
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="inventory-store.js"></script>
+<script src="staging-boot.js"></script>
 <script src="hub-auth.js?v=2"></script>
+<script src="weight-check.js"></script>
+<script src="weight-check-store.js"></script>
+<script src="weight-check-ui.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; color: #1a1a1a; }
 
-  .header { background: linear-gradient(135deg, #1B5E20, #2E7D32); color: white; padding: 14px 20px; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.15); display: flex; justify-content: space-between; align-items: center; }
+  .header { background: linear-gradient(135deg, #1B5E20, #2E7D32); color: white; padding: 14px 20px; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.15); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
   .header-left h1 { font-size: 20px; font-weight: 700; }
   .header-left .subtitle { font-size: 12px; opacity: 0.85; margin-top: 2px; }
-  .header-actions { display: flex; gap: 8px; }
+  .header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
   .btn { padding: 8px 16px; border-radius: 8px; border: none; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
   .btn-white { background: white; color: #1B5E20; }
   .btn-white:hover { background: #E8F5E9; }
@@ -271,6 +277,7 @@
   <div class="header-actions">
     <button class="btn btn-outline" onclick="toggleMoveMode()" id="moveModeBtn">Move Dishes</button>
     <button class="btn btn-outline" onclick="openHistory()">History</button>
+    <button class="btn btn-outline" onclick="openWeightCheck()">Weight check</button>
     <button class="btn btn-white" onclick="exportPDF()">Export PDF</button>
     <button class="btn btn-outline" onclick="logout()" style="font-size:11px; padding:6px 10px; opacity:0.7;">Logout</button>
   </div>
@@ -288,6 +295,24 @@
 
 <div class="save-notice" id="saveNotice">Saved</div>
 
+<div id="weightOverlay" onclick="if(event.target===this)closeWeightCheck()">
+  <div id="weightPanel" role="dialog" aria-labelledby="weightTitle">
+    <header>
+      <h2 id="weightTitle">Plate weight check</h2>
+      <button class="history-close" onclick="closeWeightCheck()" type="button">&times;</button>
+    </header>
+    <div class="body">
+      <p class="note">Saved on this staging copy only. The live Production Hub database is not used.</p>
+      <div class="tabs" id="weightTabs">
+        <button type="button" data-tab="sheet" onclick="showWeightTab('sheet')">Print sheet</button>
+        <button type="button" data-tab="enter" onclick="showWeightTab('enter')">Enter weights</button>
+        <button type="button" data-tab="settings" onclick="showWeightTab('settings')">Targets</button>
+        <button type="button" data-tab="report" onclick="showWeightTab('report')">Report</button>
+      </div>
+      <div id="weightBody"></div>
+    </div>
+  </div>
+</div>
 <div class="history-overlay" id="historyOverlay" onclick="if(event.target===this)closeHistory()">
   <div class="history-panel">
     <div class="history-header">
@@ -390,19 +415,12 @@ const PRODUCTION_DATA = {
   }
 };
 
-// --- Firebase Real-Time Sync ---
-const firebaseConfig = {
-  apiKey: "AIzaSyDUveUlxrNDIU4yDUpbzjv8-X625S-l0Po",
-  authDomain: "zedrics-production-hub.firebaseapp.com",
-  databaseURL: "https://zedrics-production-hub-default-rtdb.firebaseio.com",
-  projectId: "zedrics-production-hub",
-  storageBucket: "zedrics-production-hub.firebasestorage.app",
-  messagingSenderId: "1000819775934",
-  appId: "1:1000819775934:web:6a0f14f54f797b092841ef"
-};
-firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
-const auth = firebase.auth();
+// --- Firebase or this browser. Settings come only from firebase-config.js. ---
+var boot = ZedBoot.start({ storageKey: 'zedops_staging_hub_local_v1' });
+if (boot.mode === 'blocked') {
+  throw new Error('Refusing to start. firebase-config.js points at the live Production Hub.');
+}
+const db = boot.db;
 const dataRef = db.ref('staging_productionData');
 const dishLibraryRef = db.ref('staging_dishLibrary');
 let isRemoteUpdate = false;
@@ -688,8 +706,12 @@ function onProductionDataGate(snapshot) { productionDataLoaded = true; onProduct
 
 // Connection status indicator
 db.ref('.info/connected').on('value', (snap) => {
-  const dot = document.getElementById('syncDot');
   const status = document.getElementById('syncStatus');
+  if (window.ZEDOPS_STAGING && window.ZEDOPS_STAGING.mode === 'local') {
+    status.innerHTML = '<span class="sync-dot connected" id="syncDot"></span>This browser only';
+    return;
+  }
+  const dot = document.getElementById('syncDot');
   if (snap.val() === true) {
     dot.className = 'sync-dot connected';
     status.innerHTML = '<span class="sync-dot connected" id="syncDot"></span>Live sync on';
@@ -1986,8 +2008,9 @@ function viewHistoryWeek(weekKey) {
       });
     });
 
-    html += '</div>';
+    html += '<div id="weightHistoryReport"></div></div>';
     content.innerHTML = html;
+    if (window.WeightUI) WeightUI.renderHistoryReport(document.getElementById('weightHistoryReport'), Object.keys(week.data || {}));
   });
 }
 

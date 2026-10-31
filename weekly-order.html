@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zedric's — Weekly Order</title>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="firebase-config.js?v=20261031e"></script>
+    <script src="inventory-store.js?v=20261031e"></script>
+    <script src="staging-boot.js?v=20261031e"></script>
+    <script src="hub-auth.js?v=20261031e"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; padding: 10px; }
+        #login-screen { position: fixed; inset: 0; background: linear-gradient(135deg, #2d5016, #4a7c2a); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+        .login-box { background: white; padding: 36px; border-radius: 12px; text-align: center; max-width: 380px; width: 100%; }
+        .login-box h1 { color: #2d5016; margin-bottom: 8px; }
+        .login-box p { color: #666; margin-bottom: 20px; }
+        .pin-input { width: 100%; font-size: 32px; text-align: center; letter-spacing: 12px; padding: 12px; border: 2px solid #ccc; border-radius: 8px; }
+        .pin-error { color: #e74c3c; min-height: 20px; margin-top: 10px; }
+        #main-content { display: none; }
+        .header { background: #2d5016; color: white; padding: 18px; border-radius: 8px; margin-bottom: 14px; text-align: center; }
+        .back-btn { display: inline-block; background: white; color: #2d5016; text-decoration: none; font-weight: 700; padding: 8px 14px; border-radius: 6px; }
+        .header-controls, .view-switch { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 12px; }
+        .view-switch button.active { background: #2d5016; color: white; }
+        .recipe-warn { color: #8a1f1f; font-weight: 700; }
+        .build-stamp { margin-top: 8px; font-size: 13px; font-weight: 700; letter-spacing: 0.02em; }
+        footer.build-stamp { color: #666; text-align: center; padding: 18px 8px 28px; }
+        select, input[type="date"], button { padding: 10px 12px; font-size: 16px; border-radius: 4px; border: none; min-height: 44px; }
+        button { background: #e8f5e0; color: #2d5016; font-weight: 700; cursor: pointer; border: 2px solid #2d5016; }
+        .location-badge, .role-badge { display: inline-block; margin-top: 8px; padding: 4px 12px; border-radius: 20px; font-weight: 700; background: rgba(255,255,255,.15); }
+        .panel, .section { background: white; border-radius: 8px; padding: 14px; margin-bottom: 14px; }
+        .section { padding: 0; overflow: hidden; }
+        .section-header { background: #e8f5e0; padding: 12px 14px; }
+        .section-header-title { color: #2d5016; font-weight: 700; }
+        .order-table { width: 100%; border-collapse: collapse; }
+        .order-table th, .order-table td { padding: 8px; border-bottom: 1px solid #eee; text-align: left; vertical-align: top; }
+        .order-table th { font-size: 12px; text-transform: uppercase; color: #666; }
+        .item-name { font-weight: 700; color: #2d5016; }
+        .item-brand, .item-num { color: #888; font-size: 12px; }
+        .onhand-input { width: 90px; padding: 8px; font-size: 16px; text-align: right; }
+        .need-order { color: #b80000; font-weight: 700; }
+        .temp-badge { background: #b85400; color: white; border-radius: 4px; font-size: 11px; padding: 2px 6px; }
+        .unmatched { background: #fff4e0; }
+        .file-pick { display: inline-block; background: #2d5016; color: white; font-weight: 700; padding: 12px 16px; border-radius: 6px; margin-right: 8px; }
+        #recipeFile { font-size: 16px; max-width: 100%; }
+        #recipeStatus { margin-top: 8px; font-weight: 700; min-height: 1.4em; }
+        .match-tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 10px 0; }
+        .match-tools input { font-size: 16px; padding: 10px; min-height: 44px; flex: 1; min-width: 180px; }
+        .match-box { position: relative; min-width: 220px; }
+        .match-chosen, .match-save { min-height: 44px; font-size: 16px; text-align: left; width: 100%; }
+        .match-pop { position: absolute; z-index: 20; left: 0; right: 0; background: white; border: 2px solid #2d5016; border-radius: 8px; padding: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.2); }
+        .match-pop input { width: 100%; font-size: 16px; min-height: 44px; margin-bottom: 6px; }
+        .match-pop ul { list-style: none; max-height: 240px; overflow: auto; margin: 0; padding: 0; }
+        .match-pop li { min-height: 44px; padding: 10px 8px; border-bottom: 1px solid #eee; cursor: pointer; }
+        .match-pop li[aria-selected="true"] { background: #e8f5e0; font-weight: 700; }
+        .row-saved { color: #2d5016; font-size: 12px; font-weight: 700; }
+        .hide-panel { margin-top: 8px; padding: 10px; background: #fff8ee; border: 1px solid #e0c080; border-radius: 8px; }
+        .hide-panel label { display: block; margin: 6px 0; }
+        .match-pop li { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+        .show-hidden-label { display: block; font-size: 14px; margin-bottom: 6px; }
+        .store-row { padding: 8px 0; border-bottom: 1px solid #eee; }
+        .empty-state { padding: 24px; text-align: center; color: #888; }
+        #pageStatus { margin-top: 8px; font-weight: 700; min-height: 1.2em; }
+        #pageStatus.error { background: #fff4f4; color: #8a1f1f; display: inline-block; padding: 6px 10px; border-radius: 6px; }
+        h2 { color: #2d5016; margin-bottom: 8px; }
+    </style>
+</head>
+<body>
+    <div id="login-screen">
+        <div class="login-box">
+            <h1>Weekly Order</h1>
+            <p>Enter team PIN to continue</p>
+            <input type="password" id="pin-input" class="pin-input" maxlength="4" inputmode="numeric" autofocus>
+            <div class="pin-error" id="pin-error"></div>
+        </div>
+    </div>
+    <div id="main-content">
+        <div class="header">
+            <div style="text-align:left;margin-bottom:10px;"><span style="display:inline-block;background:#F9A825;color:#333;font-size:13px;font-weight:700;padding:8px 14px;border-radius:6px;">STAGING. One weekly order for every store. The live hub is not changed.</span></div>
+            <div style="text-align:left;margin-bottom:10px;"><a class="back-btn" href="dashboard.html">← Back to Dashboard</a></div>
+            <h1>Weekly Order <span style="background:#F9A825;color:#333;font-size:12px;padding:2px 8px;border-radius:4px;">STAGING</span></h1>
+            <div id="buildStamp" class="build-stamp">Build 20261031e</div>
+            <div class="header-controls">
+                <label for="locationSelect">Store:</label>
+                <select id="locationSelect"></select>
+                <label for="weekSelect">Cook date:</label>
+                <input type="date" id="weekSelect">
+                <button type="button" id="pdfOrder">BEK order PDF</button>
+                <button type="button" id="pdfSpecial">Special order PDF</button>
+            </div>
+            <div class="view-switch">
+                <button type="button" id="showStore">This store</button>
+                <button type="button" id="showOrder">Whole BEK order</button>
+            </div>
+            <div><span class="location-badge" id="locationBadge"></span> <span class="role-badge" id="roleBadge">Team</span></div>
+            <div id="dueLine"></div>
+            <div id="lastSaved">No changes yet</div>
+            <div id="pageStatus" role="status" aria-live="polite"></div>
+        </div>
+        <div id="recipeTools" style="display:none;">
+            <div class="panel">
+                <h2>Scaled recipe list</h2>
+                <p>Upload the weekly scaled-recipe PDF. You will see the raw purchase totals first. Cooked weights are not used. Ingredient matches save as you confirm them. The recipe totals are not applied until you approve.</p>
+                <label class="file-pick" for="recipeFile">Choose PDF</label>
+                <input type="file" id="recipeFile" accept="application/pdf,.pdf">
+                <p id="recipeStatus" role="status" aria-live="polite"></p>
+            </div>
+            <div class="panel" id="recipeEmpty"></div>
+            <div class="panel" id="recipePanel" style="display:none;"></div>
+            <div class="panel">
+                <h2>Plate list</h2>
+                <p>Upload the plate list PDF. Total Cook is one container per meal. Containers are bought by the pallet, not from BEK.</p>
+                <label class="file-pick" for="plateFile">Choose plate list</label>
+                <input type="file" id="plateFile" accept="application/pdf,.pdf">
+                <p id="plateStatus" role="status" aria-live="polite"></p>
+            </div>
+            <div class="panel" id="platePanel" style="display:none;"></div>
+        </div>
+        <div class="panel" id="orderSummary" style="display:none;"></div>
+        <div class="panel" id="mealChecks" style="display:none;"></div>
+        <div id="storeView"><div id="itemTable"></div></div>
+        <div id="orderView" style="display:none;"><div class="panel" id="orderTable"></div></div>
+        <div id="adminTools" style="display:none;">
+            <div class="panel">
+                <h2>BEK guide</h2>
+                <p>Upload a new order guide when items move or prices change. Review the difference, then approve.</p>
+                <input type="file" id="guideFile" accept=".xlsx">
+            </div>
+            <div class="panel" id="guidePanel" style="display:none;"></div>
+            <div class="panel" id="storePanel"></div>
+        </div>
+        <footer class="build-stamp">Build 20261031e</footer>
+    </div>
+    <script src="zedops/catalog.js?v=20261031e"></script>
+    <script src="zedops/schema.js?v=20261031e"></script>
+    <script src="zedops/locations.js?v=20261031e"></script>
+    <script src="zedops/storage.js?v=20261031e"></script>
+    <script src="zedops/weekly-hidden.js?v=20261031e"></script>
+    <script src="zedops/xlsx.js?v=20261031e"></script>
+    <script src="zedops/pdf.js?v=20261031e"></script>
+    <script src="zedops/bek.js?v=20261031e"></script>
+    <script src="zedops/recipe-parse.js?v=20261031e"></script>
+    <script src="zedops/recipe-pdf.js?v=20261031e"></script>
+    <script src="zedops/order-math.js?v=20261031e"></script>
+    <script src="zedops/meal-supplies.js?v=20261031e"></script>
+    <script src="zedops/plate-parse.js?v=20261031e"></script>
+    <script src="zedops/plate-pdf.js?v=20261031e"></script>
+    <script>
+        if (window.pdfjsLib) {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        }
+    </script>
+    <script src="zedops/weekly-page.js?v=20261031e"></script>
+</body>
+</html>
