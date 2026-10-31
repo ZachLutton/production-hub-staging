@@ -24,7 +24,8 @@
     showHiddenIngredients: false,
     showHiddenCatalog: false,
     pendingRecipe: null,
-    pendingGuide: null
+    pendingGuide: null,
+    approvingRecipe: false
   };
 
   function esc(value) {
@@ -46,9 +47,15 @@
     var el = document.getElementById('lastSaved');
     if (el) el.textContent = 'Saved at ' + stamp;
   }
+  function setPageStatus(text, isError) {
+    var el = document.getElementById('pageStatus');
+    if (!el) return;
+    el.textContent = text || '';
+    el.className = isError ? 'error' : '';
+  }
   function showError(err) {
     console.error(err);
-    alert((err && err.message) || 'Could not save that change.');
+    setPageStatus((err && err.message) || 'Could not save that change.', true);
   }
   function itemIdForInventory(item) {
     if (item.itemNumber) return ZedCatalog.catalogId('bek', item.itemNumber);
@@ -215,21 +222,15 @@
     state.hands = {};
     state.legacyById = {};
     state.allPars = {};
-    var chain = Promise.resolve();
-    stores().forEach(function (loc) {
-      chain = chain.then(function () {
-        return db.ref(ZedStorage.PATHS.counts + '/' + loc.id + '/' + state.weekKey).once('value').then(function (snap) {
-          state.hands[loc.id] = snap.val() || {};
-        });
-      }).then(function () {
-        return db.ref(ZedStorage.PATHS.pars + '/' + loc.id).once('value').then(function (snap) {
-          state.allPars[loc.id] = snap.val() || {};
-        });
-      });
-      if (ZedLocations.listSourceOf(loc) !== 'inventory') return;
-      chain = chain.then(function () {
-        return db.ref('staging_weekly_orders/' + loc.id + '/' + state.weekKey).once('value').then(function (snap) {
-          var counts = snap.val() || {};
+    return Promise.all(stores().map(function (loc) {
+      return db.ref(ZedStorage.PATHS.counts + '/' + loc.id + '/' + state.weekKey).once('value').then(function (snap) {
+        state.hands[loc.id] = snap.val() || {};
+        return db.ref(ZedStorage.PATHS.pars + '/' + loc.id).once('value');
+      }).then(function (snap) {
+        state.allPars[loc.id] = snap.val() || {};
+        if (ZedLocations.listSourceOf(loc) !== 'inventory') return null;
+        return db.ref('staging_weekly_orders/' + loc.id + '/' + state.weekKey).once('value').then(function (legacySnap) {
+          var counts = legacySnap.val() || {};
           return ensureInventory(loc).then(function (raw) {
             var sections = ZedWeekly.sectionsFromSnapshot(raw || {});
             var map = {};
@@ -245,8 +246,7 @@
           });
         }).catch(function () { state.legacyById[loc.id] = {}; });
       });
-    });
-    return chain;
+    }));
   }
 
   function reload() {
@@ -540,30 +540,44 @@
   }
 
   function approveRecipe() {
-    var pending = state.pendingRecipe;
+    var pending = ZedOrder.claimApproval(state);
     if (!pending) return;
-    var week = ZedBek.addDays(pending.cookDate, -((new Date(pending.cookDate + 'T12:00:00Z').getUTCDay() - 2 + 7) % 7));
-    state.weekKey = week;
-    document.getElementById('weekSelect').value = week;
-    var chain = Promise.resolve();
-    pending.purchases.forEach(function (row) {
-      var catalogId = row.hideMode === 'ignore' ? '' : (row.catalogId || '');
-      var eachFactor = row.eachFactor === '' || row.eachFactor == null ? null : Number(row.eachFactor);
-      chain = chain.then(function () {
-        return ZedStorage.setIngredientMatch(db, row.key, {
-          name: row.name, catalogId: catalogId, eachFactor: eachFactor, hideMode: row.hideMode || ''
-        });
-      }).then(function () {
-        if (row.hideMode === 'ignore' || !catalogId) return ZedStorage.setRecipeLine(db, week, row.key, null);
-        return ZedStorage.setRecipeLine(db, week, row.key, {
-          name: row.name, pounds: row.pounds, unit: 'lb', catalogId: catalogId, eachFactor: eachFactor
-        });
-      });
+    (pending.purchases || []).forEach(function (row, index) {
+      var factorEl = document.querySelector('[data-factor="' + index + '"]');
+      if (factorEl) row.eachFactor = factorEl.value === '' ? '' : Number(factorEl.value);
     });
-    chain.then(function () {
-      state.pendingRecipe = null;
+    var button = document.getElementById('approveRecipe');
+    if (button) {
+      button.disabled = true;
+      if (button.blur) button.blur();
+    }
+    var week = ZedOrder.recipeWeek(pending.cookDate);
+    if (!week) {
+      state.approvingRecipe = false;
+      state.pendingRecipe = pending;
+      setPageStatus('That recipe has no cook date, so nothing was saved.', true);
+      return;
+    }
+    state.weekKey = week;
+    var weekInput = document.getElementById('weekSelect');
+    if (weekInput && weekInput.value !== week) weekInput.value = week;
+    var plan = ZedOrder.planRecipeApproval(pending.purchases, week);
+    setPageStatus('Saving recipe needs for the week of ' + week + '…');
+    renderRecipeReview();
+    ZedStorage.saveRecipeApproval(db, plan).then(function () {
+      Object.keys(plan.matches).forEach(function (key) { state.matches[key] = plan.matches[key]; });
       return reload();
-    }).then(function () { markSaved(); alert('Recipe needs saved for the week of ' + week + '.'); }).catch(showError);
+    }).then(function () {
+      markSaved();
+      setPageStatus('Recipe needs saved for the week of ' + week + '.');
+    }).catch(function (err) {
+      state.approvingRecipe = false;
+      state.pendingRecipe = pending;
+      showError(err);
+      renderRecipeReview();
+    }).then(function () {
+      state.approvingRecipe = false;
+    });
   }
 
   function onRecipeFile(file) {
@@ -653,7 +667,9 @@
     reload();
   });
   document.getElementById('weekSelect').addEventListener('change', function () {
-    state.weekKey = this.value || ZedBek.countWeekTuesday(new Date());
+    var next = this.value || ZedBek.countWeekTuesday(new Date());
+    if (next === state.weekKey) return;
+    state.weekKey = next;
     reload();
   });
   document.getElementById('showStore').addEventListener('click', function () { state.view = 'store'; history.replaceState(null, '', 'weekly-order.html'); render(); });
@@ -700,7 +716,7 @@
         mode: checked ? checked.value : 'replace',
         catalogId: applyRow.catalogId
       });
-      if (!plan.ok) { alert(plan.error + ' Replace is the default so the weight is not dropped.'); return; }
+      if (!plan.ok) { setPageStatus(plan.error + ' Replace is the default so the weight is not dropped.', true); return; }
       applyRow.hideMode = plan.hideMode;
       applyRow.catalogId = plan.catalogId;
       saveMatch(applyIndex).then(function () {

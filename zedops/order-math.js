@@ -155,6 +155,52 @@
     return { ok: true, hideMode: 'ignore', catalogId: '', pounds: pounds };
   }
 
+  // Tuesday of the count week for a cook date. 2026-11-04 (Wednesday) is the week of 2026-11-03.
+  function recipeWeek(cookDate) {
+    var day = new Date(String(cookDate || '') + 'T12:00:00Z');
+    if (!isFinite(day.getTime())) return '';
+    day.setUTCDate(day.getUTCDate() - ((day.getUTCDay() - 2 + 7) % 7));
+    var month = String(day.getUTCMonth() + 1).padStart(2, '0');
+    var date = String(day.getUTCDate()).padStart(2, '0');
+    return day.getUTCFullYear() + '-' + month + '-' + date;
+  }
+
+  // One approval replaces that week's lines. Ignored or unmatched rows are left out, so the weight is not ordered.
+  // Matches are remembered by ingredient name, including hideMode.
+  function planRecipeApproval(purchases, week) {
+    var matches = {};
+    var lines = {};
+    (purchases || []).forEach(function (row) {
+      if (!row || !row.key) return;
+      var catalogId = row.hideMode === 'ignore' ? '' : (row.catalogId || '');
+      var eachFactor = row.eachFactor === '' || row.eachFactor == null ? null : Number(row.eachFactor);
+      matches[row.key] = {
+        name: row.name || '',
+        catalogId: catalogId,
+        eachFactor: eachFactor,
+        hideMode: row.hideMode || ''
+      };
+      if (row.hideMode === 'ignore' || !catalogId) return;
+      lines[row.key] = {
+        name: row.name || '',
+        pounds: Number(row.pounds) || 0,
+        unit: 'lb',
+        catalogId: catalogId,
+        eachFactor: eachFactor
+      };
+    });
+    return { week: week, matches: matches, lines: lines };
+  }
+
+  // The first call takes the pending recipe. A listener or a second click gets nothing and must not write.
+  function claimApproval(state) {
+    if (!state || state.approvingRecipe || !state.pendingRecipe) return null;
+    state.approvingRecipe = true;
+    var pending = state.pendingRecipe;
+    state.pendingRecipe = null;
+    return pending;
+  }
+
   return {
     canonUnit: canonUnit,
     packAmount: packAmount,
@@ -165,6 +211,9 @@
     filterCatalog: filterCatalog,
     matchCounts: matchCounts,
     suggestMatches: suggestMatches,
-    planIngredientHide: planIngredientHide
+    planIngredientHide: planIngredientHide,
+    recipeWeek: recipeWeek,
+    planRecipeApproval: planRecipeApproval,
+    claimApproval: claimApproval
   };
 });

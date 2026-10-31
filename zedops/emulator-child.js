@@ -76,6 +76,25 @@ async function main() {
   assert.equal(par.status, 200, par.text);
   const hidden = await put(team, 'staging_zedops_hidden/store-a/bek__222', true);
   assert.equal(hidden.status, 200, hidden.text);
+
+  const approval = {
+    'staging_zedops_recipe/2026-11-03': {
+      almond_meal: { name: 'Almond Meal', pounds: 5.2, unit: 'lb', catalogId: 'bek__flour', eachFactor: null }
+    },
+    'staging_zedops_ingredient_map/almond_meal': { name: 'Almond Meal', catalogId: 'bek__flour', eachFactor: null, hideMode: 'replace' }
+  };
+  const patched = await fetch(dbUrl('', admin), {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(approval)
+  });
+  assert.equal(patched.status, 200, await patched.text());
+  await fetch(dbUrl('', admin), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(approval) });
+  const recipeWeek = JSON.parse((await get(admin, 'staging_zedops_recipe/2026-11-03')).text);
+  assert.deepEqual(Object.keys(recipeWeek), ['almond_meal']);
+  assert.equal(recipeWeek.almond_meal.pounds, 5.2);
+  const signedOut = await fetch(dbUrl('', null), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(approval) });
+  assert.notEqual(signedOut.status, 200);
   console.log('Emulator rules and concurrent item writes passed.');
 }
 

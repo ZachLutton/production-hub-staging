@@ -103,6 +103,29 @@
     return refOf(db, path).set(value);
   }
 
+  // One update for the whole approval. The week node is replaced, so a repeat cannot add a second copy of a line.
+  function saveRecipeApproval(db, plan) {
+    var week = plan && String(plan.week || '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(week)) return Promise.reject(new Error('Recipe week is missing.'));
+    var update = {};
+    update[PATHS.recipe + '/' + week] = plan.lines && typeof plan.lines === 'object' ? plan.lines : {};
+    var matches = plan.matches || {};
+    try {
+      Object.keys(matches).forEach(function (key) {
+        if (!/^[a-z0-9_]{1,80}$/.test(key)) throw new Error('Bad ingredient key.');
+        update[PATHS.ingredientMap + '/' + key] = matches[key];
+      });
+      Object.keys(update).forEach(function (path) {
+        var recipeWeek = path === PATHS.recipe + '/' + week;
+        var match = path.indexOf(PATHS.ingredientMap + '/') === 0 && path.split('/').length === 2;
+        if (!recipeWeek && !match) throw new Error('Recipe approval cannot write ' + path);
+      });
+    } catch (err) {
+      return Promise.reject(err);
+    }
+    return db.ref().update(update);
+  }
+
   function setLocation(db, location) {
     if (!location || !location.id) return Promise.reject(new Error('Store is missing an id.'));
     return refOf(db, PATHS.locations + '/' + location.id).set(location);
@@ -186,6 +209,7 @@
     setItemFields: setItemFields,
     setIngredientMatch: setIngredientMatch,
     setRecipeLine: setRecipeLine,
+    saveRecipeApproval: saveRecipeApproval,
     setLocation: setLocation,
     applyWrites: applyWrites,
     approvalUpdate: approvalUpdate,

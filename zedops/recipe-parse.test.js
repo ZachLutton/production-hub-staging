@@ -128,3 +128,79 @@ test('a future store uses the supplies list, and two stores can save at once', a
   assert.equal((await db.ref('staging_zedops_ingredient_map/almond_meal/hideMode').once('value')).val(), 'ignore');
   assert.equal((await db.ref('staging_zedops_counts/store-a/2026-11-03/bek__654028').once('value')).val(), 4);
 });
+
+test('a single approve writes once, and a listener cannot approve again', async () => {
+  assert.equal(order.recipeWeek('2026-11-04'), '2026-11-03');
+  const purchases = parsed.purchases.map(function (row, index) {
+    const copy = Object.assign({}, row);
+    if (index === 0) {
+      copy.hideMode = 'ignore';
+      copy.catalogId = 'bek__meal';
+    } else if (index % 11 === 0) copy.catalogId = '';
+    else copy.catalogId = 'bek__654028';
+    return copy;
+  });
+  const pageState = { approvingRecipe: false, pendingRecipe: { cookDate: '2026-11-04', purchases: purchases } };
+  const pending = order.claimApproval(pageState);
+  assert.equal(order.claimApproval(pageState), null);
+  const plan = order.planRecipeApproval(pending.purchases, order.recipeWeek(pending.cookDate));
+  const ordered = purchases.filter(function (row) { return row.hideMode !== 'ignore' && row.catalogId; });
+  assert.equal(Object.keys(plan.lines).length, ordered.length);
+  assert.equal(plan.lines[purchases[0].key], undefined);
+  assert.equal(plan.matches[purchases[0].key].hideMode, 'ignore');
+  assert.equal(plan.matches[purchases[0].key].catalogId, '');
+  const kept = purchases.find(function (row) { return row.catalogId === 'bek__654028' && row.hideMode !== 'ignore'; });
+  assert.equal(plan.lines[kept.key].catalogId, 'bek__654028');
+  assert.equal(plan.lines[kept.key].pounds, kept.pounds);
+
+  const db = store.createInventoryDb({ storage: { getItem: function () { return null; }, setItem: function () {} } });
+  await db.ref('staging_zedops_recipe/2026-11-03/stale_line').set({ name: 'Stale', pounds: 9, catalogId: 'bek__old' });
+  await db.ref('staging_zedops_recipe/2026-11-10/keep_me').set({ name: 'Other week', pounds: 1, catalogId: 'bek__1' });
+  await db.ref('staging_zedops_ingredient_map/already_remembered').set({ name: 'Already', catalogId: 'bek__9', hideMode: '' });
+  let updates = 0;
+  let sets = 0;
+  const realRef = db.ref.bind(db);
+  db.ref = function (path) {
+    const api = realRef(path);
+    const update = api.update.bind(api);
+    const set = api.set.bind(api);
+    api.update = function (map) {
+      updates += 1;
+      return update(map).then(function () {
+        if (order.claimApproval(pageState)) throw new Error('a listener started another approve');
+      });
+    };
+    api.set = function (value) {
+      sets += 1;
+      return set(value);
+    };
+    return api;
+  };
+  const started = Date.now();
+  await storage.saveRecipeApproval(db, plan);
+  assert.ok(Date.now() - started < 1000);
+  assert.equal(updates, 1);
+  assert.equal(sets, 0);
+  const week = (await realRef('staging_zedops_recipe/2026-11-03').once('value')).val();
+  assert.equal(week.stale_line, undefined);
+  assert.equal(Object.keys(week).length, ordered.length);
+  assert.equal((await realRef('staging_zedops_recipe/2026-11-10/keep_me/name').once('value')).val(), 'Other week');
+  assert.equal((await realRef('staging_zedops_ingredient_map/already_remembered/catalogId').once('value')).val(), 'bek__9');
+  assert.equal((await realRef('staging_zedops_ingredient_map/' + purchases[0].key + '/hideMode').once('value')).val(), 'ignore');
+  pageState.approvingRecipe = false;
+  pageState.pendingRecipe = { cookDate: '2026-11-04', purchases: purchases };
+  const again = order.claimApproval(pageState);
+  await storage.saveRecipeApproval(db, order.planRecipeApproval(again.purchases, '2026-11-03'));
+  assert.equal(updates, 2);
+  assert.equal(Object.keys((await realRef('staging_zedops_recipe/2026-11-03').once('value')).val()).length, ordered.length);
+  const page = fs.readFileSync(path.join(__dirname, 'weekly-page.js'), 'utf8');
+  assert.equal(page.includes('alert('), false);
+  assert.equal(page.includes('confirm('), false);
+  const approve = page.slice(page.indexOf('function approveRecipe'), page.indexOf('function onRecipeFile'));
+  assert.equal((approve.match(/saveRecipeApproval/g) || []).length, 1);
+  assert.equal(approve.includes('setRecipeLine'), false);
+  const render = page.slice(page.indexOf('function render('), page.indexOf('function renderStore'));
+  const reload = page.slice(page.indexOf('function reload('), page.indexOf('function fillStores'));
+  assert.equal(render.includes('saveRecipeApproval') || render.includes('.update(') || render.includes('.set('), false);
+  assert.equal(reload.includes('saveRecipeApproval') || reload.includes('.set('), false);
+});

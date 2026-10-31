@@ -60,6 +60,8 @@
         .show-hidden-label { display: block; font-size: 14px; margin-bottom: 6px; }
         .store-row { padding: 8px 0; border-bottom: 1px solid #eee; }
         .empty-state { padding: 24px; text-align: center; color: #888; }
+        #pageStatus { margin-top: 8px; font-weight: 700; min-height: 1.2em; }
+        #pageStatus.error { background: #fff4f4; color: #8a1f1f; display: inline-block; padding: 6px 10px; border-radius: 6px; }
         h2 { color: #2d5016; margin-bottom: 8px; }
     </style>
 </head>
@@ -92,6 +94,7 @@
             <div><span class="location-badge" id="locationBadge"></span> <span class="role-badge" id="roleBadge">Team</span></div>
             <div id="dueLine"></div>
             <div id="lastSaved">No changes yet</div>
+            <div id="pageStatus" role="status" aria-live="polite"></div>
         </div>
         <div id="adminTools" style="display:none;">
             <div class="panel">
