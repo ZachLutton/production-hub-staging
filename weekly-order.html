@@ -327,13 +327,37 @@
         }
 
         // ==================== DATA LOADING ====================
+        // The weekly page reads each location's saved item list. It does not use the BEK catalog.
+        // Staging often has no Rim list yet (that list is created the first time monthly inventory
+        // is opened). If the list is missing, copy the repo's Rim or Main list once. Never replace
+        // a list that is already there, and never write month counts.
+        async function ensureLocationItems(loc) {
+            const ref = db.ref('staging_inventory/' + loc + '/items');
+            const snap = await ref.once('value');
+            if (!ZedWeekly.itemsNodeEmpty(snap.val())) return snap.val();
+            if (loc !== 'rim' && loc !== 'main') return snap.val() || {};
+            try {
+                const response = await fetch('zedops/weekly-location-items.json');
+                if (!response.ok) throw new Error('Could not load the weekly item list.');
+                const tables = await response.json();
+                const payload = tables[loc];
+                if (!payload) return {};
+                const result = await ref.transaction(function (current) {
+                    return ZedWeekly.itemsNodeEmpty(current) ? payload : undefined;
+                });
+                const saved = result && result.snapshot && typeof result.snapshot.val === 'function'
+                    ? result.snapshot.val() : null;
+                if (saved) return saved;
+                const again = await ref.once('value');
+                return again.val() || payload;
+            } catch (err) {
+                console.error(err);
+                return snap.val() || {};
+            }
+        }
         async function loadItemsForLocation(loc) {
-            const snap = await db.ref('staging_inventory/' + loc + '/items').once('value');
-            let raw = snap.val() || {};
-            // Unescape section keys
-            const out = {};
-            Object.keys(raw).forEach(k => { out[unescapeSection(k)] = raw[k]; });
-            return out;
+            const raw = await ensureLocationItems(loc);
+            return ZedWeekly.sectionsFromSnapshot(raw);
         }
         async function loadPars(loc) {
             const snap = await db.ref('staging_weekly_orders/' + loc + '/pars').once('value');
@@ -600,10 +624,7 @@
         function attachRealtimeListeners() {
             // Listen for ITEM LIST changes — re-render when Rim's items list updates
             db.ref('staging_inventory/' + currentLocation + '/items').on('value', snap => {
-                const raw = snap.val() || {};
-                const out = {};
-                Object.keys(raw).forEach(k => { out[unescapeSection(k)] = raw[k]; });
-                itemsData = out;
+                itemsData = ZedWeekly.sectionsFromSnapshot(snap.val() || {});
                 render();
             });
 

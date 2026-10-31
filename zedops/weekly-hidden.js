@@ -24,9 +24,33 @@
     return !!(hiddenMap && key && hiddenMap[key] === true);
   }
 
+  // Firebase sometimes hands back a list as {"0": item, "1": item} instead of an array.
+  function itemList(value) {
+    if (Array.isArray(value)) return value;
+    if (!value || typeof value !== 'object') return [];
+    var keys = Object.keys(value);
+    if (!keys.length || !keys.every(function (key) { return /^\d+$/.test(key); })) return [];
+    return keys.sort(function (a, b) { return Number(a) - Number(b); }).map(function (key) { return value[key]; });
+  }
+
+  function itemsNodeEmpty(value) {
+    return value == null || (typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === 0);
+  }
+
+  function sectionsFromSnapshot(raw) {
+    var out = {};
+    Object.keys(raw || {}).forEach(function (key) {
+      out[unescapeSection(key)] = itemList(raw[key]);
+    });
+    return out;
+  }
+
   return {
     unescapeSection: unescapeSection,
     getItemKey: getItemKey,
-    isRowHidden: isRowHidden
+    isRowHidden: isRowHidden,
+    itemList: itemList,
+    itemsNodeEmpty: itemsNodeEmpty,
+    sectionsFromSnapshot: sectionsFromSnapshot
   };
 });
