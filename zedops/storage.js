@@ -72,9 +72,15 @@
     return refOf(db, path).set({ value: Number(par.value) || 0, unit: String(par.unit || '') });
   }
 
+  var MATCH_HIDDEN = 'match';
+
   function setHidden(db, locationId, itemId, hidden) {
     var path = PATHS.hidden + '/' + locationId + '/' + itemId;
     return hidden ? refOf(db, path).set(true) : refOf(db, path).remove();
+  }
+
+  function setMatchHidden(db, itemId, hidden) {
+    return setHidden(db, MATCH_HIDDEN, itemId, hidden);
   }
 
   function setCountUnit(db, itemId, unit) {
@@ -173,7 +179,9 @@
     countPath: countPath,
     setOnHand: setOnHand,
     setPar: setPar,
+    MATCH_HIDDEN: MATCH_HIDDEN,
     setHidden: setHidden,
+    setMatchHidden: setMatchHidden,
     setCountUnit: setCountUnit,
     setItemFields: setItemFields,
     setIngredientMatch: setIngredientMatch,

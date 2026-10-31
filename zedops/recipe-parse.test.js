@@ -55,12 +55,36 @@ test('item search is fuzzy and the match count separates saved picks from blanks
   assert.equal(order.filterCatalog('markon asp', items)[0].id, 'bek__179416');
   assert.equal(order.filterCatalog('zzzz-not-a-food', items).length, 0);
   assert.deepEqual(order.matchCounts([{ catalogId: 'bek__1' }, { catalogId: '' }, {}]), { matched: 1, unmatched: 2, total: 3 });
+  const meal = { id: 'bek__meal', itemNumber: '111', name: 'Almond Meal', brand: 'Old' };
+  const flour = { id: 'bek__flour', itemNumber: '222', name: 'Almond Flour', brand: 'New' };
+  const hidden = {};
+  hidden[meal.id] = true;
+  assert.equal(order.filterCatalog('almond', [meal, flour], { hidden: hidden }).some(function (item) { return item.id === meal.id; }), false);
+  assert.equal(order.filterCatalog('almond', [meal, flour], { hidden: hidden, showHidden: true }).some(function (item) { return item.id === meal.id; }), true);
+  const replaced = order.planIngredientHide({ name: 'Almond Meal', pounds: 5.2 }, { mode: 'replace', catalogId: flour.id });
+  assert.equal(replaced.ok, true);
+  assert.equal(replaced.hideMode, 'replace');
+  assert.equal(replaced.catalogId, flour.id);
+  assert.equal(replaced.pounds, 5.2);
+  const ignored = order.planIngredientHide({ name: 'Almond Meal', pounds: 5.2 }, { mode: 'ignore' });
+  assert.equal(ignored.hideMode, 'ignore');
+  assert.equal(ignored.catalogId, '');
+  const fallback = order.planIngredientHide({ pounds: 5.2 }, {});
+  assert.equal(fallback.ok, false);
+  assert.equal(fallback.defaultMode, 'replace');
+  assert.equal(storage.MATCH_HIDDEN, 'match');
+  const noWeight = order.planIngredientHide({ name: 'Water', pounds: 0 }, {});
+  assert.equal(noWeight.ok, true);
+  assert.equal(noWeight.hideMode, 'ignore');
   const page = fs.readFileSync(path.join(__dirname, 'weekly-page.js'), 'utf8');
   const html = fs.readFileSync(path.join(__dirname, '..', 'weekly-order.html'), 'utf8');
   const handler = page.slice(page.indexOf("getElementById('recipeFile')"), page.indexOf("getElementById('guideFile')"));
   assert.equal(handler.includes('this.value'), false);
   assert.equal(page.includes('recipeStatus'), true);
   assert.equal(page.includes('setIngredientMatch'), true);
+  assert.equal(page.includes('setMatchHidden'), true);
+  assert.equal(page.includes('Replace with…'), true);
+  assert.equal(page.includes("Ignore (don\\'t order)"), true);
   assert.equal(page.includes('No match'), true);
   assert.match(html, /id="recipeFile"[^>]*accept="application\/pdf,\.pdf"/);
 });
@@ -82,4 +106,25 @@ test('a future store uses the supplies list, and two stores can save at once', a
   assert.equal((await db.ref('staging_zedops_pars/store-b/bek__654028/value').once('value')).val(), 2);
   assert.equal((await db.ref('staging_zedops_recipe/2026-11-03/mahatma_jasmine_rice/pounds').once('value')).val(), 113.4);
   assert.throws(function () { storage.assertWritable('staging_zedops_recipe/2026-11-03'); });
+
+  await storage.setMatchHidden(db, 'bek__meal', true);
+  assert.equal((await db.ref('staging_zedops_hidden/match/bek__meal').once('value')).val(), true);
+  await storage.setMatchHidden(db, 'bek__meal', false);
+  assert.equal((await db.ref('staging_zedops_hidden/match/bek__meal').once('value')).val(), null);
+  await storage.setIngredientMatch(db, 'almond_meal', {
+    name: 'Almond Meal', catalogId: 'bek__flour', eachFactor: null, hideMode: 'replace'
+  });
+  await storage.setRecipeLine(db, '2026-11-03', 'almond_meal', {
+    name: 'Almond Meal', pounds: 5.2, unit: 'lb', catalogId: 'bek__flour', eachFactor: null
+  });
+  const replacedLine = (await db.ref('staging_zedops_recipe/2026-11-03/almond_meal').once('value')).val();
+  assert.equal(replacedLine.catalogId, 'bek__flour');
+  assert.equal(replacedLine.pounds, 5.2);
+  await storage.setIngredientMatch(db, 'almond_meal', {
+    name: 'Almond Meal', catalogId: '', eachFactor: null, hideMode: 'ignore'
+  });
+  await storage.setRecipeLine(db, '2026-11-03', 'almond_meal', null);
+  assert.equal((await db.ref('staging_zedops_recipe/2026-11-03/almond_meal').once('value')).val(), null);
+  assert.equal((await db.ref('staging_zedops_ingredient_map/almond_meal/hideMode').once('value')).val(), 'ignore');
+  assert.equal((await db.ref('staging_zedops_counts/store-a/2026-11-03/bek__654028').once('value')).val(), 4);
 });

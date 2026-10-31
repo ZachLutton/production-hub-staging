@@ -55,8 +55,8 @@ Paths added for this module:
 - `staging_zedops_catalog`
 - `staging_zedops_counts`
 - `staging_zedops_pars`
-- `staging_zedops_hidden`
+- `staging_zedops_hidden` — a store's weekly-count hides, and match-search hides at `match/{item id}`
 - `staging_zedops_drafts`
-- `staging_zedops_ingredient_map`
+- `staging_zedops_ingredient_map` — remembered matches, including `hideMode` of `replace` or `ignore`
 - `staging_zedops_recipe`
 - `staging_zedops_price_approvals`

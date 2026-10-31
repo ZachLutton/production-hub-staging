@@ -20,6 +20,9 @@
     allPars: {},
     recipe: {},
     matches: {},
+    catalogHidden: {},
+    showHiddenIngredients: false,
+    showHiddenCatalog: false,
     pendingRecipe: null,
     pendingGuide: null
   };
@@ -185,7 +188,8 @@
       db.ref(ZedStorage.PATHS.counts + '/' + loc.id + '/' + week).once('value'),
       db.ref(ZedStorage.PATHS.pars + '/' + loc.id).once('value'),
       db.ref(ZedStorage.PATHS.recipe + '/' + week).once('value'),
-      db.ref(ZedStorage.PATHS.ingredientMap).once('value')
+      db.ref(ZedStorage.PATHS.ingredientMap).once('value'),
+      db.ref(ZedStorage.PATHS.hidden + '/' + ZedStorage.MATCH_HIDDEN).once('value')
     ];
     if (ZedLocations.listSourceOf(loc) === 'inventory') {
       jobs.push(db.ref('staging_weekly_orders/' + loc.id + '/' + week).once('value'));
@@ -196,8 +200,9 @@
       state.pars = snaps[1].val() || {};
       state.recipe = snaps[2].val() || {};
       state.matches = snaps[3].val() || {};
-      state.legacyOnHand = snaps[4] ? (snaps[4].val() || {}) : {};
-      state.legacyPars = snaps[5] ? (snaps[5].val() || {}) : {};
+      state.catalogHidden = snaps[4].val() || {};
+      state.legacyOnHand = snaps[5] ? (snaps[5].val() || {}) : {};
+      state.legacyPars = snaps[6] ? (snaps[6].val() || {}) : {};
       return loadEveryStore();
     }).catch(function () {
       state.legacyOnHand = {};
@@ -386,15 +391,17 @@
   }
   function assignInitialMatch(row, items) {
     var saved = state.matches[row.key];
-    if (saved && Object.prototype.hasOwnProperty.call(saved, 'catalogId')) {
+    if (saved && (Object.prototype.hasOwnProperty.call(saved, 'catalogId') || saved.hideMode)) {
       row.catalogId = saved.catalogId || '';
       row.eachFactor = saved.eachFactor == null ? '' : saved.eachFactor;
+      row.hideMode = saved.hideMode || '';
       row.matchSaved = true;
       return;
     }
-    var suggestion = ZedOrder.filterCatalog(row.name, items)[0];
+    var suggestion = ZedOrder.filterCatalog(row.name, items, { hidden: state.catalogHidden })[0];
     row.catalogId = suggestion ? suggestion.id : '';
     row.eachFactor = '';
+    row.hideMode = '';
     row.matchSaved = false;
   }
   function setRecipeStatus(text) {
@@ -402,9 +409,12 @@
     if (el) el.textContent = text;
   }
   function updateMatchCount() {
-    var counts = ZedOrder.matchCounts(state.pendingRecipe ? state.pendingRecipe.purchases : []);
+    var purchases = state.pendingRecipe ? state.pendingRecipe.purchases : [];
+    var visible = purchases.filter(function (row) { return !row.hideMode; });
+    var counts = ZedOrder.matchCounts(visible);
+    var hidden = purchases.length - visible.length;
     var el = document.getElementById('matchCount');
-    if (el) el.textContent = counts.matched + ' matched, ' + counts.unmatched + ' unmatched';
+    if (el) el.textContent = counts.matched + ' matched, ' + counts.unmatched + ' unmatched' + (hidden ? ', ' + hidden + ' hidden' : '');
   }
   function renderRecipeReview() {
     var panel = document.getElementById('recipePanel');
@@ -428,19 +438,31 @@
     panel._pending = pending;
     panel.setAttribute('data-built', '1');
     var counts = ZedOrder.matchCounts(pending.purchases);
+    var hiddenRows = pending.purchases.filter(function (row) { return row.hideMode; }).length;
     panel.innerHTML = '<h2>Review raw purchases before the order is applied</h2><p>Cook date ' + esc(pending.cookDate || '') +
       '. These are raw weights. Cooked totals and sub-recipe outputs are not ordered twice. A match is saved as soon as you confirm that row. The week\'s order uses them only after you approve.</p>' +
       '<div class="match-tools"><input id="matchFilter" type="search" placeholder="Find an ingredient" autocomplete="off" enterkeyhint="search"><strong id="matchCount">' +
-      counts.matched + ' matched, ' + counts.unmatched + ' unmatched</strong></div>' +
-      '<table class="order-table"><thead><tr><th>Ingredient</th><th>Raw amount</th><th>BEK item</th><th>Each factor</th></tr></thead><tbody>' +
+      counts.matched + ' matched, ' + counts.unmatched + ' unmatched' + (hiddenRows ? ', ' + hiddenRows + ' hidden' : '') + '</strong>' +
+      '<label><input type="checkbox" id="showHiddenIngredients"' + (state.showHiddenIngredients ? ' checked' : '') + '> Show hidden ingredients</label></div>' +
+      '<table class="order-table"><thead><tr><th>Ingredient</th><th>Raw amount</th><th>BEK item</th><th>Each factor</th><th></th></tr></thead><tbody>' +
       pending.purchases.map(function (row, index) {
         var chosen = row.catalogId ? state.catalog.items[row.catalogId] : null;
-        return '<tr class="' + (row.catalogId ? '' : 'unmatched') + '" data-ingredient="' + esc(row.name) + '" data-index="' + index + '"><td>' + esc(row.name) +
-          '<div class="row-saved" data-saved="' + index + '">' + (row.matchSaved ? 'Saved' : '') + '</div></td><td>' + esc(row.pounds) + ' lb</td><td>' +
+        var hiddenNote = row.hideMode === 'ignore' ? 'Ignored — not ordered' : (row.hideMode === 'replace' ? 'Replaced — weight carries over' : '');
+        var hasWeight = Number(row.pounds) > 0;
+        return '<tr class="' + (row.catalogId ? '' : 'unmatched') + (row.hideMode ? ' ingredient-hidden' : '') + '" data-ingredient="' + esc(row.name) + '" data-index="' + index + '"' + (row.hideMode && !state.showHiddenIngredients ? ' hidden' : '') + '><td>' + esc(row.name) +
+          '<div class="row-saved" data-saved="' + index + '">' + (row.matchSaved ? 'Saved' : '') + (hiddenNote ? ' · ' + hiddenNote : '') + '</div></td><td>' + esc(row.pounds) + ' lb</td><td>' +
           '<div class="match-box"><button type="button" class="match-chosen" data-open="' + index + '" aria-haspopup="listbox" aria-expanded="false">' + esc(choiceLabel(chosen)) + '</button>' +
-          '<div class="match-pop" data-pop="' + index + '" hidden><input type="search" data-search="' + index + '" placeholder="Name, brand, or item #" autocomplete="off" enterkeyhint="search">' +
-          '<ul role="listbox" data-list="' + index + '"></ul></div></div></td><td><input data-factor="' + index + '" type="number" min="0" step="any" inputmode="decimal" placeholder="lb per each" value="' + esc(row.eachFactor) + '" style="width:120px;font-size:16px;min-height:44px"></td></tr>';
-      }).join('') + '</tbody></table><p class="diff-note">Choose No match when nothing fits. Unmatched rows are not ordered.</p><button type="button" id="approveRecipe">Approve recipe needs</button> <button type="button" id="discardRecipe">Discard</button>';
+          '<div class="match-pop" data-pop="' + index + '" hidden><label class="show-hidden-label"><input type="checkbox" data-show-hidden-catalog="' + index + '"' + (state.showHiddenCatalog ? ' checked' : '') + '> Show hidden items</label><input type="search" data-search="' + index + '" placeholder="Name, brand, or item #" autocomplete="off" enterkeyhint="search">' +
+          '<ul role="listbox" data-list="' + index + '"></ul></div></div>' +
+          '<div class="hide-panel" data-hide-panel="' + index + '" hidden><p>' + (hasWeight
+            ? '<strong>Replace with…</strong> is the default, so this ' + esc(row.pounds) + ' lb stays on the order.'
+            : 'This row has no weight. <strong>Ignore</strong> is the default, so nothing is added to the order.') + '</p>' +
+          '<label><input type="radio" name="hide-mode-' + index + '" value="replace"' + (hasWeight ? ' checked' : '') + '> Replace with the BEK item above. The weight carries over.</label>' +
+          '<label><input type="radio" name="hide-mode-' + index + '" value="ignore"' + (hasWeight ? '' : ' checked') + '> Ignore (don\'t order). This weight will not be ordered.</label>' +
+          '<button type="button" data-apply-hide="' + index + '">Hide ingredient</button> <button type="button" data-cancel-hide="' + index + '">Cancel</button></div></td><td><input data-factor="' + index + '" type="number" min="0" step="any" inputmode="decimal" placeholder="lb per each" value="' + esc(row.eachFactor) + '" style="width:120px;font-size:16px;min-height:44px"></td><td>' +
+          (row.hideMode ? '<button type="button" data-unhide-row="' + index + '">Unhide</button>' : '<button type="button" data-hide-row="' + index + '">Hide</button>') +
+          '</td></tr>';
+      }).join('') + '</tbody></table><p class="diff-note">Choose No match when nothing fits. Hiding a weighed ingredient asks you to move the weight onto another BEK item, or to leave it off the order.</p><button type="button" id="approveRecipe">Approve recipe needs</button> <button type="button" id="discardRecipe">Discard</button>';
     document.getElementById('approveRecipe').onclick = approveRecipe;
     document.getElementById('discardRecipe').onclick = function () {
       state.pendingRecipe = null;
@@ -458,14 +480,23 @@
   function fillMatchList(index, query) {
     var list = document.querySelector('[data-list="' + index + '"]');
     var row = state.pendingRecipe.purchases[index];
-    var choices = ZedOrder.filterCatalog(query, catalogChoices()).slice(0, 40);
-    if (row.catalogId && !choices.some(function (item) { return item.id === row.catalogId; })) {
+    var choices = ZedOrder.filterCatalog(query, catalogChoices(), {
+      hidden: state.catalogHidden,
+      showHidden: state.showHiddenCatalog
+    }).slice(0, 40);
+    if (row.catalogId && !choices.some(function (item) { return item.id === row.catalogId; }) && (state.showHiddenCatalog || !state.catalogHidden[row.catalogId])) {
       var selected = state.catalog.items[row.catalogId];
       if (selected) choices.unshift(selected);
     }
     var html = '<li role="option" data-id=""' + (row.catalogId ? '' : ' aria-selected="true"') + '>No match</li>';
     choices.forEach(function (item) {
-      html += '<li role="option" data-id="' + esc(item.id) + '"' + (item.id === row.catalogId ? ' aria-selected="true"' : '') + '>' + esc(choiceLabel(item)) + '</li>';
+      var hidden = !!state.catalogHidden[item.id];
+      html += '<li role="option" data-id="' + esc(item.id) + '"' + (item.id === row.catalogId ? ' aria-selected="true"' : '') + '>' +
+        '<span>' + esc(choiceLabel(item)) + (hidden ? ' (hidden)' : '') + '</span> ' +
+        (hidden
+          ? '<button type="button" data-unhide-catalog="' + esc(item.id) + '">Unhide</button>'
+          : '<button type="button" data-hide-catalog="' + esc(item.id) + '">Hide</button>') +
+        '</li>';
     });
     list.innerHTML = html;
   }
@@ -488,14 +519,19 @@
     return ZedStorage.setIngredientMatch(db, row.key, {
       name: row.name,
       catalogId: row.catalogId || '',
-      eachFactor: eachFactor
+      eachFactor: eachFactor,
+      hideMode: row.hideMode || ''
     }).then(function () {
-      state.matches[row.key] = { name: row.name, catalogId: row.catalogId || '', eachFactor: eachFactor };
+      state.matches[row.key] = { name: row.name, catalogId: row.catalogId || '', eachFactor: eachFactor, hideMode: row.hideMode || '' };
       row.matchSaved = true;
+      var hiddenNote = row.hideMode === 'ignore' ? 'Ignored — not ordered' : (row.hideMode === 'replace' ? 'Replaced — weight carries over' : '');
       var note = document.querySelector('[data-saved="' + index + '"]');
-      if (note) note.textContent = 'Saved';
+      if (note) note.textContent = 'Saved' + (hiddenNote ? ' · ' + hiddenNote : '');
       var tr = document.querySelector('tr[data-index="' + index + '"]');
-      if (tr) tr.className = row.catalogId ? '' : 'unmatched';
+      if (tr) {
+        tr.className = (row.catalogId ? '' : 'unmatched') + (row.hideMode ? ' ingredient-hidden' : '');
+        tr.hidden = !!(row.hideMode && !state.showHiddenIngredients);
+      }
       var button = document.querySelector('[data-open="' + index + '"]');
       if (button) button.textContent = choiceLabel(row.catalogId ? state.catalog.items[row.catalogId] : null);
       updateMatchCount();
@@ -511,12 +547,14 @@
     document.getElementById('weekSelect').value = week;
     var chain = Promise.resolve();
     pending.purchases.forEach(function (row) {
-      var catalogId = row.catalogId || '';
+      var catalogId = row.hideMode === 'ignore' ? '' : (row.catalogId || '');
       var eachFactor = row.eachFactor === '' || row.eachFactor == null ? null : Number(row.eachFactor);
       chain = chain.then(function () {
-        return ZedStorage.setIngredientMatch(db, row.key, { name: row.name, catalogId: catalogId, eachFactor: eachFactor });
+        return ZedStorage.setIngredientMatch(db, row.key, {
+          name: row.name, catalogId: catalogId, eachFactor: eachFactor, hideMode: row.hideMode || ''
+        });
       }).then(function () {
-        if (!catalogId) return null;
+        if (row.hideMode === 'ignore' || !catalogId) return ZedStorage.setRecipeLine(db, week, row.key, null);
         return ZedStorage.setRecipeLine(db, week, row.key, {
           name: row.name, pounds: row.pounds, unit: 'lb', catalogId: catalogId, eachFactor: eachFactor
         });
@@ -641,8 +679,87 @@
       }
       return;
     }
+    var hideRow = event.target.closest('[data-hide-row]');
+    if (hideRow) {
+      var hidePanel = document.querySelector('[data-hide-panel="' + hideRow.getAttribute('data-hide-row') + '"]');
+      if (hidePanel) hidePanel.hidden = false;
+      return;
+    }
+    var cancelHide = event.target.closest('[data-cancel-hide]');
+    if (cancelHide) {
+      var cancelPanel = document.querySelector('[data-hide-panel="' + cancelHide.getAttribute('data-cancel-hide') + '"]');
+      if (cancelPanel) cancelPanel.hidden = true;
+      return;
+    }
+    var applyHide = event.target.closest('[data-apply-hide]');
+    if (applyHide) {
+      var applyIndex = applyHide.getAttribute('data-apply-hide');
+      var applyRow = state.pendingRecipe.purchases[applyIndex];
+      var checked = document.querySelector('input[name="hide-mode-' + applyIndex + '"]:checked');
+      var plan = ZedOrder.planIngredientHide(applyRow, {
+        mode: checked ? checked.value : 'replace',
+        catalogId: applyRow.catalogId
+      });
+      if (!plan.ok) { alert(plan.error + ' Replace is the default so the weight is not dropped.'); return; }
+      applyRow.hideMode = plan.hideMode;
+      applyRow.catalogId = plan.catalogId;
+      saveMatch(applyIndex).then(function () {
+        var tr = document.querySelector('tr[data-index="' + applyIndex + '"]');
+        if (tr) {
+          tr.classList.add('ingredient-hidden');
+          tr.hidden = !state.showHiddenIngredients;
+        }
+        var panel = document.querySelector('[data-hide-panel="' + applyIndex + '"]');
+        if (panel) panel.hidden = true;
+        var note = document.querySelector('[data-saved="' + applyIndex + '"]');
+        if (note) note.textContent = 'Saved · ' + (plan.hideMode === 'ignore' ? 'Ignored — not ordered' : 'Replaced — weight carries over');
+        var btn = tr && tr.querySelector('[data-hide-row]');
+        if (btn) {
+          btn.textContent = 'Unhide';
+          btn.removeAttribute('data-hide-row');
+          btn.setAttribute('data-unhide-row', applyIndex);
+        }
+      }).catch(showError);
+      return;
+    }
+    var unhideRow = event.target.closest('[data-unhide-row]');
+    if (unhideRow) {
+      var unhideIndex = unhideRow.getAttribute('data-unhide-row');
+      var unhide = state.pendingRecipe.purchases[unhideIndex];
+      unhide.hideMode = '';
+      saveMatch(unhideIndex).then(function () {
+        var tr = document.querySelector('tr[data-index="' + unhideIndex + '"]');
+        if (tr) {
+          tr.classList.remove('ingredient-hidden');
+          tr.hidden = false;
+        }
+        unhideRow.textContent = 'Hide';
+        unhideRow.removeAttribute('data-unhide-row');
+        unhideRow.setAttribute('data-hide-row', unhideIndex);
+        var note = document.querySelector('[data-saved="' + unhideIndex + '"]');
+        if (note) note.textContent = 'Saved';
+      }).catch(showError);
+      return;
+    }
+    var hideCatalog = event.target.closest('[data-hide-catalog], [data-unhide-catalog]');
+    if (hideCatalog) {
+      event.preventDefault();
+      event.stopPropagation();
+      var hideId = hideCatalog.getAttribute('data-hide-catalog') || hideCatalog.getAttribute('data-unhide-catalog');
+      var hiding = !!hideCatalog.getAttribute('data-hide-catalog');
+      ZedStorage.setMatchHidden(db, hideId, hiding).then(function () {
+        if (hiding) state.catalogHidden[hideId] = true;
+        else delete state.catalogHidden[hideId];
+        document.querySelectorAll('.match-pop:not([hidden])').forEach(function (pop) {
+          var search = pop.querySelector('input[type="search"]');
+          fillMatchList(pop.getAttribute('data-pop'), search ? search.value : '');
+        });
+        markSaved();
+      }).catch(showError);
+      return;
+    }
     var option = event.target.closest('.match-pop li');
-    if (option) {
+    if (option && !event.target.closest('button')) {
       var list = option.parentElement;
       var matchIndex = list.getAttribute('data-list');
       var row = state.pendingRecipe.purchases[matchIndex];
@@ -650,6 +767,21 @@
       row.matchSaved = false;
       closeMatchPops();
       saveMatch(matchIndex).catch(showError);
+    }
+  });
+  document.getElementById('recipePanel').addEventListener('change', function (event) {
+    if (event.target.id === 'showHiddenIngredients') {
+      state.showHiddenIngredients = event.target.checked;
+      document.querySelectorAll('tr.ingredient-hidden').forEach(function (tr) {
+        tr.hidden = !state.showHiddenIngredients;
+      });
+      return;
+    }
+    var showCatalog = event.target.getAttribute && event.target.getAttribute('data-show-hidden-catalog');
+    if (showCatalog != null) {
+      state.showHiddenCatalog = event.target.checked;
+      var search = document.querySelector('[data-search="' + showCatalog + '"]');
+      fillMatchList(showCatalog, search ? search.value : '');
     }
   });
   document.getElementById('recipePanel').addEventListener('input', function (event) {

@@ -47,9 +47,9 @@ The file denies the root. On each path the pages use, read and write are allowed
 | `staging_zedops_catalog` | vendor catalog and shelf order |
 | `staging_zedops_counts` | weekly on-hand counts, one item at a time |
 | `staging_zedops_pars` | pars for the weekly BEK count |
-| `staging_zedops_hidden` | rows hidden on the weekly BEK count |
+| `staging_zedops_hidden` | rows hidden on the weekly BEK count, and BEK items hidden from match search under `match/{item id}` |
 | `staging_zedops_drafts` | a guide upload waiting for approval |
-| `staging_zedops_ingredient_map` | remembered ingredient name to BEK item matches |
+| `staging_zedops_ingredient_map` | remembered ingredient name to BEK item matches, including hide (`replace` keeps the weight on the chosen item, `ignore` leaves it off the order) |
 | `staging_zedops_recipe` | approved raw recipe needs for one count week |
 | `staging_zedops_price_approvals` | month-end BEK prices after the owner approves them |
 

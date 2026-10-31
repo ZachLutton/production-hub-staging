@@ -92,12 +92,15 @@
   }
 
   // Case-insensitive search across item name, brand, and item number.
-  function filterCatalog(query, items) {
+  function filterCatalog(query, items, options) {
+    var opts = options || {};
+    var hidden = opts.hidden || {};
     var q = fold(query);
     var compact = q.replace(/ /g, '');
     var ranked = [];
     (items || []).forEach(function (item) {
       if (!item) return;
+      if (hidden[item.id] && !opts.showHidden) return;
       var name = fold(item.name);
       var brand = fold(item.brand);
       var num = String(item.itemNumber || '').toLowerCase().replace(/\s+/g, '');
@@ -136,6 +139,22 @@
     return filterCatalog(ingredientName, items).slice(0, limit || 3);
   }
 
+  // A row with weight defaults to Replace, so the pounds stay on the order.
+  // Ignore is explicit and drops that weight.
+  function planIngredientHide(row, choice) {
+    var pounds = Number(row && row.pounds) || 0;
+    var requested = choice && choice.mode;
+    var mode = requested === 'ignore' ? 'ignore' : 'replace';
+    if (!(pounds > 0) && requested !== 'replace') mode = 'ignore';
+    if (mode === 'replace') {
+      if (!choice || !choice.catalogId) {
+        return { ok: false, defaultMode: 'replace', error: 'Pick the BEK item that should get this weight.' };
+      }
+      return { ok: true, hideMode: 'replace', catalogId: choice.catalogId, pounds: pounds };
+    }
+    return { ok: true, hideMode: 'ignore', catalogId: '', pounds: pounds };
+  }
+
   return {
     canonUnit: canonUnit,
     packAmount: packAmount,
@@ -145,6 +164,7 @@
     isFoodItem: isFoodItem,
     filterCatalog: filterCatalog,
     matchCounts: matchCounts,
-    suggestMatches: suggestMatches
+    suggestMatches: suggestMatches,
+    planIngredientHide: planIngredientHide
   };
 });
