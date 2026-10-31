@@ -146,7 +146,7 @@
       var old = state.legacyPars[row.legacyKey];
       return typeof old === 'object' ? (Number(old.value) || 0) : (Number(old) || 0);
     }
-    return row.item.guidePar != null ? Number(row.item.guidePar) || 0 : 0;
+    return 0;
   }
   function recipeNeed(item) {
     var qty = 0;
@@ -163,12 +163,17 @@
     return { quantity: qty, unit: unit, eachFactor: factor };
   }
   function needFor(row, loc) {
-    var food = ZedOrder.isFoodItem(row.item);
-    var recipe = recipeNeed(row.item);
-    if (ZedLocations.listSourceOf(loc) === 'catalog' && food && recipe) return recipe;
-    var par = parOf(row);
-    if (!(par > 0)) return null;
-    return { quantity: par, unit: row.item.countUnit || 'each', eachFactor: null, par: true };
+    loc = loc || currentStore();
+    var recipe = loc && ZedLocations.listSourceOf(loc) === 'catalog' ? recipeNeed(row.item) : null;
+    return ZedOrder.orderNeed(row.item, {
+      recipe: recipe,
+      standingPar: ZedOrder.isFoodItem(row.item) ? 0 : parOf(row, loc),
+      countUnit: row.item.countUnit || 'each'
+    });
+  }
+  function needLabel(need) {
+    var qty = ZedBek.formatQty(need.quantity);
+    return qty + (need.unit ? ' ' + need.unit : '') + ' · ' + need.source;
   }
   function casesFor(row, loc) {
     var need = needFor(row, loc);
@@ -282,7 +287,7 @@
       var kind = ZedLocations.listSourceOf(loc) === 'catalog' ? 'Full BEK catalog' : 'Store supplies';
       badge.textContent = loc.name + ' · ' + kind + (ZedLocations.roleLabel(loc) ? ' · ' + ZedLocations.roleLabel(loc) : '');
     }
-    document.getElementById('dueLine').textContent = 'Counts are due by the end of Tuesday ' + state.weekKey + '. Order cases round up, so the order is never short.';
+    document.getElementById('dueLine').textContent = 'Counts are due by the end of Tuesday ' + state.weekKey + '. Food need comes from the approved scaled recipe. Supplies use the standing par for that store. BEK guide pars are not used for the order.';
     if (state.view === 'order') renderOrder();
     else renderStore(loc);
     renderAdmin(loc);
@@ -316,15 +321,14 @@
     var need = needFor(row, loc);
     var hand = handOf(row);
     var cases = casesFor(row, loc);
-    var needText = need ? (ZedBek.formatQty(need.quantity) + ' ' + (need.unit || '')) : '—';
-    if (need && need.par) needText = 'par ' + needText;
+    var needText = needLabel(need);
     var temp = item.temporary ? ' <span class="temp-badge">TEMPORARY</span>' : '';
     var parBtn = state.role === 'admin' && !ZedOrder.isFoodItem(item)
       ? '<button type="button" class="edit-par-btn" data-par="' + esc(row.id) + '">' + (parOf(row) || 'set') + '</button>' : '';
     return '<tr><td class="item-num">' + esc(item.itemNumber || 'no BEK #') + '</td><td><div class="item-name">' +
       esc(item.name) + temp + '</div><div class="item-brand">' + esc(item.brand || '') + '</div></td><td>' + esc(item.pack || '') +
       '</td><td>' + esc(needText) + '</td><td><input class="onhand-input" data-hand="' + esc(row.id) + '" type="number" min="0" step="any" value="' +
-      (hand == null ? '' : esc(hand)) + '"></td><td class="need-order">' + (cases > 0 ? cases + ' cs' : '—') + '</td>' +
+      (hand == null ? '' : esc(hand)) + '"></td><td class="need-order">' + (cases > 0 ? cases + ' cs' : '0') + '</td>' +
       (state.role === 'admin' ? '<td>' + parBtn + '</td>' : '') + '</tr>';
   }
 
@@ -342,12 +346,11 @@
         var hand = handOf(row, loc);
         var cases = casesFor(row, loc);
         total += cases;
-        var needText = need ? ZedBek.formatQty(need.quantity) + ' ' + need.unit : '—';
-        return '<td>' + esc(needText) + '</td><td>' + (hand == null ? '—' : esc(hand)) + '</td>';
+        return '<td>' + esc(needLabel(need)) + '</td><td>' + (hand == null ? '—' : esc(hand)) + '</td>';
       }).join('');
       return '<tr><td class="item-num">' + esc(item.itemNumber || 'no BEK #') + '</td><td><div class="item-name">' + esc(item.name) +
         (item.temporary ? ' <span class="temp-badge">TEMPORARY</span>' : '') + '</div></td>' + cells +
-        '<td class="need-order">' + (total > 0 ? total + ' cs' : '—') + '</td></tr>';
+        '<td class="need-order">' + (total > 0 ? total + ' cs' : '0') + '</td></tr>';
     }).join('');
     document.getElementById('orderTable').innerHTML = '<table class="order-table"><thead><tr><th>Item #</th><th>Name</th>' + head +
       '<th>Total cases</th></tr></thead><tbody>' + body + '</tbody></table>';
@@ -850,16 +853,29 @@
     };
     reader.readAsArrayBuffer(file);
   });
+  function bekOrderLines() {
+    var lines = ['Week of Tuesday ' + state.weekKey, 'Food need is the approved scaled recipe. Supplies use the standing par for that store. BEK guide pars are not used. Cases round up.', ''];
+    var list = stores();
+    ZedCatalog.asList(state.catalog.shelf.guide).concat(ZedCatalog.asList(state.catalog.shelf.special)).forEach(function (id) {
+      var item = state.catalog.items[id];
+      if (!item || !ZedBek.isShown(item) || item.kind === 'vendor_check') return;
+      var parts = list.map(function (loc) {
+        var row = { id: id, item: item, legacyKey: '', source: 'guide' };
+        return loc.name + ' ' + needLabel(needFor(row, loc)) + ', order ' + casesFor(row, loc);
+      });
+      lines.push((item.itemNumber || 'no BEK #') + ' ' + item.name + ' | ' + parts.join(' | '));
+    });
+    return lines;
+  }
   document.getElementById('pdfOrder').addEventListener('click', function () {
-    var lines = ['Week of Tuesday ' + state.weekKey, 'Cases are rounded up.', ''];
-    document.querySelectorAll('#orderTable tbody tr').forEach(function (tr) { lines.push(tr.innerText.replace(/\s+/g, ' ').trim()); });
-    ZedPdf.downloadPdf('bek-order-' + state.weekKey + '.pdf', ZedPdf.buildPdf({ title: 'Weekly BEK order', lines: lines }));
+    ZedPdf.downloadPdf('bek-order-' + state.weekKey + '.pdf', ZedPdf.buildPdf({ title: 'Weekly BEK order', lines: bekOrderLines() }));
   });
   document.getElementById('pdfSpecial').addEventListener('click', function () {
-    var lines = ['Send this list direct to the BEK rep.', 'Week of Tuesday ' + state.weekKey, ''];
+    var lines = ['Send this list direct to the BEK rep.', 'Week of Tuesday ' + state.weekKey, 'Food on this list uses the approved scaled recipe, not the BEK par.', ''];
     state.rows.filter(function (row) { return row.source === 'special'; }).forEach(function (row) {
       var hand = handOf(row);
       lines.push((row.item.temporary ? '[TEMPORARY] ' : '') + row.item.name + (row.item.itemNumber ? ' #' + row.item.itemNumber : ' (no BEK #)') +
+        ' | ' + needLabel(needFor(row)) + ' | order ' + casesFor(row) +
         ' | on hand ' + (hand == null ? 'not counted' : hand + ' ' + (row.item.countUnit || '')));
     });
     ZedPdf.downloadPdf('bek-special-order-' + state.weekKey + '.pdf', ZedPdf.buildPdf({ title: 'Special order — send direct to the BEK rep', lines: lines }));

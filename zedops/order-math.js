@@ -62,6 +62,26 @@
     return item.kind === 'special' && /salmon|mahi|filet/i.test(item.name || '');
   }
 
+  // Food is ordered from the approved recipe only. A missing recipe is zero, not the BEK guide par.
+  // Supplies use the standing par set for that store. guidePar is not an input here.
+  function orderNeed(item, input) {
+    input = input || {};
+    if (isFoodItem(item)) {
+      var recipeQty = input.recipe ? Number(input.recipe.quantity) || 0 : 0;
+      if (!(recipeQty > 0)) return { quantity: 0, unit: 'lb', eachFactor: null, source: 'recipe' };
+      return {
+        quantity: recipeQty,
+        unit: (input.recipe && input.recipe.unit) || 'lb',
+        eachFactor: input.recipe ? input.recipe.eachFactor : null,
+        source: 'recipe'
+      };
+    }
+    var par = Number(input.standingPar) || 0;
+    var unit = input.countUnit || (item && item.countUnit) || 'each';
+    if (!(par > 0)) return { quantity: 0, unit: unit, eachFactor: null, source: 'standing par' };
+    return { quantity: par, unit: unit, eachFactor: null, source: 'standing par' };
+  }
+
   function fold(value) {
     return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
   }
@@ -208,6 +228,7 @@
     casesToOrder: casesToOrder,
     needInCountUnit: needInCountUnit,
     isFoodItem: isFoodItem,
+    orderNeed: orderNeed,
     filterCatalog: filterCatalog,
     matchCounts: matchCounts,
     suggestMatches: suggestMatches,

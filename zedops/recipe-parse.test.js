@@ -89,6 +89,36 @@ test('item search is fuzzy and the match count separates saved picks from blanks
   assert.match(html, /id="recipeFile"[^>]*accept="application\/pdf,\.pdf"/);
 });
 
+test('food need ignores the BEK par and supplies keep the standing par', () => {
+  const asparagus = { id: 'bek__179416', name: 'Asparagus Jumbo', label: 'Produce', pack: '11 / 1 LB', countUnit: 'lb', guidePar: 20 };
+  const film = { id: 'michael_fleming__film', name: 'Film', kind: 'vendor_check', countUnit: 'case', guidePar: 4 };
+  const noRecipe = order.orderNeed(asparagus, { recipe: null, standingPar: 9 });
+  assert.equal(noRecipe.quantity, 0);
+  assert.equal(noRecipe.source, 'recipe');
+  assert.equal(order.casesToOrder(noRecipe.quantity, 0, 11), 0);
+  const fromRecipe = order.orderNeed(asparagus, { recipe: { quantity: 31.2, unit: 'lb' }, standingPar: 9 });
+  assert.equal(fromRecipe.quantity, 31.2);
+  assert.equal(fromRecipe.source, 'recipe');
+  assert.equal(order.casesToOrder(fromRecipe.quantity, 0, order.packAmount(asparagus.pack).perCase), 3);
+  const supply = order.orderNeed(film, { recipe: { quantity: 50, unit: 'lb' }, standingPar: 2, countUnit: 'case' });
+  assert.equal(supply.quantity, 2);
+  assert.equal(supply.source, 'standing par');
+  const unset = order.orderNeed(film, { standingPar: 0, countUnit: 'case' });
+  assert.equal(unset.quantity, 0);
+  assert.equal(unset.source, 'standing par');
+  const catalog = require('./bek.js').buildCatalog(require('./seed.json'));
+  const stored = catalog.items.bek__106810;
+  assert.equal(stored.guidePar, 7);
+  assert.equal(order.isFoodItem(stored), true);
+  assert.equal(order.orderNeed(stored, { recipe: null, standingPar: stored.guidePar }).quantity, 0);
+  const page = fs.readFileSync(path.join(__dirname, 'weekly-page.js'), 'utf8');
+  const parFn = page.slice(page.indexOf('function parOf'), page.indexOf('function recipeNeed'));
+  assert.equal(parFn.includes('guidePar'), false);
+  assert.equal(page.includes('standing par'), true);
+  assert.equal(page.includes('function bekOrderLines'), true);
+  assert.equal(page.includes('needLabel(needFor'), true);
+});
+
 test('a future store uses the supplies list, and two stores can save at once', async () => {
   const added = locations.addLocation({ locations: {} }, { name: 'San Pedro' });
   assert.equal(locations.listSourceOf(added.added), 'inventory');
