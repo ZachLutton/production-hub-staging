@@ -110,6 +110,10 @@
       ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')",
       ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')"
     },
+    "staging_zedops_plate": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')"
+    },
     "staging_zedops_recipe": {
       ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')",
       ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password' && (auth.token.email === 'team@zedrics-production-hub.firebaseapp.com' || auth.token.email === 'admin@zedrics-production-hub.firebaseapp.com')"

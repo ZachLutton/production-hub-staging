@@ -95,8 +95,31 @@ test('item search is fuzzy and the match count separates saved picks from blanks
   assert.match(html, /id="recipeFile"[^>]*accept="application\/pdf,\.pdf"/);
 });
 
+test('food follows the temp zone, even on a supply shelf, and a supply par saves on its own', async () => {
+  const pecan = {
+    id: 'bek__122588', name: 'Pecan Pieces Medium Fancy', brand: 'Ellington Farms',
+    pack: '1 / 5 LB', tempZone: 'Retail Ready Item Dry', label: 'Label Printing Table'
+  };
+  const sticker = { name: 'Label 3 In Use First Orange', tempZone: 'Dry', label: 'Label Printing Table' };
+  assert.equal(order.isFoodItem(pecan), true);
+  assert.equal(order.isFoodItem(sticker), false);
+  assert.equal(order.isFoodItem(Object.assign({}, pecan, { orderRole: 'supply' })), false);
+  assert.equal(order.isFoodItem(Object.assign({}, sticker, { orderRole: 'food' })), true);
+  assert.equal(order.orderNeed(pecan, { recipe: { quantity: 5, unit: 'lb' }, standingPar: 9 }).source, 'recipe');
+  assert.equal(order.orderNeed(sticker, { standingPar: 2, countUnit: 'each' }).source, 'standing par');
+  const page = fs.readFileSync(path.join(__dirname, 'weekly-page.js'), 'utf8');
+  assert.equal(page.includes("prompt('Standing par"), false);
+  assert.equal(page.includes('data-par='), true);
+  const db = store.createInventoryDb({ storage: { getItem: function () { return null; }, setItem: function () {} } });
+  await storage.setPar(db, 'colonnade', pecan.id, { value: 2, unit: 'each' });
+  assert.equal((await db.ref('staging_zedops_pars/colonnade/bek__122588/value').once('value')).val(), 2);
+  assert.equal((await db.ref('staging_zedops_pars/colonnade/bek__122588').once('value')).val().unit, 'each');
+  const orderLines = page.slice(page.indexOf('function bekOrderLines'), page.indexOf("getElementById('pdfOrder')"));
+  assert.equal(orderLines.includes('meal_container'), false);
+});
+
 test('food need ignores the BEK par and supplies keep the standing par', () => {
-  const asparagus = { id: 'bek__179416', name: 'Asparagus Jumbo', label: 'Produce', pack: '11 / 1 LB', countUnit: 'lb', guidePar: 20 };
+  const asparagus = { id: 'bek__179416', name: 'Asparagus Jumbo', label: 'Produce', pack: '11 / 1 LB', countUnit: 'lb', guidePar: 20, tempZone: 'Refrigeration' };
   const film = { id: 'michael_fleming__film', name: 'Film', kind: 'vendor_check', countUnit: 'case', guidePar: 4 };
   const noRecipe = order.orderNeed(asparagus, { recipe: null, standingPar: 9 });
   assert.equal(noRecipe.quantity, 0);

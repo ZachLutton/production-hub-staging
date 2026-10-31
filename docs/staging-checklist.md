@@ -51,6 +51,7 @@ The file denies the root. On each path the pages use, read and write are allowed
 | `staging_zedops_drafts` | a guide upload waiting for approval |
 | `staging_zedops_ingredient_map` | remembered ingredient name to BEK item matches, including hide (`replace` keeps the weight on the chosen item, `ignore` leaves it off the order) |
 | `staging_zedops_recipe` | approved raw recipe needs for one count week |
+| `staging_zedops_plate` | approved plate-list Total Cook for one cook date (meal containers, not the BEK order) |
 | `staging_zedops_price_approvals` | month-end BEK prices after the owner approves them |
 
 `.info/connected` is a Firebase connection flag, not a data path, so it is not in the rules file.

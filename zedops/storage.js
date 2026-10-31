@@ -15,7 +15,8 @@
     drafts: 'staging_zedops_drafts',
     priceApprovals: 'staging_zedops_price_approvals',
     ingredientMap: 'staging_zedops_ingredient_map',
-    recipe: 'staging_zedops_recipe'
+    recipe: 'staging_zedops_recipe',
+    plate: 'staging_zedops_plate'
   };
 
   var WHOLE_LIST = {};
@@ -42,6 +43,7 @@
     if (parts[0] === PATHS.pars && parts.length !== 3) throw new Error('Pars are saved one item at a time.');
     if (parts[0] === PATHS.ingredientMap && parts.length !== 2) throw new Error('Ingredient matches are saved one name at a time.');
     if (parts[0] === PATHS.recipe && parts.length !== 3) throw new Error('Recipe lines are saved one ingredient at a time.');
+    if (parts[0] === PATHS.plate && parts.length !== 2) throw new Error('A plate list is saved one cook date at a time.');
     if (parts[0] === PATHS.hidden && parts.length !== 3) throw new Error('Hidden items are saved one item at a time.');
     if (parts[0] === PATHS.locations && parts.length !== 2) throw new Error('Stores are saved one store at a time.');
     if (parts[0] === PATHS.catalog && parts[1] === 'items' && parts.length !== 3) {
@@ -95,6 +97,14 @@
     var path = PATHS.ingredientMap + '/' + nameKey;
     if (value == null) return refOf(db, path).remove();
     return refOf(db, path).set(value);
+  }
+
+  function setPlateTotal(db, cookDate, value) {
+    var path = PATHS.plate + '/' + cookDate;
+    if (value == null) return refOf(db, path).remove();
+    var total = Number(value.totalCook);
+    if (!isFinite(total) || total < 0) return Promise.reject(new Error('Total Cook must be zero or more.'));
+    return refOf(db, path).set({ cookDate: cookDate, totalCook: total });
   }
 
   function setRecipeLine(db, weekKey, lineId, value) {
@@ -236,6 +246,7 @@
     setItemFields: setItemFields,
     setIngredientMatch: setIngredientMatch,
     setRecipeLine: setRecipeLine,
+    setPlateTotal: setPlateTotal,
     saveRecipeApproval: saveRecipeApproval,
     setLocation: setLocation,
     applyWrites: applyWrites,

@@ -45,21 +45,19 @@
     return qty;
   }
 
-  var FOOD_LABELS = {
-    'walk-in cooler': true,
-    produce: true,
-    meat: true,
-    'saute line': true,
-    'spice rack': true,
-    'kitchen dry supplies': true,
-    freezer: true
-  };
-
+  // Food comes from the BEK temp zone, not the shelf the item sits on.
+  // Refrigeration, frozen, and retail-ready (including dry retail-ready food) are food.
+  // A plain Dry zone is a supply. An admin override on the item wins over the zone.
   function isFoodItem(item) {
     if (!item || item.kind === 'vendor_check') return false;
-    var label = String(item.label || '').toLowerCase();
-    if (FOOD_LABELS[label]) return true;
-    return item.kind === 'special' && /salmon|mahi|filet/i.test(item.name || '');
+    if (item.orderRole === 'food') return true;
+    if (item.orderRole === 'supply') return false;
+    if (item.kind === 'special' && /salmon|mahi|filet/i.test(item.name || '')) return true;
+    var zone = String(item.tempZone || '').toLowerCase();
+    if (zone.indexOf('retail ready') !== -1) return true;
+    if (zone.indexOf('refriger') !== -1) return true;
+    if (zone.indexOf('frozen') !== -1 || zone.indexOf('freezer') !== -1) return true;
+    return false;
   }
 
   // Food is ordered from the approved recipe only. A missing recipe is zero, not the BEK guide par.

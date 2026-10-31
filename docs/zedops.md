@@ -59,4 +59,5 @@ Paths added for this module:
 - `staging_zedops_drafts`
 - `staging_zedops_ingredient_map` — remembered matches, including `hideMode` of `replace` or `ignore`
 - `staging_zedops_recipe`
+- `staging_zedops_plate` — approved plate-list Total Cook for one cook date
 - `staging_zedops_price_approvals`

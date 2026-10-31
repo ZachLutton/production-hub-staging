@@ -35,6 +35,7 @@ const RULE_PATHS = [
   'staging_zedops_drafts',
   'staging_zedops_ingredient_map',
   'staging_zedops_recipe',
+  'staging_zedops_plate',
   'staging_zedops_price_approvals'
 ];
 
