@@ -262,16 +262,16 @@ test('a downloaded PDF is a real PDF and a spreadsheet keeps a leading zero', as
 
 test('monthly and Rim weekly data shapes stay put, and September uses saved prices unless that month was approved', () => {
   const monthly = fs.readFileSync(path.join(root, 'monthly-inventory.html'), 'utf8');
-  const weeklyPage = fs.readFileSync(path.join(root, 'weekly-order.html'), 'utf8');
+  const weeklyLogic = fs.readFileSync(path.join(root, 'zedops', 'weekly-page.js'), 'utf8');
   assert.equal(monthly.includes('const total = price * onHand'), true);
   assert.equal(monthly.includes("db.ref('staging_inventory/' + loc + '/items')"), true);
   assert.equal(monthly.includes("const path = 'staging_inventory/' + location + '/' + monthKey;"), true);
   assert.equal(monthly.includes("return 's_' + sectionId + '_' + sanitized + '_' + idx;"), true);
   assert.equal(monthly.includes('staging_zedops_counts'), false);
   assert.equal(monthly.includes('staging_zedops_price_approvals'), true);
-  assert.equal(weeklyPage.includes('staging_weekly_orders/'), true);
-  assert.equal(weeklyPage.includes('ZedWeekly.isRowHidden'), true);
-  assert.equal(weeklyPage.includes('staging_zedops_counts'), false);
+  assert.equal(weeklyLogic.includes('staging_weekly_orders/'), true);
+  assert.equal(weeklyLogic.includes('staging_inventory/'), true);
+  assert.equal(weeklyLogic.includes('getItemKey'), true);
   const config = JSON.parse(fs.readFileSync(path.join(root, 'firebase.json'), 'utf8'));
   assert.equal(config.database.rules, 'database.rules.json');
   const rc = fs.readFileSync(path.join(root, '.firebaserc'), 'utf8');

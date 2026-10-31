@@ -4,7 +4,7 @@
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (root) root.ZedSchema = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
-  var SCHEMA_VERSION = 1;
+  var SCHEMA_VERSION = 2;
 
   function catalogApi() {
     if (typeof require === 'function') {
@@ -98,6 +98,7 @@
       countsWeeklyBek: false,
       legacyWeekly: false,
       monthlyLocationId: '',
+      listSource: 'inventory',
       active: true
     };
   }
@@ -119,6 +120,9 @@
       loc.legacyWeekly = !!row.legacyWeekly;
       loc.monthlyLocationId = row.monthlyLocationId == null ? '' : String(row.monthlyLocationId);
       loc.active = row.active === false ? false : true;
+      loc.listSource = row.listSource === 'catalog' || row.listSource === 'inventory'
+        ? row.listSource
+        : (loc.isProductionHub ? 'catalog' : 'inventory');
       map[loc.id] = loc;
     });
     return { schemaVersion: SCHEMA_VERSION, locations: map };

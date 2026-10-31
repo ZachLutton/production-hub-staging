@@ -14,6 +14,7 @@
       countsWeeklyBek: true,
       legacyWeekly: false,
       monthlyLocationId: 'main',
+      listSource: 'catalog',
       active: true
     },
     {
@@ -24,6 +25,7 @@
       countsWeeklyBek: false,
       legacyWeekly: true,
       monthlyLocationId: 'rim',
+      listSource: 'inventory',
       active: true
     }
   ];
@@ -78,8 +80,16 @@
       countsWeeklyBek: !!loc.countsWeeklyBek,
       legacyWeekly: !!loc.legacyWeekly,
       monthlyLocationId: loc.monthlyLocationId == null ? '' : String(loc.monthlyLocationId),
+      listSource: loc.listSource === 'catalog' || loc.listSource === 'inventory'
+        ? loc.listSource
+        : (loc.isProductionHub ? 'catalog' : 'inventory'),
       active: loc.active === false ? false : true
     };
+  }
+
+  function listSourceOf(loc) {
+    if (loc && (loc.listSource === 'catalog' || loc.listSource === 'inventory')) return loc.listSource;
+    return loc && loc.isProductionHub ? 'catalog' : 'inventory';
   }
 
   function withRole(doc, id, role, on) {
@@ -122,6 +132,7 @@
     withRole: withRole,
     addLocation: addLocation,
     countingLocations: countingLocations,
-    roleLabel: roleLabel
+    roleLabel: roleLabel,
+    listSourceOf: listSourceOf
   };
 });

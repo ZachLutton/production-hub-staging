@@ -61,6 +61,10 @@ test('changed pages load in a headless browser', { timeout: 120000 }, async () =
   try {
     for (const page of pages) {
       const result = await loadPage(server.port, page);
+      if (page === 'bek-count.html' || page === 'bek-combined.html') {
+        assert.equal(result.out.includes('weekly-order.html') || result.out.includes('Weekly Order'), true, page + ' redirect');
+        continue;
+      }
       assert.equal(result.out.includes('id="pin-input"'), true, page + ' login');
       assert.equal(result.out.includes('STAGING'), true, page + ' staging mark');
       assert.equal(result.out.includes('Staging will not start'), false, page);

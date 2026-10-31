@@ -26,10 +26,11 @@ test('the Rim weekly list is the inventory list, not the BEK catalog', () => {
   assert.equal(sections['Front of House Supplies'].some(function (item) { return item.name === 'Pumpkin Seeds'; }), true);
   const catalog = bek.buildCatalog(require('./seed.json'));
   assert.ok(count !== catalog.shelf.guide.length);
-  const page = fs.readFileSync(path.join(__dirname, '..', 'weekly-order.html'), 'utf8');
-  assert.equal(page.includes("db.ref('staging_inventory/' + loc + '/items')"), true);
-  assert.equal(page.includes('weekly-location-items.json'), true);
-  assert.equal(page.includes('staging_zedops_catalog'), false);
+  const logic = fs.readFileSync(path.join(__dirname, 'weekly-page.js'), 'utf8');
+  assert.equal(logic.includes('staging_inventory/'), true);
+  assert.equal(logic.includes('weekly-location-items.json'), true);
+  assert.equal(logic.includes("listSourceOf(loc) === 'catalog'"), true);
+  assert.equal(fs.readFileSync(path.join(__dirname, '..', 'weekly-order.html'), 'utf8').includes('weekly-page.js'), true);
 });
 
 test('a list saved as an object still shows, and an existing list is not replaced', async () => {

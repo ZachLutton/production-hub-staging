@@ -13,7 +13,9 @@
     pars: 'staging_zedops_pars',
     hidden: 'staging_zedops_hidden',
     drafts: 'staging_zedops_drafts',
-    priceApprovals: 'staging_zedops_price_approvals'
+    priceApprovals: 'staging_zedops_price_approvals',
+    ingredientMap: 'staging_zedops_ingredient_map',
+    recipe: 'staging_zedops_recipe'
   };
 
   var WHOLE_LIST = {};
@@ -38,6 +40,8 @@
       throw new Error('On-hand counts are saved one item at a time.');
     }
     if (parts[0] === PATHS.pars && parts.length !== 3) throw new Error('Pars are saved one item at a time.');
+    if (parts[0] === PATHS.ingredientMap && parts.length !== 2) throw new Error('Ingredient matches are saved one name at a time.');
+    if (parts[0] === PATHS.recipe && parts.length !== 3) throw new Error('Recipe lines are saved one ingredient at a time.');
     if (parts[0] === PATHS.hidden && parts.length !== 3) throw new Error('Hidden items are saved one item at a time.');
     if (parts[0] === PATHS.locations && parts.length !== 2) throw new Error('Stores are saved one store at a time.');
     if (parts[0] === PATHS.catalog && parts[1] === 'items' && parts.length !== 3) {
@@ -79,6 +83,18 @@
 
   function setItemFields(db, itemId, fields) {
     return refOf(db, PATHS.catalog + '/items/' + itemId).update(fields || {});
+  }
+
+  function setIngredientMatch(db, nameKey, value) {
+    var path = PATHS.ingredientMap + '/' + nameKey;
+    if (value == null) return refOf(db, path).remove();
+    return refOf(db, path).set(value);
+  }
+
+  function setRecipeLine(db, weekKey, lineId, value) {
+    var path = PATHS.recipe + '/' + weekKey + '/' + lineId;
+    if (value == null) return refOf(db, path).remove();
+    return refOf(db, path).set(value);
   }
 
   function setLocation(db, location) {
@@ -160,6 +176,8 @@
     setHidden: setHidden,
     setCountUnit: setCountUnit,
     setItemFields: setItemFields,
+    setIngredientMatch: setIngredientMatch,
+    setRecipeLine: setRecipeLine,
     setLocation: setLocation,
     applyWrites: applyWrites,
     approvalUpdate: approvalUpdate,

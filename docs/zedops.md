@@ -10,6 +10,7 @@ The weekly BEK count is the first module on a shared ZedOps base. Later work (a 
 - Two people can type at once, including at the same store. Each number is saved on its own. One person's lemon count does not replace someone else's oil count.
 - The guide upload shows what moved, what is new, what was dropped, substitutions, and prices that went up or down. Nothing changes until you approve it.
 - BEK prices go into the month-end count only on the last Monday of the month, and only after you approve them. Other months are left alone.
+- Weekly ordering is one page. The production hub counts the full BEK catalog. Every other store counts that store's supplies (monthly items, without meals). Food amounts come from the scaled recipe PDF after you approve the raw totals. Cases always round up.
 - The data has a version number. When the site is updated, it can bring older data forward without running that step twice.
 
 ## Before a deploy
@@ -42,6 +43,8 @@ GitHub can also run it by hand: Actions → **ZedOps Staging backup** → Run wo
 | Saves | `zedops/storage.js` | One item, one par, one count. Not a whole list |
 | Version | `zedops/schema.js` | `schemaVersion` in the data, migrations that can run twice |
 | BEK count | `zedops/bek.js` | Guide diff, count units, Tuesday of the count, price gate |
+| Recipes | `zedops/recipe-parse.js` | Raw purchase totals from a scaled-recipe layout. The browser PDF reader calls this same parser |
+| Order math | `zedops/order-math.js` | Need minus on hand, rounded up to cases |
 
 New database paths go in `database.rules.staging.json` with the same sign-in rule as the paths already there. Publish that file in the ZedOps Staging console. Do not publish it to the live project.
 
@@ -54,4 +57,6 @@ Paths added for this module:
 - `staging_zedops_pars`
 - `staging_zedops_hidden`
 - `staging_zedops_drafts`
+- `staging_zedops_ingredient_map`
+- `staging_zedops_recipe`
 - `staging_zedops_price_approvals`
