@@ -17,6 +17,12 @@ function pounds(name) {
   return row.pounds;
 }
 
+test('a scaled recipe header names its Wednesday cook date', () => {
+  const sample = recipe.parseScaledRecipes('Scaled Recipes for Wednesday Nov 11, 2026\n');
+  assert.equal(sample.cookDate, '2026-11-11');
+  assert.equal(recipe.parseScaledRecipes(text).cookDate, '2026-11-04');
+});
+
 test('scaled recipe uses raw weights and does not double count', () => {
   assert.equal(parsed.cookDate, '2026-11-04');
   assert.ok(Math.abs(pounds('Mahatma Jasmine Rice') - 113.4) < 0.05);
@@ -160,7 +166,9 @@ test('a future store uses the supplies list, and two stores can save at once', a
 });
 
 test('a single approve writes once, and a listener cannot approve again', async () => {
-  assert.equal(order.recipeWeek('2026-11-04'), '2026-11-03');
+  assert.equal(order.recipeWeek('2026-11-04'), '2026-11-04');
+  assert.equal(order.recipeWeek('2026-11-11'), '2026-11-11');
+  assert.equal(order.recipeWeek('2026-11-03'), '2026-11-11');
   const purchases = parsed.purchases.map(function (row, index) {
     const copy = Object.assign({}, row);
     if (index === 0) {
@@ -184,7 +192,7 @@ test('a single approve writes once, and a listener cannot approve again', async 
   assert.equal(plan.lines[kept.key].pounds, kept.pounds);
 
   const db = store.createInventoryDb({ storage: { getItem: function () { return null; }, setItem: function () {} } });
-  await db.ref('staging_zedops_recipe/2026-11-03/stale_line').set({ name: 'Stale', pounds: 9, catalogId: 'bek__old' });
+  await db.ref('staging_zedops_recipe/2026-11-04/stale_line').set({ name: 'Stale', pounds: 9, catalogId: 'bek__old' });
   await db.ref('staging_zedops_recipe/2026-11-10/keep_me').set({ name: 'Other week', pounds: 1, catalogId: 'bek__1' });
   await db.ref('staging_zedops_ingredient_map/already_remembered').set({ name: 'Already', catalogId: 'bek__9', hideMode: '' });
   let updates = 0;
@@ -211,7 +219,7 @@ test('a single approve writes once, and a listener cannot approve again', async 
   assert.ok(Date.now() - started < 1000);
   assert.equal(updates, 1);
   assert.equal(sets, 0);
-  const week = (await realRef('staging_zedops_recipe/2026-11-03').once('value')).val();
+  const week = (await realRef('staging_zedops_recipe/2026-11-04').once('value')).val();
   assert.equal(week.stale_line, undefined);
   assert.equal(Object.keys(week).length, ordered.length);
   assert.equal((await realRef('staging_zedops_recipe/2026-11-10/keep_me/name').once('value')).val(), 'Other week');
@@ -220,9 +228,9 @@ test('a single approve writes once, and a listener cannot approve again', async 
   pageState.approvingRecipe = false;
   pageState.pendingRecipe = { cookDate: '2026-11-04', purchases: purchases };
   const again = order.claimApproval(pageState);
-  await storage.saveRecipeApproval(db, order.planRecipeApproval(again.purchases, '2026-11-03'));
+  await storage.saveRecipeApproval(db, order.planRecipeApproval(again.purchases, '2026-11-04'));
   assert.equal(updates, 2);
-  assert.equal(Object.keys((await realRef('staging_zedops_recipe/2026-11-03').once('value')).val()).length, ordered.length);
+  assert.equal(Object.keys((await realRef('staging_zedops_recipe/2026-11-04').once('value')).val()).length, ordered.length);
   const page = fs.readFileSync(path.join(__dirname, 'weekly-page.js'), 'utf8');
   assert.equal(page.includes('alert('), false);
   assert.equal(page.includes('confirm('), false);

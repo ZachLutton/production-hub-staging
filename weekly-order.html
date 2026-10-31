@@ -25,6 +25,8 @@
         .header { background: #2d5016; color: white; padding: 18px; border-radius: 8px; margin-bottom: 14px; text-align: center; }
         .back-btn { display: inline-block; background: white; color: #2d5016; text-decoration: none; font-weight: 700; padding: 8px 14px; border-radius: 6px; }
         .header-controls, .view-switch { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 12px; }
+        .view-switch button.active { background: #2d5016; color: white; }
+        .recipe-warn { color: #8a1f1f; font-weight: 700; }
         select, input[type="date"], button { padding: 10px 12px; font-size: 16px; border-radius: 4px; border: none; min-height: 44px; }
         button { background: #e8f5e0; color: #2d5016; font-weight: 700; cursor: pointer; border: 2px solid #2d5016; }
         .location-badge, .role-badge { display: inline-block; margin-top: 8px; padding: 4px 12px; border-radius: 20px; font-weight: 700; background: rgba(255,255,255,.15); }
@@ -82,7 +84,7 @@
             <div class="header-controls">
                 <label for="locationSelect">Store:</label>
                 <select id="locationSelect"></select>
-                <label for="weekSelect">Tuesday:</label>
+                <label for="weekSelect">Cook date:</label>
                 <input type="date" id="weekSelect">
                 <button type="button" id="pdfOrder">BEK order PDF</button>
                 <button type="button" id="pdfSpecial">Special order PDF</button>
@@ -96,6 +98,8 @@
             <div id="lastSaved">No changes yet</div>
             <div id="pageStatus" role="status" aria-live="polite"></div>
         </div>
+        <div id="storeView"><div id="itemTable"></div></div>
+        <div id="orderView" style="display:none;"><div class="panel" id="orderTable"></div></div>
         <div id="adminTools" style="display:none;">
             <div class="panel">
                 <h2>Scaled recipe list</h2>
@@ -113,8 +117,6 @@
             <div class="panel" id="guidePanel" style="display:none;"></div>
             <div class="panel" id="storePanel"></div>
         </div>
-        <div id="storeView"><div id="itemTable"></div></div>
-        <div id="orderView" style="display:none;"><div class="panel" id="orderTable"></div></div>
     </div>
     <script src="zedops/catalog.js"></script>
     <script src="zedops/schema.js"></script>

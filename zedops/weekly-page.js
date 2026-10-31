@@ -204,7 +204,7 @@
       db.ref(ZedStorage.PATHS.hidden + '/' + ZedStorage.MATCH_HIDDEN).once('value')
     ];
     if (ZedLocations.listSourceOf(loc) === 'inventory') {
-      jobs.push(db.ref('staging_weekly_orders/' + loc.id + '/' + week).once('value'));
+      jobs.push(db.ref('staging_weekly_orders/' + loc.id + '/' + legacyCountWeek()).once('value'));
       jobs.push(db.ref('staging_weekly_orders/' + loc.id + '/pars').once('value'));
     }
     return Promise.all(jobs).then(function (snaps) {
@@ -234,7 +234,7 @@
       }).then(function (snap) {
         state.allPars[loc.id] = snap.val() || {};
         if (ZedLocations.listSourceOf(loc) !== 'inventory') return null;
-        return db.ref('staging_weekly_orders/' + loc.id + '/' + state.weekKey).once('value').then(function (legacySnap) {
+        return db.ref('staging_weekly_orders/' + loc.id + '/' + legacyCountWeek()).once('value').then(function (legacySnap) {
           var counts = legacySnap.val() || {};
           return ensureInventory(loc).then(function (raw) {
             var sections = ZedWeekly.sectionsFromSnapshot(raw || {});
@@ -252,6 +252,22 @@
         }).catch(function () { state.legacyById[loc.id] = {}; });
       });
     }));
+  }
+
+  function legacyCountWeek() {
+    return state.weekKey ? ZedBek.addDays(state.weekKey, -8) : '';
+  }
+
+  function syncRecipeWarning() {
+    var pending = state.pendingRecipe;
+    var fileCook = pending ? ZedOrder.recipeWeek(pending.cookDate) : '';
+    var text = ZedBek.recipeCycleWarning(fileCook, state.weekKey);
+    var el = document.getElementById('recipeCycleWarning');
+    if (el) el.textContent = text;
+    var button = document.getElementById('approveRecipe');
+    if (button) button.disabled = !!text;
+    if (text) setPageStatus(text, true);
+    return text;
   }
 
   function reload() {
@@ -280,17 +296,48 @@
 
   function render() {
     var loc = currentStore();
-    document.getElementById('storeView').style.display = state.view === 'store' ? 'block' : 'none';
-    document.getElementById('orderView').style.display = state.view === 'order' ? 'block' : 'none';
+    var storeView = document.getElementById('storeView');
+    var orderView = document.getElementById('orderView');
+    if (storeView) storeView.style.display = state.view === 'store' ? 'block' : 'none';
+    if (orderView) orderView.style.display = state.view === 'order' ? 'block' : 'none';
+    var storeBtn = document.getElementById('showStore');
+    var orderBtn = document.getElementById('showOrder');
+    if (storeBtn) {
+      storeBtn.classList.toggle('active', state.view !== 'order');
+      storeBtn.setAttribute('aria-pressed', state.view !== 'order' ? 'true' : 'false');
+    }
+    if (orderBtn) {
+      orderBtn.classList.toggle('active', state.view === 'order');
+      orderBtn.setAttribute('aria-pressed', state.view === 'order' ? 'true' : 'false');
+    }
     var badge = document.getElementById('locationBadge');
     if (badge && loc) {
       var kind = ZedLocations.listSourceOf(loc) === 'catalog' ? 'Full BEK catalog' : 'Store supplies';
       badge.textContent = loc.name + ' · ' + kind + (ZedLocations.roleLabel(loc) ? ' · ' + ZedLocations.roleLabel(loc) : '');
     }
-    document.getElementById('dueLine').textContent = 'Counts are due by the end of Tuesday ' + state.weekKey + '. Food need comes from the approved scaled recipe. Supplies use the standing par for that store. BEK guide pars are not used for the order.';
-    if (state.view === 'order') renderOrder();
-    else renderStore(loc);
-    renderAdmin(loc);
+    var due = document.getElementById('dueLine');
+    if (due) {
+      var cycle = state.weekKey ? ZedBek.formatCycle(state.weekKey) : '';
+      due.textContent = (cycle ? cycle + '. ' : '') + 'Food need comes from the approved scaled recipe. Supplies use the standing par for that store. BEK guide pars are not used for the order.';
+    }
+    try {
+      if (state.view === 'order') renderOrder();
+      else renderStore(loc);
+      renderAdmin(loc);
+    } catch (err) {
+      showError(err);
+    }
+  }
+
+  function showView(view) {
+    state.view = view === 'order' ? 'order' : 'store';
+    try {
+      var next = location.pathname + location.search + (state.view === 'order' ? '#order' : '');
+      history.replaceState(null, '', next);
+    } catch (err) {}
+    render();
+    var pane = document.getElementById(state.view === 'order' ? 'orderView' : 'storeView');
+    if (pane && pane.scrollIntoView) pane.scrollIntoView({ block: 'nearest' });
   }
 
   function renderStore(loc) {
@@ -433,6 +480,7 @@
     if (panel.getAttribute('data-built') === '1' && panel._pending === pending) {
       panel.style.display = 'block';
       updateMatchCount();
+      syncRecipeWarning();
       return;
     }
     var items = catalogChoices();
@@ -442,7 +490,7 @@
     panel.setAttribute('data-built', '1');
     var counts = ZedOrder.matchCounts(pending.purchases);
     var hiddenRows = pending.purchases.filter(function (row) { return row.hideMode; }).length;
-    panel.innerHTML = '<h2>Review raw purchases before the order is applied</h2><p>Cook date ' + esc(pending.cookDate || '') +
+    panel.innerHTML = '<h2>Review raw purchases before the order is applied</h2><p id="recipeCycleWarning" class="recipe-warn"></p><p>Cook date ' + esc(pending.cookDate || '') +
       '. These are raw weights. Cooked totals and sub-recipe outputs are not ordered twice. A match is saved as soon as you confirm that row. The week\'s order uses them only after you approve.</p>' +
       '<div class="match-tools"><input id="matchFilter" type="search" placeholder="Find an ingredient" autocomplete="off" enterkeyhint="search"><strong id="matchCount">' +
       counts.matched + ' matched, ' + counts.unmatched + ' unmatched' + (hiddenRows ? ', ' + hiddenRows + ' hidden' : '') + '</strong>' +
@@ -467,6 +515,7 @@
           '</td></tr>';
       }).join('') + '</tbody></table><p class="diff-note">Choose No match when nothing fits. Hiding a weighed ingredient asks you to move the weight onto another BEK item, or to leave it off the order.</p><button type="button" id="approveRecipe">Approve recipe needs</button> <button type="button" id="discardRecipe">Discard</button>';
     document.getElementById('approveRecipe').onclick = approveRecipe;
+    syncRecipeWarning();
     document.getElementById('discardRecipe').onclick = function () {
       state.pendingRecipe = null;
       renderRecipeReview();
@@ -554,25 +603,31 @@
       button.disabled = true;
       if (button.blur) button.blur();
     }
-    var week = ZedOrder.recipeWeek(pending.cookDate);
-    if (!week) {
+    var fileCook = ZedOrder.recipeWeek(pending.cookDate);
+    if (!fileCook) {
       state.approvingRecipe = false;
       state.pendingRecipe = pending;
       setPageStatus('That recipe has no cook date, so nothing was saved.', true);
       return;
     }
-    state.weekKey = week;
-    var weekInput = document.getElementById('weekSelect');
-    if (weekInput && weekInput.value !== week) weekInput.value = week;
+    var mismatch = ZedBek.recipeCycleWarning(fileCook, state.weekKey);
+    if (mismatch) {
+      state.approvingRecipe = false;
+      state.pendingRecipe = pending;
+      setPageStatus(mismatch, true);
+      renderRecipeReview();
+      return;
+    }
+    var week = state.weekKey;
     var plan = ZedOrder.planRecipeApproval(pending.purchases, week);
-    setPageStatus('Saving recipe needs for the week of ' + week + '…');
+    setPageStatus('Saving recipe needs for ' + ZedBek.shortDate(week) + '…');
     renderRecipeReview();
     ZedStorage.saveRecipeApproval(db, plan).then(function () {
       Object.keys(plan.matches).forEach(function (key) { state.matches[key] = plan.matches[key]; });
       return reload();
     }).then(function () {
       markSaved();
-      setPageStatus('Recipe needs saved for the week of ' + week + '.');
+      setPageStatus('Recipe needs saved for ' + ZedBek.formatCycle(week) + '.');
     }).catch(function (err) {
       state.approvingRecipe = false;
       state.pendingRecipe = pending;
@@ -670,13 +725,18 @@
     reload();
   });
   document.getElementById('weekSelect').addEventListener('change', function () {
-    var next = this.value || ZedBek.countWeekTuesday(new Date());
-    if (next === state.weekKey) return;
-    state.weekKey = next;
+    var picked = ZedBek.selectCookDate(this.value || ZedBek.cycleCookForDay(ZedBek.chicagoParts(new Date()).ymd));
+    if (this.value !== picked) this.value = picked;
+    if (picked === state.weekKey) {
+      syncRecipeWarning();
+      render();
+      return;
+    }
+    state.weekKey = picked;
     reload();
   });
-  document.getElementById('showStore').addEventListener('click', function () { state.view = 'store'; history.replaceState(null, '', 'weekly-order.html'); render(); });
-  document.getElementById('showOrder').addEventListener('click', function () { state.view = 'order'; history.replaceState(null, '', 'weekly-order.html#order'); render(); });
+  document.getElementById('showStore').addEventListener('click', function () { showView('store'); });
+  document.getElementById('showOrder').addEventListener('click', function () { showView('order'); });
   document.getElementById('recipeFile').addEventListener('change', function () {
     var file = this.files && this.files[0];
     if (!file) return;
@@ -854,7 +914,7 @@
     reader.readAsArrayBuffer(file);
   });
   function bekOrderLines() {
-    var lines = ['Week of Tuesday ' + state.weekKey, 'Food need is the approved scaled recipe. Supplies use the standing par for that store. BEK guide pars are not used. Cases round up.', ''];
+    var lines = [ZedBek.formatCycle(state.weekKey), 'Food need is the approved scaled recipe for this cook date. Supplies use the standing par for that store. BEK guide pars are not used. Cases round up.', ''];
     var list = stores();
     ZedCatalog.asList(state.catalog.shelf.guide).concat(ZedCatalog.asList(state.catalog.shelf.special)).forEach(function (id) {
       var item = state.catalog.items[id];
@@ -871,7 +931,7 @@
     ZedPdf.downloadPdf('bek-order-' + state.weekKey + '.pdf', ZedPdf.buildPdf({ title: 'Weekly BEK order', lines: bekOrderLines() }));
   });
   document.getElementById('pdfSpecial').addEventListener('click', function () {
-    var lines = ['Send this list direct to the BEK rep.', 'Week of Tuesday ' + state.weekKey, 'Food on this list uses the approved scaled recipe, not the BEK par.', ''];
+    var lines = ['Send this list direct to the BEK rep.', ZedBek.formatCycle(state.weekKey), 'Food on this list uses the approved scaled recipe, not the BEK par.', ''];
     state.rows.filter(function (row) { return row.source === 'special'; }).forEach(function (row) {
       var hand = handOf(row);
       lines.push((row.item.temporary ? '[TEMPORARY] ' : '') + row.item.name + (row.item.itemNumber ? ' #' + row.item.itemNumber : ' (no BEK #)') +
@@ -886,9 +946,17 @@
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('main-content').style.display = 'block';
     document.getElementById('roleBadge').textContent = state.role === 'admin' ? 'Admin' : 'Team';
-    state.weekKey = ZedBek.countWeekTuesday(new Date());
+    state.weekKey = ZedBek.cycleCookForDay(ZedBek.chicagoParts(new Date()).ymd);
     document.getElementById('weekSelect').value = state.weekKey;
-    ZedBek.loadSeed().then(function (seed) { return ZedBek.prepareDatabase(db, seed); }).then(function () {
+    ZedBek.loadSeed().then(function (seed) { return ZedBek.prepareDatabase(db, seed); }).then(function (moves) {
+      if (moves && moves.length) {
+        var shown = moves.slice(0, 4).map(function (move) {
+          return move.kind + ' ' + move.from + ' is now cook date ' + move.to;
+        }).join('. ');
+        setPageStatus('Saved weeks now use the cook date. ' + shown + (moves.length > 4 ? '. And ' + (moves.length - 4) + ' more.' : '.'));
+      }
+      return null;
+    }).then(function () {
       return Promise.all([
         db.ref(ZedStorage.PATHS.catalog).once('value'),
         db.ref(ZedStorage.PATHS.locations).once('value')

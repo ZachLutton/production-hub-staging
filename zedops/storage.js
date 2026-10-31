@@ -196,6 +196,33 @@
     return chain;
   }
 
+  // One recipe line at a time, including a Tuesday key that moved onto the cook date.
+  function writeMigratedRecipe(db, before, after) {
+    var previous = before || {};
+    var next = after || {};
+    var weeks = {};
+    Object.keys(previous).forEach(function (key) { weeks[key] = true; });
+    Object.keys(next).forEach(function (key) { weeks[key] = true; });
+    var chain = Promise.resolve();
+    Object.keys(weeks).forEach(function (week) {
+      var beforeLines = previous[week] || {};
+      var afterLines = next[week] || {};
+      var keys = {};
+      Object.keys(beforeLines).forEach(function (key) { keys[key] = true; });
+      Object.keys(afterLines).forEach(function (key) { keys[key] = true; });
+      Object.keys(keys).forEach(function (lineId) {
+        var had = Object.prototype.hasOwnProperty.call(beforeLines, lineId);
+        var has = Object.prototype.hasOwnProperty.call(afterLines, lineId);
+        if (has && (!had || JSON.stringify(beforeLines[lineId]) !== JSON.stringify(afterLines[lineId]))) {
+          chain = chain.then(function () { return setRecipeLine(db, week, lineId, afterLines[lineId]); });
+        } else if (had && !has) {
+          chain = chain.then(function () { return setRecipeLine(db, week, lineId, null); });
+        }
+      });
+    });
+    return chain;
+  }
+
   return {
     PATHS: PATHS,
     assertWritable: assertWritable,
@@ -214,6 +241,7 @@
     applyWrites: applyWrites,
     approvalUpdate: approvalUpdate,
     savePriceApproval: savePriceApproval,
-    writeMigratedCounts: writeMigratedCounts
+    writeMigratedCounts: writeMigratedCounts,
+    writeMigratedRecipe: writeMigratedRecipe
   };
 });

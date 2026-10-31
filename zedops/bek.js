@@ -261,22 +261,77 @@
   }
 
   function addDays(ymd, days) {
-    var bits = ymd.split('-').map(Number);
+    var bits = String(ymd || '').split('-').map(Number);
     var date = new Date(Date.UTC(bits[0], bits[1] - 1, bits[2] + days));
     return date.toISOString().slice(0, 10);
+  }
+
+  // Weekday of a calendar date. UTC noon keeps America/Chicago dates from shifting a day.
+  function weekdayOf(ymd) {
+    var bits = String(ymd || '').split('-').map(Number);
+    if (bits.length !== 3 || !bits[0] || !bits[1] || !bits[2]) return -1;
+    return new Date(Date.UTC(bits[0], bits[1] - 1, bits[2])).getUTCDay();
+  }
+
+  var WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  function shortDate(ymd) {
+    var bits = String(ymd || '').split('-');
+    if (bits.length !== 3) return '';
+    return WEEKDAYS[weekdayOf(ymd)] + ' ' + Number(bits[1]) + '/' + Number(bits[2]);
+  }
+
+  // Counts are due 8 days before the cook date, the order goes in the next day, delivery is 4 days before the cook.
+  function cycleForCook(cook) {
+    return {
+      cook: cook,
+      countsDue: addDays(cook, -8),
+      orderSubmit: addDays(cook, -7),
+      delivery: addDays(cook, -4)
+    };
+  }
+
+  function formatCycle(cook) {
+    if (!cook || weekdayOf(cook) < 0) return '';
+    var cycle = cycleForCook(cook);
+    return 'Counts due end of ' + shortDate(cycle.countsDue) + ' · Order ' + shortDate(cycle.orderSubmit) + ' · Delivery ' + shortDate(cycle.delivery) + ' · Cook ' + shortDate(cycle.cook);
+  }
+
+  // The order cycle a calendar day belongs to. Its cook date is 8 days after that day's count Tuesday.
+  function cycleCookForDay(ymd) {
+    var due = addDays(ymd, 2 - weekdayOf(ymd));
+    return addDays(due, 8);
+  }
+
+  // The cook-date picker keeps a Wednesday. Any other day snaps to that day's order cycle.
+  function selectCookDate(ymd) {
+    if (weekdayOf(ymd) === 3) return ymd;
+    return cycleCookForDay(ymd);
+  }
+
+  // Older saves used the Tuesday before the Wednesday cook. 2026-11-03 becomes cook date 2026-11-04.
+  function cookKeyFromLegacyWeek(week) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(week || ''))) return week;
+    if (weekdayOf(week) !== 2) return week;
+    return addDays(week, 1);
+  }
+
+  function recipeCycleWarning(fileCook, cycleCook) {
+    if (!fileCook || !cycleCook || fileCook === cycleCook) return '';
+    return 'This file is the scaled recipe for ' + shortDate(fileCook) + '. This cycle cooks ' + shortDate(cycleCook) + '. Switch the cook date to ' + shortDate(fileCook) + ' before approving.';
   }
 
   // The count is due at the end of Tuesday. Monday looks ahead to that Tuesday.
   // Wednesday through Saturday still show the Tuesday that just closed.
   function countWeekTuesday(now) {
-    var parts = chicagoParts(now || new Date());
-    return addDays(parts.ymd, 2 - parts.dow);
+    var ymd = chicagoParts(now || new Date()).ymd;
+    return addDays(ymd, 2 - weekdayOf(ymd));
   }
 
   function isLastMonday(now) {
-    var parts = chicagoParts(now || new Date());
-    if (parts.dow !== 1) return false;
-    return addDays(parts.ymd, 7).slice(0, 7) !== parts.ymd.slice(0, 7);
+    var ymd = chicagoParts(now || new Date()).ymd;
+    if (weekdayOf(ymd) !== 1) return false;
+    return addDays(ymd, 7).slice(0, 7) !== ymd.slice(0, 7);
   }
 
   function monthKey(now) {
@@ -512,21 +567,39 @@
       if (version > d.schema.SCHEMA_VERSION) {
         throw new Error('This ZedOps data is newer than this page. Reload after the site is updated.');
       }
-      if (version >= d.schema.SCHEMA_VERSION) return seedMissing(db, buildCatalog(seed), d.locations.defaultLocations());
+      if (version >= d.schema.SCHEMA_VERSION) {
+        return seedMissing(db, buildCatalog(seed), d.locations.defaultLocations()).then(function () { return []; });
+      }
       return Promise.all([
         db.ref(paths.catalog).once('value'),
         db.ref(paths.locations).once('value'),
-        db.ref(paths.counts).once('value')
+        db.ref(paths.counts).once('value'),
+        db.ref(paths.recipe).once('value')
       ]).then(function (snaps) {
         var beforeCatalog = snaps[0].val();
         var beforeCounts = snaps[2].val() || {};
+        var beforeRecipe = snaps[3].val() || {};
         var migrated = d.schema.migrateAll({
           schemaVersion: version,
           catalog: beforeCatalog || { schemaVersion: 0, items: {}, shelf: {} },
           locations: snaps[1].val() || {},
-          counts: beforeCounts
+          counts: beforeCounts,
+          recipe: beforeRecipe
+        });
+        var moves = [];
+        Object.keys(beforeRecipe).forEach(function (week) {
+          var next = cookKeyFromLegacyWeek(week);
+          if (next !== week) moves.push({ kind: 'recipe', from: week, to: next });
+        });
+        Object.keys(beforeCounts).forEach(function (loc) {
+          Object.keys(beforeCounts[loc] || {}).forEach(function (week) {
+            var next = cookKeyFromLegacyWeek(week);
+            if (next !== week) moves.push({ kind: 'counts for ' + loc, from: week, to: next });
+          });
         });
         return d.storage.writeMigratedCounts(db, beforeCounts, migrated.counts || {}).then(function () {
+          return d.storage.writeMigratedRecipe(db, beforeRecipe, migrated.recipe || {});
+        }).then(function () {
           if (!looksLikeLegacyItemList(beforeCatalog)) return null;
           return rewriteLegacyCatalog(db, beforeCatalog, migrated.catalog);
         }).then(function () {
@@ -535,7 +608,7 @@
           return seedMissing(db, buildCatalog(seed), d.locations.defaultLocations());
         }).then(function () {
           return db.ref(paths.schema).set({ schemaVersion: d.schema.SCHEMA_VERSION });
-        });
+        }).then(function () { return moves; });
       });
     });
   }
@@ -593,6 +666,14 @@
     planUpload: planUpload,
     chicagoParts: chicagoParts,
     addDays: addDays,
+    weekdayOf: weekdayOf,
+    shortDate: shortDate,
+    cycleForCook: cycleForCook,
+    formatCycle: formatCycle,
+    cycleCookForDay: cycleCookForDay,
+    selectCookDate: selectCookDate,
+    cookKeyFromLegacyWeek: cookKeyFromLegacyWeek,
+    recipeCycleWarning: recipeCycleWarning,
     countWeekTuesday: countWeekTuesday,
     isLastMonday: isLastMonday,
     monthKey: monthKey,

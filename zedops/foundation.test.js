@@ -153,9 +153,9 @@ test('schema migrations are idempotent and do not drop an edited count unit', ()
   once.catalog.items.bek__028201.countUnit = 'bottle';
   const twice = schema.migrateAll(once);
   assert.deepEqual(twice, schema.migrateAll(twice));
-  assert.equal(once.counts.a['2026-10-27'].bek__028201, 0.25);
-  assert.equal(once.counts.a['2026-10-27']['028201'], undefined);
-  assert.equal(once.counts.a['2026-10-27'].bek__999, 3);
+  assert.equal(once.counts.a['2026-10-28'].bek__028201, 0.25);
+  assert.equal(once.counts.a['2026-10-27'], undefined);
+  assert.equal(once.counts.a['2026-10-28'].bek__999, 3);
   assert.equal(twice.catalog.items.bek__028201.countUnit, 'bottle');
   assert.equal(twice.catalog.shelf.guide[0], 'bek__028201');
   assert.equal(twice.locations.locations.bitters.isCulinaryCenter, true);
@@ -190,6 +190,46 @@ test('the count week is the Tuesday it is due, in Chicago, and prices wait for t
   assert.equal(bek.countWeekTuesday(new Date('2026-10-26T15:00:00-05:00')), '2026-10-27');
   assert.equal(bek.countWeekTuesday(new Date('2026-10-27T20:00:00-05:00')), '2026-10-27');
   assert.equal(bek.countWeekTuesday(new Date('2026-10-28T09:00:00-05:00')), '2026-10-27');
+  assert.equal(bek.weekdayOf('2026-11-03'), 2);
+  assert.equal(bek.weekdayOf('2026-11-04'), 3);
+  assert.equal(bek.weekdayOf('2026-11-07'), 6);
+  assert.equal(bek.weekdayOf('2026-11-11'), 3);
+  assert.equal(bek.shortDate('2026-11-03'), 'Tue 11/3');
+  assert.equal(bek.shortDate('2026-11-04'), 'Wed 11/4');
+  const cycle = bek.cycleForCook('2026-11-11');
+  assert.equal(cycle.countsDue, '2026-11-03');
+  assert.equal(cycle.orderSubmit, '2026-11-04');
+  assert.equal(cycle.delivery, '2026-11-07');
+  assert.equal(cycle.cook, '2026-11-11');
+  assert.equal(bek.formatCycle('2026-11-11'), 'Counts due end of Tue 11/3 · Order Wed 11/4 · Delivery Sat 11/7 · Cook Wed 11/11');
+  assert.equal(bek.cycleCookForDay('2026-11-03'), '2026-11-11');
+  assert.equal(bek.cycleCookForDay('2026-11-04'), '2026-11-11');
+  assert.equal(bek.cycleCookForDay('2026-10-31'), '2026-11-04');
+  assert.equal(bek.selectCookDate('2026-11-11'), '2026-11-11');
+  assert.equal(bek.selectCookDate('2026-11-03'), '2026-11-11');
+  assert.equal(bek.cookKeyFromLegacyWeek('2026-11-03'), '2026-11-04');
+  assert.equal(bek.cookKeyFromLegacyWeek('2026-11-04'), '2026-11-04');
+  assert.equal(schema.cookKeyFromLegacyWeek('2026-11-03'), '2026-11-04');
+  assert.equal(bek.recipeCycleWarning('2026-11-04', '2026-11-11').includes('Wed 11/4'), true);
+  assert.equal(bek.recipeCycleWarning('2026-11-11', '2026-11-11'), '');
+  const moved = schema.migrateAll({
+    schemaVersion: 2,
+    catalog: { schemaVersion: 2, items: {}, shelf: { guide: [], special: [], vendorChecks: [] } },
+    locations: {},
+    counts: { hub: { '2026-11-03': { bek__1: 4 } } },
+    recipe: { '2026-11-03': { almond_meal: { name: 'Almond Meal', pounds: 5.2, catalogId: 'bek__flour' } } }
+  });
+  assert.equal(moved.recipe['2026-11-04'].almond_meal.pounds, 5.2);
+  assert.equal(moved.recipe['2026-11-03'], undefined);
+  assert.equal(moved.counts.hub['2026-11-04'].bek__1, 4);
+  assert.equal(moved.counts.hub['2026-11-03'], undefined);
+  assert.equal(schema.migrateAll(moved).recipe['2026-11-04'].almond_meal.pounds, 5.2);
+  const page = fs.readFileSync(path.join(root, 'weekly-order.html'), 'utf8');
+  const logic = fs.readFileSync(path.join(root, 'zedops', 'weekly-page.js'), 'utf8');
+  assert.equal(page.indexOf('id="storeView"') < page.indexOf('id="adminTools"'), true);
+  assert.equal(page.indexOf('id="orderView"') < page.indexOf('id="adminTools"'), true);
+  assert.equal(logic.includes('function showView'), true);
+  assert.equal(logic.includes('formatCycle'), true);
   assert.equal(bek.isLastMonday(new Date('2026-10-26T21:30:00-05:00')), true);
   assert.equal(bek.isLastMonday(new Date('2026-10-19T12:00:00-05:00')), false);
   assert.equal(bek.isLastMonday(new Date('2026-10-27T12:00:00-05:00')), false);

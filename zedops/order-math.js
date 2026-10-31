@@ -175,14 +175,30 @@
     return { ok: true, hideMode: 'ignore', catalogId: '', pounds: pounds };
   }
 
-  // Tuesday of the count week for a cook date. 2026-11-04 (Wednesday) is the week of 2026-11-03.
-  function recipeWeek(cookDate) {
-    var day = new Date(String(cookDate || '') + 'T12:00:00Z');
-    if (!isFinite(day.getTime())) return '';
-    day.setUTCDate(day.getUTCDate() - ((day.getUTCDay() - 2 + 7) % 7));
+  function calendarDay(ymd) {
+    var bits = String(ymd || '').split('-').map(Number);
+    if (bits.length !== 3 || !bits[0] || !bits[1] || !bits[2]) return null;
+    return new Date(Date.UTC(bits[0], bits[1] - 1, bits[2]));
+  }
+
+  function addCalendarDays(ymd, days) {
+    var day = calendarDay(ymd);
+    if (!day) return '';
+    day.setUTCDate(day.getUTCDate() + days);
     var month = String(day.getUTCMonth() + 1).padStart(2, '0');
     var date = String(day.getUTCDate()).padStart(2, '0');
     return day.getUTCFullYear() + '-' + month + '-' + date;
+  }
+
+  // The saved week is the cook date. A Wednesday stays that date. Any other day
+  // belongs to the order cycle whose counts are due on its Tuesday, eight days before the cook.
+  function recipeWeek(cookDate) {
+    var ymd = String(cookDate || '');
+    var day = calendarDay(ymd);
+    if (!day) return '';
+    if (day.getUTCDay() === 3) return ymd;
+    var countsDue = addCalendarDays(ymd, 2 - day.getUTCDay());
+    return addCalendarDays(countsDue, 8);
   }
 
   // One approval replaces that week's lines. Ignored or unmatched rows are left out, so the weight is not ordered.

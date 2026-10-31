@@ -4,7 +4,38 @@
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (root) root.ZedSchema = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
-  var SCHEMA_VERSION = 2;
+  var SCHEMA_VERSION = 3;
+
+  function weekdayOf(ymd) {
+    var bits = String(ymd || '').split('-').map(Number);
+    if (bits.length !== 3 || !bits[0] || !bits[1] || !bits[2]) return -1;
+    return new Date(Date.UTC(bits[0], bits[1] - 1, bits[2])).getUTCDay();
+  }
+
+  function addDaysYmd(ymd, days) {
+    var bits = String(ymd).split('-').map(Number);
+    return new Date(Date.UTC(bits[0], bits[1] - 1, bits[2] + days)).toISOString().slice(0, 10);
+  }
+
+  // Tuesday keys were the day before the cook. A Wednesday key is already the cook date.
+  function cookKeyFromLegacyWeek(week) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(week || ''))) return week;
+    if (weekdayOf(week) !== 2) return week;
+    return addDaysYmd(week, 1);
+  }
+
+  function shiftWeekMap(weeks) {
+    var out = {};
+    Object.keys(weeks || {}).forEach(function (week) {
+      var next = cookKeyFromLegacyWeek(week);
+      if (!out[next]) out[next] = {};
+      var dest = out[next];
+      Object.keys(weeks[week] || {}).forEach(function (key) {
+        if (!Object.prototype.hasOwnProperty.call(dest, key)) dest[key] = weeks[week][key];
+      });
+    });
+    return out;
+  }
 
   function catalogApi() {
     if (typeof require === 'function') {
@@ -139,7 +170,7 @@
       out[loc] = {};
       Object.keys(weeks).forEach(function (week) {
         var bag = weeks[week] || {};
-        out[loc][week] = {};
+        if (!out[loc][week]) out[loc][week] = {};
         Object.keys(bag).forEach(function (key) {
           var value = bag[key];
           var next = key;
@@ -153,8 +184,13 @@
           out[loc][week][next] = value;
         });
       });
+      out[loc] = shiftWeekMap(out[loc]);
     });
     return out;
+  }
+
+  function migrateRecipeWeeks(recipe) {
+    return shiftWeekMap(recipe || {});
   }
 
   function migrateAll(root) {
@@ -175,6 +211,7 @@
     data.catalog = migrateCatalog(data.catalog || { schemaVersion: 0, items: {}, shelf: {} });
     data.locations = migrateLocations(data.locations || {});
     data.counts = migrateCounts(data.counts || {}, data.catalog);
+    data.recipe = migrateRecipeWeeks(data.recipe || {});
     data.pars = data.pars && typeof data.pars === 'object' ? data.pars : {};
     data.hidden = data.hidden && typeof data.hidden === 'object' ? data.hidden : {};
     data.priceApprovals = data.priceApprovals && typeof data.priceApprovals === 'object' ? data.priceApprovals : {};
@@ -189,6 +226,8 @@
     migrateCatalog: migrateCatalog,
     migrateLocations: migrateLocations,
     migrateCounts: migrateCounts,
+    migrateRecipeWeeks: migrateRecipeWeeks,
+    cookKeyFromLegacyWeek: cookKeyFromLegacyWeek,
     migrateAll: migrateAll
   };
 });

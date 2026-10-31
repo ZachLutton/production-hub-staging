@@ -37,8 +37,10 @@ function startServer() {
 
 function loadPage(port, page) {
   return new Promise(function (resolve, reject) {
+    const chromeDir = fs.mkdtempSync('/tmp/zedops-chrome-dump-');
     const chrome = spawn('google-chrome', [
       '--headless=new', '--no-sandbox', '--disable-gpu',
+      '--user-data-dir=' + chromeDir,
       '--virtual-time-budget=8000', '--timeout=20000',
       '--dump-dom', 'http://127.0.0.1:' + port + '/' + page
     ]);
@@ -71,6 +73,70 @@ test('changed pages load in a headless browser', { timeout: 120000 }, async () =
       assert.equal(/Uncaught|SyntaxError|is not defined/.test(result.err), false, page + '\n' + result.err.slice(-1500));
     }
   } finally {
+    server.server.close();
+  }
+});
+
+test('the store and order buttons switch the visible list', { timeout: 60000 }, async () => {
+  const server = await startServer();
+  const chromeDir = fs.mkdtempSync('/tmp/zedops-chrome-');
+  const chrome = spawn('google-chrome', [
+    '--headless=new', '--no-sandbox', '--disable-gpu',
+    '--user-data-dir=' + chromeDir,
+    '--remote-debugging-port=9341', '--remote-debugging-address=127.0.0.1',
+    'about:blank'
+  ], { stdio: ['ignore', 'ignore', 'pipe'] });
+  let debugError = '';
+  chrome.stderr.on('data', function (buf) { debugError += buf; });
+  function sleep(ms) { return new Promise(function (resolve) { setTimeout(resolve, ms); }); }
+  try {
+    let list = null;
+    for (let i = 0; i < 30 && !list; i++) {
+      await sleep(200);
+      try { list = await fetch('http://127.0.0.1:9341/json/list').then(function (res) { return res.json(); }); } catch (e) {}
+    }
+    assert.ok(list, 'Chrome did not open a debug port\n' + debugError.slice(-500));
+    const page = list.find(function (tab) { return tab.type === 'page' && tab.webSocketDebuggerUrl; });
+    const ws = new WebSocket(page.webSocketDebuggerUrl);
+    let seq = 0;
+    const pending = new Map();
+    const logs = [];
+    ws.addEventListener('message', function (ev) {
+      const msg = JSON.parse(ev.data);
+      if (msg.id && pending.has(msg.id)) { pending.get(msg.id)(msg); pending.delete(msg.id); }
+      if (msg.method === 'Runtime.exceptionThrown') {
+        const detail = msg.params.exceptionDetails;
+        logs.push(detail.text + ' ' + (detail.exception && detail.exception.description));
+      }
+    });
+    function send(method, params) {
+      const id = ++seq;
+      return new Promise(function (resolve) {
+        pending.set(id, resolve);
+        ws.send(JSON.stringify({ id: id, method: method, params: params }));
+      });
+    }
+    await new Promise(function (resolve) { ws.addEventListener('open', resolve); });
+    await send('Runtime.enable');
+    await send('Page.enable');
+    await send('Page.navigate', { url: 'http://127.0.0.1:' + server.port + '/weekly-order.html' });
+    await sleep(2000);
+    const evaluated = await send('Runtime.evaluate', {
+      expression: "(() => { const snap = () => ({ store: document.getElementById('storeView').style.display, order: document.getElementById('orderView').style.display, pressed: document.getElementById('showOrder').getAttribute('aria-pressed') }); const before = snap(); document.getElementById('showOrder').click(); const afterOrder = snap(); document.getElementById('showStore').click(); const afterStore = snap(); return JSON.stringify({ before, afterOrder, afterStore }); })()",
+      returnByValue: true
+    });
+    const value = evaluated.result && evaluated.result.result && evaluated.result.result.value;
+    assert.equal(logs.filter(function (line) { return /SyntaxError|is not defined|Uncaught/.test(line); }).join('\n'), '');
+    const body = JSON.parse(value);
+    assert.equal(body.afterOrder.order, 'block', JSON.stringify(body));
+    assert.equal(body.afterOrder.store, 'none', JSON.stringify(body));
+    assert.equal(body.afterOrder.pressed, 'true');
+    assert.equal(body.afterStore.store, 'block');
+    assert.equal(body.afterStore.order, 'none');
+    assert.equal(body.afterStore.pressed, 'false');
+    ws.close();
+  } finally {
+    chrome.kill('SIGKILL');
     server.server.close();
   }
 });
