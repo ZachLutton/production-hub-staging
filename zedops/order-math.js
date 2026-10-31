@@ -61,9 +61,18 @@
   }
 
   // Food is ordered from the approved recipe only. A missing recipe is zero, not the BEK guide par.
-  // Supplies use the standing par set for that store. guidePar is not an input here.
+  // A plate-list package that maps to a BEK item wins over a standing par.
+  // Other supplies use the standing par set for that store. guidePar is not an input here.
   function orderNeed(item, input) {
     input = input || {};
+    if (input.plateList) {
+      return {
+        quantity: Number(input.plateList.quantity) || 0,
+        unit: (input.plateList && input.plateList.unit) || 'each',
+        eachFactor: null,
+        source: 'plate list'
+      };
+    }
     if (isFoodItem(item)) {
       var recipeQty = input.recipe ? Number(input.recipe.quantity) || 0 : 0;
       if (!(recipeQty > 0)) return { quantity: 0, unit: 'lb', eachFactor: null, source: 'recipe' };
