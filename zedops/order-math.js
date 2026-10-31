@@ -62,18 +62,78 @@
     return item.kind === 'special' && /salmon|mahi|filet/i.test(item.name || '');
   }
 
-  function suggestMatches(ingredientName, items, limit) {
-    var needle = String(ingredientName || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-    var tokens = needle.split(' ').filter(function (word) { return word.length > 2; });
-    var ranked = (items || []).map(function (item) {
-      var hay = (item.name + ' ' + (item.brand || '')).toLowerCase();
+  function fold(value) {
+    return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+
+  function fuzzy(needle, hay) {
+    if (!needle || needle.length < 4) return false;
+    var i = 0;
+    var first = -1;
+    var last = -1;
+    for (var c = 0; c < hay.length && i < needle.length; c++) {
+      if (hay.charAt(c) === needle.charAt(i)) {
+        if (first < 0) first = c;
+        last = c;
+        i++;
+      }
+    }
+    return i === needle.length && (last - first) <= needle.length * 3;
+  }
+
+  function tokenHit(token, hay) {
+    if (!token) return false;
+    if (hay.indexOf(token) !== -1) return true;
+    var words = hay.split(' ');
+    for (var i = 0; i < words.length; i++) {
+      if (words[i].indexOf(token) === 0) return true;
+    }
+    return false;
+  }
+
+  // Case-insensitive search across item name, brand, and item number.
+  function filterCatalog(query, items) {
+    var q = fold(query);
+    var compact = q.replace(/ /g, '');
+    var ranked = [];
+    (items || []).forEach(function (item) {
+      if (!item) return;
+      var name = fold(item.name);
+      var brand = fold(item.brand);
+      var num = String(item.itemNumber || '').toLowerCase().replace(/\s+/g, '');
+      var hay = fold(name + ' ' + brand + ' ' + num);
+      var flat = hay.replace(/ /g, '');
       var score = 0;
-      if (hay.indexOf(needle) !== -1 && needle.length > 3) score += 5;
-      tokens.forEach(function (word) { if (hay.indexOf(word) !== -1) score += 1; });
-      return { item: item, score: score };
-    }).filter(function (row) { return row.score > 0; });
-    ranked.sort(function (a, b) { return b.score - a.score; });
-    return ranked.slice(0, limit || 3).map(function (row) { return row.item; });
+      if (!q) score = 1;
+      else if (num && compact && num.indexOf(compact) !== -1) score = 80;
+      else if (hay.indexOf(q) !== -1) score = 50;
+      else {
+        var tokens = q.split(' ').filter(Boolean);
+        var hit = tokens.filter(function (token) { return tokenHit(token, hay); }).length;
+        if (tokens.length && hit === tokens.length) score = 30;
+        else if (fuzzy(compact, flat)) score = 10;
+      }
+      if (score) ranked.push({ item: item, score: score, name: item.name || '' });
+    });
+    ranked.sort(function (a, b) {
+      if (b.score !== a.score) return b.score - a.score;
+      return a.name < b.name ? -1 : (a.name > b.name ? 1 : 0);
+    });
+    return ranked.map(function (row) { return row.item; });
+  }
+
+  function matchCounts(rows) {
+    var matched = 0;
+    var unmatched = 0;
+    (rows || []).forEach(function (row) {
+      if (row && row.catalogId) matched += 1;
+      else unmatched += 1;
+    });
+    return { matched: matched, unmatched: unmatched, total: matched + unmatched };
+  }
+
+  function suggestMatches(ingredientName, items, limit) {
+    return filterCatalog(ingredientName, items).slice(0, limit || 3);
   }
 
   return {
@@ -83,6 +143,8 @@
     casesToOrder: casesToOrder,
     needInCountUnit: needInCountUnit,
     isFoodItem: isFoodItem,
+    filterCatalog: filterCatalog,
+    matchCounts: matchCounts,
     suggestMatches: suggestMatches
   };
 });

@@ -41,6 +41,19 @@
         .need-order { color: #b80000; font-weight: 700; }
         .temp-badge { background: #b85400; color: white; border-radius: 4px; font-size: 11px; padding: 2px 6px; }
         .unmatched { background: #fff4e0; }
+        .file-pick { display: inline-block; background: #2d5016; color: white; font-weight: 700; padding: 12px 16px; border-radius: 6px; margin-right: 8px; }
+        #recipeFile { font-size: 16px; max-width: 100%; }
+        #recipeStatus { margin-top: 8px; font-weight: 700; min-height: 1.4em; }
+        .match-tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 10px 0; }
+        .match-tools input { font-size: 16px; padding: 10px; min-height: 44px; flex: 1; min-width: 180px; }
+        .match-box { position: relative; min-width: 220px; }
+        .match-chosen, .match-save { min-height: 44px; font-size: 16px; text-align: left; width: 100%; }
+        .match-pop { position: absolute; z-index: 20; left: 0; right: 0; background: white; border: 2px solid #2d5016; border-radius: 8px; padding: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.2); }
+        .match-pop input { width: 100%; font-size: 16px; min-height: 44px; margin-bottom: 6px; }
+        .match-pop ul { list-style: none; max-height: 240px; overflow: auto; margin: 0; padding: 0; }
+        .match-pop li { min-height: 44px; padding: 10px 8px; border-bottom: 1px solid #eee; cursor: pointer; }
+        .match-pop li[aria-selected="true"] { background: #e8f5e0; font-weight: 700; }
+        .row-saved { color: #2d5016; font-size: 12px; font-weight: 700; }
         .store-row { padding: 8px 0; border-bottom: 1px solid #eee; }
         .empty-state { padding: 24px; text-align: center; color: #888; }
         h2 { color: #2d5016; margin-bottom: 8px; }
@@ -79,8 +92,10 @@
         <div id="adminTools" style="display:none;">
             <div class="panel">
                 <h2>Scaled recipe list</h2>
-                <p>Upload the weekly scaled-recipe PDF. You will see the raw purchase totals first. Cooked weights are not used. Nothing is saved until you approve.</p>
+                <p>Upload the weekly scaled-recipe PDF. You will see the raw purchase totals first. Cooked weights are not used. Ingredient matches save as you confirm them. The recipe totals are not applied until you approve.</p>
+                <label class="file-pick" for="recipeFile">Choose PDF</label>
                 <input type="file" id="recipeFile" accept="application/pdf,.pdf">
+                <p id="recipeStatus" role="status" aria-live="polite"></p>
             </div>
             <div class="panel" id="recipePanel" style="display:none;"></div>
             <div class="panel">

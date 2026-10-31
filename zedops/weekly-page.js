@@ -375,30 +375,132 @@
     };
   }
 
+  function catalogChoices() {
+    return Object.keys(state.catalog.items).map(function (id) { return state.catalog.items[id]; }).filter(function (item) {
+      return item && (item.itemNumber || item.internalKey || item.name);
+    });
+  }
+  function choiceLabel(item) {
+    if (!item) return 'No match';
+    return (item.itemNumber || 'no #') + ' ' + (item.name || '') + (item.brand ? ' · ' + item.brand : '');
+  }
+  function assignInitialMatch(row, items) {
+    var saved = state.matches[row.key];
+    if (saved && Object.prototype.hasOwnProperty.call(saved, 'catalogId')) {
+      row.catalogId = saved.catalogId || '';
+      row.eachFactor = saved.eachFactor == null ? '' : saved.eachFactor;
+      row.matchSaved = true;
+      return;
+    }
+    var suggestion = ZedOrder.filterCatalog(row.name, items)[0];
+    row.catalogId = suggestion ? suggestion.id : '';
+    row.eachFactor = '';
+    row.matchSaved = false;
+  }
+  function setRecipeStatus(text) {
+    var el = document.getElementById('recipeStatus');
+    if (el) el.textContent = text;
+  }
+  function updateMatchCount() {
+    var counts = ZedOrder.matchCounts(state.pendingRecipe ? state.pendingRecipe.purchases : []);
+    var el = document.getElementById('matchCount');
+    if (el) el.textContent = counts.matched + ' matched, ' + counts.unmatched + ' unmatched';
+  }
   function renderRecipeReview() {
     var panel = document.getElementById('recipePanel');
     var pending = state.pendingRecipe;
     if (!pending) {
-      panel.style.display = 'none';
-      panel.innerHTML = '';
+      if (panel.getAttribute('data-built')) {
+        panel.style.display = 'none';
+        panel.innerHTML = '';
+        panel.removeAttribute('data-built');
+      }
       return;
     }
+    if (panel.getAttribute('data-built') === '1' && panel._pending === pending) {
+      panel.style.display = 'block';
+      updateMatchCount();
+      return;
+    }
+    var items = catalogChoices();
+    pending.purchases.forEach(function (row) { assignInitialMatch(row, items); });
     panel.style.display = 'block';
-    var items = Object.keys(state.catalog.items).map(function (id) { return state.catalog.items[id]; });
-    panel.innerHTML = '<h2>Review raw purchases before anything is saved</h2><p>Cook date ' + esc(pending.cookDate || '') +
-      '. These are raw weights. Cooked totals and sub-recipe outputs are not ordered twice. Nothing is saved until you approve.</p><table class="order-table"><thead><tr><th>Ingredient</th><th>Raw amount</th><th>Match</th><th>Each factor</th></tr></thead><tbody>' +
+    panel._pending = pending;
+    panel.setAttribute('data-built', '1');
+    var counts = ZedOrder.matchCounts(pending.purchases);
+    panel.innerHTML = '<h2>Review raw purchases before the order is applied</h2><p>Cook date ' + esc(pending.cookDate || '') +
+      '. These are raw weights. Cooked totals and sub-recipe outputs are not ordered twice. A match is saved as soon as you confirm that row. The week\'s order uses them only after you approve.</p>' +
+      '<div class="match-tools"><input id="matchFilter" type="search" placeholder="Find an ingredient" autocomplete="off" enterkeyhint="search"><strong id="matchCount">' +
+      counts.matched + ' matched, ' + counts.unmatched + ' unmatched</strong></div>' +
+      '<table class="order-table"><thead><tr><th>Ingredient</th><th>Raw amount</th><th>BEK item</th><th>Each factor</th></tr></thead><tbody>' +
       pending.purchases.map(function (row, index) {
-        var saved = state.matches[row.key] || {};
-        var suggestions = ZedOrder.suggestMatches(row.name, items, 3);
-        var chosen = saved.catalogId || (suggestions[0] && suggestions[0].id) || '';
-        var options = '<option value="">Unmatched</option>' + items.filter(function (item) { return item.itemNumber || item.internalKey; }).slice(0, 400).map(function (item) {
-          return '<option value="' + esc(item.id) + '"' + (item.id === chosen ? ' selected' : '') + '>' + esc((item.itemNumber || 'no #') + ' ' + item.name) + '</option>';
-        }).join('');
-        var factor = saved.eachFactor || '';
-        return '<tr class="' + (chosen ? '' : 'unmatched') + '"><td>' + esc(row.name) + '</td><td>' + esc(row.pounds) + ' lb</td><td><select data-match="' + index + '">' + options + '</select></td><td><input data-factor="' + index + '" type="number" min="0" step="any" placeholder="lb per each" value="' + esc(factor) + '" style="width:110px"></td></tr>';
-      }).join('') + '</tbody></table><p class="diff-note">Unmatched rows stay visible and are not ordered.</p><button type="button" id="approveRecipe">Approve recipe needs</button> <button type="button" id="discardRecipe">Discard</button>';
+        var chosen = row.catalogId ? state.catalog.items[row.catalogId] : null;
+        return '<tr class="' + (row.catalogId ? '' : 'unmatched') + '" data-ingredient="' + esc(row.name) + '" data-index="' + index + '"><td>' + esc(row.name) +
+          '<div class="row-saved" data-saved="' + index + '">' + (row.matchSaved ? 'Saved' : '') + '</div></td><td>' + esc(row.pounds) + ' lb</td><td>' +
+          '<div class="match-box"><button type="button" class="match-chosen" data-open="' + index + '" aria-haspopup="listbox" aria-expanded="false">' + esc(choiceLabel(chosen)) + '</button>' +
+          '<div class="match-pop" data-pop="' + index + '" hidden><input type="search" data-search="' + index + '" placeholder="Name, brand, or item #" autocomplete="off" enterkeyhint="search">' +
+          '<ul role="listbox" data-list="' + index + '"></ul></div></div></td><td><input data-factor="' + index + '" type="number" min="0" step="any" inputmode="decimal" placeholder="lb per each" value="' + esc(row.eachFactor) + '" style="width:120px;font-size:16px;min-height:44px"></td></tr>';
+      }).join('') + '</tbody></table><p class="diff-note">Choose No match when nothing fits. Unmatched rows are not ordered.</p><button type="button" id="approveRecipe">Approve recipe needs</button> <button type="button" id="discardRecipe">Discard</button>';
     document.getElementById('approveRecipe').onclick = approveRecipe;
-    document.getElementById('discardRecipe').onclick = function () { state.pendingRecipe = null; renderRecipeReview(); };
+    document.getElementById('discardRecipe').onclick = function () {
+      state.pendingRecipe = null;
+      renderRecipeReview();
+    };
+    var filter = document.getElementById('matchFilter');
+    if (filter) filter.addEventListener('input', function () {
+      var q = filter.value.toLowerCase();
+      panel.querySelectorAll('tbody tr').forEach(function (tr) {
+        var name = (tr.getAttribute('data-ingredient') || '').toLowerCase();
+        tr.style.display = !q || name.indexOf(q) !== -1 ? '' : 'none';
+      });
+    });
+  }
+  function fillMatchList(index, query) {
+    var list = document.querySelector('[data-list="' + index + '"]');
+    var row = state.pendingRecipe.purchases[index];
+    var choices = ZedOrder.filterCatalog(query, catalogChoices()).slice(0, 40);
+    if (row.catalogId && !choices.some(function (item) { return item.id === row.catalogId; })) {
+      var selected = state.catalog.items[row.catalogId];
+      if (selected) choices.unshift(selected);
+    }
+    var html = '<li role="option" data-id=""' + (row.catalogId ? '' : ' aria-selected="true"') + '>No match</li>';
+    choices.forEach(function (item) {
+      html += '<li role="option" data-id="' + esc(item.id) + '"' + (item.id === row.catalogId ? ' aria-selected="true"' : '') + '>' + esc(choiceLabel(item)) + '</li>';
+    });
+    list.innerHTML = html;
+  }
+  function closeMatchPops(except) {
+    document.querySelectorAll('.match-pop').forEach(function (pop) {
+      if (except != null && pop.getAttribute('data-pop') === String(except)) return;
+      pop.hidden = true;
+    });
+    document.querySelectorAll('.match-chosen').forEach(function (button) {
+      if (except != null && button.getAttribute('data-open') === String(except)) return;
+      button.setAttribute('aria-expanded', 'false');
+    });
+  }
+  function saveMatch(index) {
+    var row = state.pendingRecipe && state.pendingRecipe.purchases[index];
+    if (!row) return Promise.resolve();
+    var factorEl = document.querySelector('[data-factor="' + index + '"]');
+    var eachFactor = factorEl && factorEl.value !== '' ? Number(factorEl.value) : null;
+    row.eachFactor = eachFactor == null ? '' : eachFactor;
+    return ZedStorage.setIngredientMatch(db, row.key, {
+      name: row.name,
+      catalogId: row.catalogId || '',
+      eachFactor: eachFactor
+    }).then(function () {
+      state.matches[row.key] = { name: row.name, catalogId: row.catalogId || '', eachFactor: eachFactor };
+      row.matchSaved = true;
+      var note = document.querySelector('[data-saved="' + index + '"]');
+      if (note) note.textContent = 'Saved';
+      var tr = document.querySelector('tr[data-index="' + index + '"]');
+      if (tr) tr.className = row.catalogId ? '' : 'unmatched';
+      var button = document.querySelector('[data-open="' + index + '"]');
+      if (button) button.textContent = choiceLabel(row.catalogId ? state.catalog.items[row.catalogId] : null);
+      updateMatchCount();
+      markSaved();
+    });
   }
 
   function approveRecipe() {
@@ -408,11 +510,9 @@
     state.weekKey = week;
     document.getElementById('weekSelect').value = week;
     var chain = Promise.resolve();
-    pending.purchases.forEach(function (row, index) {
-      var select = document.querySelector('[data-match="' + index + '"]');
-      var factor = document.querySelector('[data-factor="' + index + '"]');
-      var catalogId = select ? select.value : '';
-      var eachFactor = factor && factor.value !== '' ? Number(factor.value) : null;
+    pending.purchases.forEach(function (row) {
+      var catalogId = row.catalogId || '';
+      var eachFactor = row.eachFactor === '' || row.eachFactor == null ? null : Number(row.eachFactor);
       chain = chain.then(function () {
         return ZedStorage.setIngredientMatch(db, row.key, { name: row.name, catalogId: catalogId, eachFactor: eachFactor });
       }).then(function () {
@@ -430,12 +530,27 @@
 
   function onRecipeFile(file) {
     if (!file) return;
+    state.recipeFileName = file.name;
+    setRecipeStatus('Chosen: ' + file.name + '. Reading the file…');
     var reader = new FileReader();
+    reader.onerror = function () {
+      setRecipeStatus('Chosen: ' + file.name + '. Could not read that file. Try again.');
+    };
     reader.onload = function () {
-      ZedRecipePdf.parseRecipePdf(new Uint8Array(reader.result)).then(function (parsed) {
+      setRecipeStatus('Chosen: ' + file.name + '. Parsing…');
+      ZedRecipePdf.parseRecipePdf(new Uint8Array(reader.result), function (info) {
+        if (info.phase === 'page') setRecipeStatus('Chosen: ' + file.name + '. Reading page ' + info.page + ' of ' + info.pages + '…');
+        else if (info.phase === 'parse') setRecipeStatus('Chosen: ' + file.name + '. Adding up raw ingredients…');
+      }).then(function (parsed) {
         state.pendingRecipe = parsed;
+        var panel = document.getElementById('recipePanel');
+        if (panel) panel.removeAttribute('data-built');
+        setRecipeStatus('Done. ' + file.name + ' — ' + parsed.purchases.length + ' raw ingredients. Review the matches below.');
         renderRecipeReview();
-      }).catch(showError);
+      }).catch(function (err) {
+        setRecipeStatus('Chosen: ' + file.name + '. ' + ((err && err.message) || 'Could not parse that PDF.'));
+        showError(err);
+      });
     };
     reader.readAsArrayBuffer(file);
   }
@@ -507,8 +622,54 @@
   document.getElementById('showOrder').addEventListener('click', function () { state.view = 'order'; history.replaceState(null, '', 'weekly-order.html#order'); render(); });
   document.getElementById('recipeFile').addEventListener('change', function () {
     var file = this.files && this.files[0];
-    this.value = '';
+    if (!file) return;
     onRecipeFile(file);
+  });
+  document.getElementById('recipePanel').addEventListener('click', function (event) {
+    var open = event.target.closest('[data-open]');
+    if (open) {
+      var index = open.getAttribute('data-open');
+      var pop = document.querySelector('[data-pop="' + index + '"]');
+      var willOpen = pop.hidden;
+      closeMatchPops();
+      if (willOpen) {
+        pop.hidden = false;
+        open.setAttribute('aria-expanded', 'true');
+        fillMatchList(index, '');
+        var search = pop.querySelector('input');
+        if (search) search.focus();
+      }
+      return;
+    }
+    var option = event.target.closest('.match-pop li');
+    if (option) {
+      var list = option.parentElement;
+      var matchIndex = list.getAttribute('data-list');
+      var row = state.pendingRecipe.purchases[matchIndex];
+      row.catalogId = option.getAttribute('data-id') || '';
+      row.matchSaved = false;
+      closeMatchPops();
+      saveMatch(matchIndex).catch(showError);
+    }
+  });
+  document.getElementById('recipePanel').addEventListener('input', function (event) {
+    var search = event.target;
+    if (search.getAttribute && search.getAttribute('data-search') != null) {
+      fillMatchList(search.getAttribute('data-search'), search.value);
+      return;
+    }
+    var factor = event.target.getAttribute && event.target.getAttribute('data-factor');
+    if (factor == null) return;
+    clearTimeout(search._factorTimer);
+    search._factorTimer = setTimeout(function () {
+      var row = state.pendingRecipe && state.pendingRecipe.purchases[factor];
+      if (!row) return;
+      row.eachFactor = search.value === '' ? '' : Number(search.value);
+      saveMatch(factor).catch(showError);
+    }, 400);
+  });
+  document.addEventListener('click', function (event) {
+    if (!event.target.closest('.match-box')) closeMatchPops();
   });
   document.getElementById('guideFile').addEventListener('change', function () {
     var file = this.files && this.files[0];

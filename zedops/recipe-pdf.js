@@ -42,14 +42,18 @@
     }).join('\n');
   }
 
-  function parseRecipePdf(data) {
+  function parseRecipePdf(data, onProgress) {
     var pdfjs = typeof globalThis !== 'undefined' ? globalThis.pdfjsLib : null;
+    function report(info) { if (typeof onProgress === 'function') onProgress(info); }
     if (!pdfjs || !pdfjs.getDocument) return Promise.reject(new Error('The PDF reader did not load. Check the connection and try again.'));
+    report({ phase: 'open' });
     return pdfjs.getDocument({ data: data }).promise.then(function (doc) {
       var chain = Promise.resolve('');
+      report({ phase: 'pages', pages: doc.numPages });
       for (var pageNumber = 1; pageNumber <= doc.numPages; pageNumber++) {
         (function (n) {
           chain = chain.then(function (text) {
+            report({ phase: 'page', page: n, pages: doc.numPages });
             return doc.getPage(n).then(function (page) {
               return page.getTextContent().then(function (content) {
                 return text + '\n' + layoutFromItems(content.items);
@@ -60,7 +64,10 @@
       }
       return chain;
     }).then(function (text) {
-      return recipeApi().parseScaledRecipes(text);
+      report({ phase: 'parse' });
+      var parsed = recipeApi().parseScaledRecipes(text);
+      report({ phase: 'done', ingredients: (parsed.purchases || []).length });
+      return parsed;
     });
   }
 

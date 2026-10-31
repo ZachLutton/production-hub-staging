@@ -44,6 +44,27 @@ test('cases always round up and an exact case does not', () => {
   assert.equal(order.needInCountUnit(10, 'ea', 'lb', 0.5), 5);
 });
 
+test('item search is fuzzy and the match count separates saved picks from blanks', () => {
+  const items = [
+    { id: 'bek__654028', itemNumber: '654028', name: 'Rice Jasmine', brand: 'Producers Rice Mill' },
+    { id: 'bek__080089', itemNumber: '080089', name: 'Broccoli Floret Bite Size', brand: 'Markon' },
+    { id: 'bek__179416', itemNumber: '179416', name: 'Asparagus Jumbo', brand: 'Markon First Crop' }
+  ];
+  assert.equal(order.filterCatalog('JASMINE', items)[0].id, 'bek__654028');
+  assert.equal(order.filterCatalog('654028', items)[0].name, 'Rice Jasmine');
+  assert.equal(order.filterCatalog('markon asp', items)[0].id, 'bek__179416');
+  assert.equal(order.filterCatalog('zzzz-not-a-food', items).length, 0);
+  assert.deepEqual(order.matchCounts([{ catalogId: 'bek__1' }, { catalogId: '' }, {}]), { matched: 1, unmatched: 2, total: 3 });
+  const page = fs.readFileSync(path.join(__dirname, 'weekly-page.js'), 'utf8');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'weekly-order.html'), 'utf8');
+  const handler = page.slice(page.indexOf("getElementById('recipeFile')"), page.indexOf("getElementById('guideFile')"));
+  assert.equal(handler.includes('this.value'), false);
+  assert.equal(page.includes('recipeStatus'), true);
+  assert.equal(page.includes('setIngredientMatch'), true);
+  assert.equal(page.includes('No match'), true);
+  assert.match(html, /id="recipeFile"[^>]*accept="application\/pdf,\.pdf"/);
+});
+
 test('a future store uses the supplies list, and two stores can save at once', async () => {
   const added = locations.addLocation({ locations: {} }, { name: 'San Pedro' });
   assert.equal(locations.listSourceOf(added.added), 'inventory');
