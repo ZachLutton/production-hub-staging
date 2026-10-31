@@ -8,10 +8,10 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <script src="firebase-config.js"></script>
-    <script src="inventory-store.js"></script>
-    <script src="staging-boot.js"></script>
-    <script src="hub-auth.js?v=2"></script>
+    <script src="firebase-config.js?v=20261031b"></script>
+    <script src="inventory-store.js?v=20261031b"></script>
+    <script src="staging-boot.js?v=20261031b"></script>
+    <script src="hub-auth.js?v=20261031b"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; padding: 10px; }
@@ -27,6 +27,8 @@
         .header-controls, .view-switch { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 12px; }
         .view-switch button.active { background: #2d5016; color: white; }
         .recipe-warn { color: #8a1f1f; font-weight: 700; }
+        .build-stamp { margin-top: 8px; font-size: 13px; font-weight: 700; letter-spacing: 0.02em; }
+        footer.build-stamp { color: #666; text-align: center; padding: 18px 8px 28px; }
         select, input[type="date"], button { padding: 10px 12px; font-size: 16px; border-radius: 4px; border: none; min-height: 44px; }
         button { background: #e8f5e0; color: #2d5016; font-weight: 700; cursor: pointer; border: 2px solid #2d5016; }
         .location-badge, .role-badge { display: inline-block; margin-top: 8px; padding: 4px 12px; border-radius: 20px; font-weight: 700; background: rgba(255,255,255,.15); }
@@ -81,6 +83,7 @@
             <div style="text-align:left;margin-bottom:10px;"><span style="display:inline-block;background:#F9A825;color:#333;font-size:13px;font-weight:700;padding:8px 14px;border-radius:6px;">STAGING. One weekly order for every store. The live hub is not changed.</span></div>
             <div style="text-align:left;margin-bottom:10px;"><a class="back-btn" href="dashboard.html">← Back to Dashboard</a></div>
             <h1>Weekly Order <span style="background:#F9A825;color:#333;font-size:12px;padding:2px 8px;border-radius:4px;">STAGING</span></h1>
+            <div id="buildStamp" class="build-stamp">Build 20261031b</div>
             <div class="header-controls">
                 <label for="locationSelect">Store:</label>
                 <select id="locationSelect"></select>
@@ -98,9 +101,7 @@
             <div id="lastSaved">No changes yet</div>
             <div id="pageStatus" role="status" aria-live="polite"></div>
         </div>
-        <div id="storeView"><div id="itemTable"></div></div>
-        <div id="orderView" style="display:none;"><div class="panel" id="orderTable"></div></div>
-        <div id="adminTools" style="display:none;">
+        <div id="recipeTools" style="display:none;">
             <div class="panel">
                 <h2>Scaled recipe list</h2>
                 <p>Upload the weekly scaled-recipe PDF. You will see the raw purchase totals first. Cooked weights are not used. Ingredient matches save as you confirm them. The recipe totals are not applied until you approve.</p>
@@ -108,7 +109,13 @@
                 <input type="file" id="recipeFile" accept="application/pdf,.pdf">
                 <p id="recipeStatus" role="status" aria-live="polite"></p>
             </div>
+            <div class="panel" id="recipeEmpty"></div>
             <div class="panel" id="recipePanel" style="display:none;"></div>
+        </div>
+        <div class="panel" id="orderSummary" style="display:none;"></div>
+        <div id="storeView"><div id="itemTable"></div></div>
+        <div id="orderView" style="display:none;"><div class="panel" id="orderTable"></div></div>
+        <div id="adminTools" style="display:none;">
             <div class="panel">
                 <h2>BEK guide</h2>
                 <p>Upload a new order guide when items move or prices change. Review the difference, then approve.</p>
@@ -117,23 +124,24 @@
             <div class="panel" id="guidePanel" style="display:none;"></div>
             <div class="panel" id="storePanel"></div>
         </div>
+        <footer class="build-stamp">Build 20261031b</footer>
     </div>
-    <script src="zedops/catalog.js"></script>
-    <script src="zedops/schema.js"></script>
-    <script src="zedops/locations.js"></script>
-    <script src="zedops/storage.js"></script>
-    <script src="zedops/weekly-hidden.js"></script>
-    <script src="zedops/xlsx.js"></script>
-    <script src="zedops/pdf.js"></script>
-    <script src="zedops/bek.js"></script>
-    <script src="zedops/recipe-parse.js"></script>
-    <script src="zedops/recipe-pdf.js"></script>
-    <script src="zedops/order-math.js"></script>
+    <script src="zedops/catalog.js?v=20261031b"></script>
+    <script src="zedops/schema.js?v=20261031b"></script>
+    <script src="zedops/locations.js?v=20261031b"></script>
+    <script src="zedops/storage.js?v=20261031b"></script>
+    <script src="zedops/weekly-hidden.js?v=20261031b"></script>
+    <script src="zedops/xlsx.js?v=20261031b"></script>
+    <script src="zedops/pdf.js?v=20261031b"></script>
+    <script src="zedops/bek.js?v=20261031b"></script>
+    <script src="zedops/recipe-parse.js?v=20261031b"></script>
+    <script src="zedops/recipe-pdf.js?v=20261031b"></script>
+    <script src="zedops/order-math.js?v=20261031b"></script>
     <script>
         if (window.pdfjsLib) {
             pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
         }
     </script>
-    <script src="zedops/weekly-page.js"></script>
+    <script src="zedops/weekly-page.js?v=20261031b"></script>
 </body>
 </html>

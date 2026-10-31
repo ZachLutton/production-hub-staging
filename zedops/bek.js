@@ -303,7 +303,19 @@
     return addDays(due, 8);
   }
 
-  // The cook-date picker keeps a Wednesday. Any other day snaps to that day's order cycle.
+  // The cook date to open on. Counts stay open through the end of their Tuesday,
+  // so Saturday 2026-10-31 opens cook Wednesday 2026-11-11, not the 11/4 cycle whose counts closed on 10/27.
+  function openCookDate(ymd) {
+    var cook = cycleCookForDay(ymd);
+    var guard = 0;
+    while (cycleForCook(cook).countsDue < ymd && guard < 8) {
+      cook = addDays(cook, 7);
+      guard++;
+    }
+    return cook;
+  }
+
+  // Any picked day snaps to a Wednesday cook date. A Wednesday is that cook date.
   function selectCookDate(ymd) {
     if (weekdayOf(ymd) === 3) return ymd;
     return cycleCookForDay(ymd);
@@ -671,6 +683,7 @@
     cycleForCook: cycleForCook,
     formatCycle: formatCycle,
     cycleCookForDay: cycleCookForDay,
+    openCookDate: openCookDate,
     selectCookDate: selectCookDate,
     cookKeyFromLegacyWeek: cookKeyFromLegacyWeek,
     recipeCycleWarning: recipeCycleWarning,
