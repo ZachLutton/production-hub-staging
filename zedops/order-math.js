@@ -105,13 +105,16 @@
     return !!(parsed && parsed.unit === 'oz' && (parsed.each === 64 || parsed.each === 128));
   }
 
-  // A multi-jar spice pack is counted by the jar. 6 / 32 OZ capers are 2 lb jars.
+  // Spice-rack and pantry packs of N / X OZ are counted by the container, not by the ounce.
+  // 12 / 42 OZ oats are 2.625 lb containers. 6 / 32 OZ capers are 2 lb jars.
   function isJarSpice(item) {
     var pack = packAmount(item && item.pack);
     if (!pack || pack.unit !== 'oz' || !(pack.each > 0)) return false;
-    if (!(pack.perCase / pack.each > 1.01)) return false;
+    if (pack.each === 64 || pack.each === 128) return false;
+    if (String(item && item.itemNumber || '') === '774477') return false;
     var label = String(item && item.label || '');
     if (/saute line|spice rack/i.test(label)) return true;
+    if (isBakingPantry(item)) return true;
     return /caper/i.test(String(item && item.name || ''));
   }
 
@@ -128,11 +131,13 @@
   // each, case, lb, or gal. Kosher salt is one box, and balsamic glaze is one bottle,
   // unless an admin already chose a unit.
   function resolvedCountUnit(item) {
-    if (item && item.countUnitChosen && item.countUnit) return item.countUnit;
+    if (item && item.countUnitChosen && item.countUnit && !(canonUnit(item.countUnit) === 'oz' && isJarSpice(item))) {
+      return item.countUnit;
+    }
     var number = String(item && item.itemNumber || '');
     if (number === '212500' || number === '393413') return 'each';
     if (number === '800401' || number === '774477') return 'lb';
-    if (number === '685406' || isJarSpice(item)) return 'each';
+    if (number === '685406' || number === '799205' || isJarSpice(item)) return 'each';
     if (fluidCarton(item && item.pack)) return 'gal';
     if (isKosherSalt(item) || isBalsamicGlaze(item)) return 'each';
     if (canEachLb(item && item.pack)) return 'each';
@@ -381,7 +386,7 @@
       var piecePack = packAmount(item && item.pack);
       if (boxLb > 0) {
         result.convertedQuantity = Number(result.quantity) / boxLb;
-        result.convertedUnit = piecePack && piecePack.canSize ? 'can' : (piecePack && piecePack.unit === 'oz' ? 'bottle' : (/egg white/i.test(String(item && item.name || '')) ? 'carton' : 'box'));
+        result.convertedUnit = piecePack && piecePack.canSize ? 'can' : (isJarSpice(item) ? 'container' : (piecePack && piecePack.unit === 'oz' ? 'bottle' : (/egg white/i.test(String(item && item.name || '')) ? 'carton' : 'box')));
       }
     }
     return result;
@@ -391,7 +396,9 @@
     if (!need) return '';
     var text = roundQty(need.quantity) + (need.unit ? ' ' + unitLabel(need.unit) : '');
     if (need.convertedQuantity != null && need.convertedUnit) {
-      text += ' ≈ ' + roundApprox(need.convertedQuantity) + ' ' + need.convertedUnit;
+      var shownUnit = need.convertedUnit;
+      if (shownUnit === 'container' && Math.abs(Number(need.convertedQuantity) - 1) >= 0.05) shownUnit = 'containers';
+      text += ' ≈ ' + roundApprox(need.convertedQuantity) + ' ' + shownUnit;
     }
     if (need.pieceQuantity != null && need.pieceUnit) {
       text += ' · ' + roundApprox(need.pieceQuantity) + ' × ' + roundApprox(need.pieceSize) + ' ' + need.pieceUnit;
@@ -494,6 +501,7 @@
   function countWord(item) {
     var number = String(item && item.itemNumber || '');
     if (number === '212500' || number === '685406') return 'jar';
+    if (isJarSpice(item)) return 'container';
     if (number === '393413') return 'carton';
     var unit = canonUnit(resolvedCountUnit(item));
     if (unit === 'gal') return 'gal';

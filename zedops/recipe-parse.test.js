@@ -572,6 +572,14 @@ test('food follows the temp zone, even on a supply shelf, and a supply par saves
   assert.equal(order.orderCases(capers, { quantity: 0.3, unit: 'lb', source: 'recipe' }, 0), 1);
   assert.equal(order.orderCases(capers, { quantity: 0.3, unit: 'lb', source: 'recipe' }, 4), 0);
   assert.equal(order.orderCases(capers, { quantity: 0.3, unit: 'lb', source: 'recipe' }, 5), 0);
+  const oats = spices.bek__799205;
+  assert.equal(oats.pack, '12 / 42 OZ');
+  assert.equal(order.resolvedCountUnit(oats), 'each');
+  assert.equal(order.resolvedCountUnit(Object.assign({}, oats, { countUnit: 'ounce', countUnitChosen: true })), 'each');
+  const oatNeed = order.orderNeed(oats, { recipe: { quantity: 10.3, unit: 'lb' }, countUnit: 'each' });
+  assert.equal(order.needText(oatNeed), '10.3 lb ≈ 3.9 containers');
+  assert.equal(order.orderCases(oats, oatNeed, 10.3), 0);
+  assert.equal(order.orderCases(oats, oatNeed, 0), 1);
   const text = fs.readFileSync(path.join(__dirname, 'fixtures', 'scaled-recipe-2026-11-04.txt'), 'utf8');
   const parsedWeek = recipe.parseScaledRecipes(text);
   parsedWeek.purchases.filter(function (row) { return row.pounds > 0 && row.pounds <= 2; }).forEach(function (row) {
