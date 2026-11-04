@@ -75,6 +75,18 @@
     return { cookDate: cookDate, components: components };
   }
 
+  function defaultPiecesPerCup(name) {
+    return /chew|cookie/i.test(String(name || '')) ? 3 : 1;
+  }
+
+  function cupsForPieces(count, per) {
+    var pieces = Number(count) || 0;
+    if (!(pieces > 0)) return 0;
+    var size = Number(per);
+    if (!(size > 0)) size = 1;
+    return Math.ceil(pieces / size - 1e-9);
+  }
+
   function defaultCupSize(name) {
     var text = String(name || '').trim();
     if (/muffin|chew/i.test(text)) return 'cup_9oz';
@@ -103,7 +115,9 @@
       catalogName = over.catalogName || catalogName;
     }
     if (over && over.itemNumber === '') itemNumber = '';
-    return { cupSize: cupSize, itemNumber: itemNumber, catalogName: catalogName };
+    var piecesPerCup = defaultPiecesPerCup(component && component.name);
+    if (over && Number(over.piecesPerCup) > 0) piecesPerCup = Number(over.piecesPerCup);
+    return { cupSize: cupSize, itemNumber: itemNumber, catalogName: catalogName, piecesPerCup: piecesPerCup };
   }
 
   function supplyTotals(components, saved) {
@@ -116,20 +130,21 @@
       if (!row || row.unit !== 'ea') return;
       var spec = specFor(row, saved);
       var count = Number(row.quantity) || 0;
+      var packed = cupsForPieces(count, spec.piecesPerCup);
       var cups = 0;
       var lids = 0;
       if (spec.cupSize === 'souffle_1_5') {
-        cups = count;
-        lids = count;
-        souffleCups += count;
-        souffleLids += count;
+        cups = packed;
+        lids = packed;
+        souffleCups += packed;
+        souffleLids += packed;
       } else if (spec.cupSize === 'cup_9oz') {
-        cups = count;
-        lids = count;
-        nineCups += count;
-        nineLids += count;
+        cups = packed;
+        lids = packed;
+        nineCups += packed;
+        nineLids += packed;
       }
-      rows.push({ key: row.key, name: row.name, quantity: count, cupSize: spec.cupSize, itemNumber: spec.itemNumber, catalogName: spec.catalogName, cups: cups, lids: lids });
+      rows.push({ key: row.key, name: row.name, quantity: count, piecesPerCup: spec.piecesPerCup, cupSize: spec.cupSize, itemNumber: spec.itemNumber, catalogName: spec.catalogName, cups: cups, lids: lids });
     });
     return { souffleCups: souffleCups, souffleLids: souffleLids, nineCups: nineCups, nineLids: nineLids, rows: rows };
   }
@@ -145,9 +160,10 @@
       if (!row || row.unit !== 'ea') return;
       var spec = specFor(row, saved);
       var count = Number(row.quantity) || 0;
+      var packed = cupsForPieces(count, spec.piecesPerCup);
       var cup = CUP[spec.cupSize];
       if (cup && (number === cup.cupNumber || number === cup.lidNumber)) {
-        total += count;
+        total += packed;
         hit = true;
         reasons.push(count + ' ' + row.name);
       }
@@ -167,6 +183,8 @@
     CUP: CUP,
     parseCookList: parseCookList,
     nameKey: nameKey,
+    defaultPiecesPerCup: defaultPiecesPerCup,
+    cupsForPieces: cupsForPieces,
     defaultCupSize: defaultCupSize,
     defaultItem: defaultItem,
     specFor: specFor,

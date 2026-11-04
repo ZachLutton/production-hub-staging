@@ -24,11 +24,11 @@
   var CAN_LB = { '10': 6.5, '5': 3.5, '3': 2.06, '2.5': 1.75, '2': 1.25, '303': 1, '300': 0.875 };
   var DEFAULT_STANDARDS = {
     can10: 6.5, can5: 3.5, can3: 2.06, can2_5: 1.75, can2: 1.25, can303: 1, can300: 0.875,
-    gal: 8.6, qt: 2.15, honeyGal: 12, mapleGal: 11, oilGal: 7.6
+    gal: 8.6, qt: 2.15, honeyGal: 12, mapleGal: 11, oilGal: 7.6, wineGal: 8.5
   };
   var STANDARD_LABELS = {
     can10: '#10 CAN', can5: '#5 CAN', can3: '#3 CAN', can2_5: '#2.5 CAN', can2: '#2 CAN', can303: '#303 CAN', can300: '#300 CAN',
-    gal: 'Gallon', qt: 'Quart', honeyGal: 'Honey per gallon', mapleGal: 'Maple per gallon', oilGal: 'Oil per gallon'
+    gal: 'Gallon', qt: 'Quart', honeyGal: 'Honey per gallon', mapleGal: 'Maple per gallon', oilGal: 'Oil per gallon', wineGal: 'Wine per gallon'
   };
   var activeStandards = null;
 
@@ -64,6 +64,7 @@
     if (name.indexOf('honey') !== -1) return standardValue('honeyGal');
     if (name.indexOf('syrup') !== -1 || name.indexOf('maple') !== -1) return standardValue('mapleGal');
     if (name.indexOf('oil') !== -1) return standardValue('oilGal');
+    if (name.indexOf('marsala') !== -1 || name.indexOf('wine') !== -1) return standardValue('wineGal') || 8.5;
     return standardValue('gal');
   }
 
@@ -350,6 +351,16 @@
 
   // Dry spices and seasonings are food even though the temp zone says Dry.
   // The Saute Line shelf is that set. A name match covers the same kind of item on another shelf.
+  function isBakingPantry(item) {
+    var name = String(item && item.name || '').toLowerCase();
+    if (/bleach|sanitizer|cleaner|degreaser|detergent|soap|disinfectant|rinse aid/.test(name)) return false;
+    if (/baking powder|baking soda/.test(name)) return true;
+    if (/\bextract\b|vanilla/.test(name)) return true;
+    if (/\boats?\b|oatmeal|cereal oats|flour|cornmeal/.test(name)) return true;
+    if (/marsala|\bwine\b|vinegar/.test(name)) return true;
+    return false;
+  }
+
   function isDrySeasoning(item) {
     var label = String(item.label || '');
     if (/saute line/i.test(label)) return true;
@@ -369,6 +380,7 @@
   function isFoodItem(item) {
     if (!item || item.kind === 'vendor_check') return false;
     if (item.orderRole === 'food') return true;
+    if (isBakingPantry(item)) return true;
     if (item.orderRole === 'supply') return false;
     if (item.kind === 'special' && /salmon|mahi|filet/i.test(item.name || '')) return true;
     if (isDrySeasoning(item)) return true;
@@ -417,7 +429,12 @@
       [/ketchup/, /ketchup/],
       [/fire roasted red pepper|roasted red pepper/, /red bell diced|pepper red bell/],
       [/apple sauce|applesauce/, /applesauce/],
-      [/black bean/, /bean black|black bean/]
+      [/black bean/, /bean black|black bean/],
+      [/baking powder/, /baking powder/],
+      [/baking soda/, /baking soda/],
+      [/vanilla extract|extract vanilla|vanilla/, /vanilla/],
+      [/quick oat|oats quick|oatmeal|rolled oat/, /oat/],
+      [/marsala|wine marsala/, /marsala/]
     ];
     for (var i = 0; i < rules.length; i++) {
       if (rules[i][0].test(q) && rules[i][1].test(name)) return 40;
@@ -689,6 +706,7 @@
     needText: needText,
     orderCases: orderCases,
     isFoodItem: isFoodItem,
+    isBakingPantry: isBakingPantry,
     orderNeed: orderNeed,
     filterCatalog: filterCatalog,
     matchCounts: matchCounts,

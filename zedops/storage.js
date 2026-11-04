@@ -190,7 +190,8 @@
     return refOf(db, path).set({
       itemNumber: String(value.itemNumber || ''),
       catalogName: String(value.catalogName || ''),
-      cupSize: String(value.cupSize || '')
+      cupSize: String(value.cupSize || ''),
+      piecesPerCup: Number(value.piecesPerCup) > 0 ? Number(value.piecesPerCup) : null
     });
   }
 

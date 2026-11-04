@@ -180,8 +180,14 @@ test('the 11/11 cook list totals cups by size and maps each counts', () => {
   const totals = cook.supplyTotals(parsed.components, {});
   assert.equal(totals.souffleCups, 1215);
   assert.equal(totals.souffleLids, 1215);
-  assert.equal(totals.nineCups, 350);
-  assert.equal(totals.nineLids, 350);
+  assert.equal(totals.nineCups, 150);
+  assert.equal(totals.nineLids, 150);
+  const chew = totals.rows.filter(function (row) { return /chew/i.test(row.name); })[0];
+  const muffin = totals.rows.filter(function (row) { return /muffin/i.test(row.name); })[0];
+  assert.equal(chew.piecesPerCup, 3);
+  assert.equal(chew.cups, 100);
+  assert.equal(muffin.piecesPerCup, 1);
+  assert.equal(muffin.cups, 50);
   const omelette = cook.piecesForItem({ itemNumber: '393795', name: 'Egg Omelette W/cheddar Chs' }, parsed.components, {});
   assert.equal(omelette.quantity, 85);
   const chicken = cook.piecesForItem({ itemNumber: '211262', name: 'Chicken Breast 4 Oz Blsl Fresh' }, parsed.components, {});
@@ -193,9 +199,9 @@ test('the 11/11 cook list totals cups by size and maps each counts', () => {
   const lid = cook.piecesForItem({ itemNumber: '130860', name: 'Lid Plas Souffle 2 Oz' }, parsed.components, {});
   assert.equal(lid.quantity, 1215);
   const nine = cook.piecesForItem({ itemNumber: '104162', name: 'Cup Plas 9 Oz Squat Clear' }, parsed.components, {});
-  assert.equal(nine.quantity, 350);
+  assert.equal(nine.quantity, 150);
   const nineLid = cook.piecesForItem({ itemNumber: '104426' }, parsed.components, {});
-  assert.equal(nineLid.quantity, 350);
+  assert.equal(nineLid.quantity, 150);
   const salmon = cook.piecesForItem({ internalKey: 'local_salmon_4oz', itemNumber: '', name: '4 oz salmon filets' }, parsed.components, {});
   assert.equal(salmon.quantity, 85);
   assert.equal(cook.defaultItem('Lemon Wedge').itemNumber, '');

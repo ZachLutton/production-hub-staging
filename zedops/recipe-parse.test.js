@@ -356,7 +356,8 @@ test('food follows the temp zone, even on a supply shelf, and a supply par saves
   assert.equal(order.isFoodItem(cumin), true);
   assert.equal(order.isFoodItem(oregano), true);
   assert.equal(order.isFoodItem(Object.assign({}, cumin, { orderRole: 'supply' })), false);
-  assert.equal(order.isFoodItem(vanilla), false);
+  assert.equal(order.isFoodItem(vanilla), true);
+  assert.equal(order.isFoodItem(Object.assign({}, vanilla, { orderRole: 'supply' })), true);
   assert.equal(order.isFoodItem(sticker), false);
   const cuminNeed = order.orderNeed(cumin, { recipe: { quantity: 2.5, unit: 'lb' }, countUnit: 'pound' });
   assert.equal(cuminNeed.source, 'recipe');

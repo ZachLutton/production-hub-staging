@@ -784,10 +784,13 @@
           '<option value="souffle_1_5"' + (spec.cupSize === 'souffle_1_5' ? ' selected' : '') + '>1.5 oz cup + 2 oz lid</option>' +
           '<option value="cup_9oz"' + (spec.cupSize === 'cup_9oz' ? ' selected' : '') + '>9 oz cup + lid</option></select>'
         : esc(spec.cupSize === 'cup_9oz' ? '9 oz cup + lid' : (spec.cupSize === 'souffle_1_5' ? '1.5 oz cup + 2 oz lid' : ''));
+      var perField = state.role === 'admin'
+        ? '<input data-cook-per="' + esc(row.key) + '" type="number" min="1" step="1" value="' + esc(spec.piecesPerCup) + '" style="width:70px" aria-label="Pieces per cup for ' + esc(row.name) + '">'
+        : esc(spec.piecesPerCup);
       var itemField = state.role === 'admin'
         ? '<input data-cook-item="' + esc(row.key) + '" value="' + esc(spec.itemNumber || '') + '" style="width:140px" aria-label="Catalog item for ' + esc(row.name) + '">'
         : esc(spec.itemNumber || '');
-      return '<tr><td>' + esc(row.name) + '</td><td>' + esc(row.quantity) + ' ' + esc(row.unit) + '</td><td>' + size + '</td><td>' + itemField + ' ' + esc(spec.catalogName || '') + '</td></tr>';
+      return '<tr><td>' + esc(row.name) + '</td><td>' + esc(row.quantity) + ' ' + esc(row.unit) + '</td><td>' + size + ' ' + perField + ' per cup</td><td>' + itemField + ' ' + esc(spec.catalogName || '') + '</td></tr>';
     }).join('');
     var approve = state.pendingCook && state.role === 'admin'
       ? '<button type="button" id="approveCook">Approve cook list</button> <button type="button" id="discardCook">Discard</button>'
@@ -1636,17 +1639,20 @@
     var target = event.target;
     var sizeKey = target.getAttribute && target.getAttribute('data-cook-size');
     var itemKey = target.getAttribute && target.getAttribute('data-cook-item');
-    var key = sizeKey || itemKey;
+    var perKey = target.getAttribute && target.getAttribute('data-cook-per');
+    var key = sizeKey || itemKey || perKey;
     if (!key) return;
     var sizeEl = document.querySelector('[data-cook-size="' + key + '"]');
     var itemEl = document.querySelector('[data-cook-item="' + key + '"]');
+    var perEl = document.querySelector('[data-cook-per="' + key + '"]');
     var cook = state.pendingCook || state.cook;
     var component = cookComponents(cook).filter(function (row) { return row.key === key; })[0];
     var current = ZedCook.specFor(component || { key: key, name: '' }, state.cookMap);
     var next = {
       itemNumber: itemEl ? itemEl.value.trim() : current.itemNumber,
       catalogName: current.catalogName,
-      cupSize: sizeEl ? sizeEl.value : current.cupSize
+      cupSize: sizeEl ? sizeEl.value : current.cupSize,
+      piecesPerCup: perEl && Number(perEl.value) > 0 ? Number(perEl.value) : current.piecesPerCup
     };
     ZedStorage.setCookMap(db, key, next).then(function () {
       state.cookMap[key] = next;
