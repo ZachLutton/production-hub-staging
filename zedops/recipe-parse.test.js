@@ -150,6 +150,16 @@ test('cases always round up and an exact case does not', () => {
   assert.equal(pecanNeed.quantity, 3);
   const glazeInFile = recipe.purchaseByName(parsed, 'Balsamic Glaze') || recipe.purchaseByName(parsed, 'Glaze, balsamic');
   assert.equal(glazeInFile, null);
+  const vinegarLine = { name: 'Vinegar, balsamic', pounds: 1.2, catalogId: 'bek__686235', unit: 'lb' };
+  const glazeLine = { name: 'Balsamic Glaze', pounds: 1.2, catalogId: 'bek__686235', unit: 'lb' };
+  assert.equal(order.forcedRecipeItemId(vinegarLine), '');
+  assert.equal(order.forcedRecipeItemId(glazeLine), 'bek__660356');
+  assert.equal(order.recipeLineFor({ id: 'bek__660356', name: 'Glaze Balsamic' }, { glaze: glazeLine, vinegar: vinegarLine }).pounds, 1.2);
+  assert.equal(order.recipeLineFor({ id: 'bek__686235', name: 'Vinegar Balsamic' }, { glaze: glazeLine, vinegar: vinegarLine }).pounds, 1.2);
+  const glazeItem = bek.buildCatalog(require('./seed.json')).items.bek__660356;
+  assert.equal(glazeItem.pack, '6 / 12.9 OZ');
+  assert.equal(order.resolvedCountUnit(glazeItem), 'each');
+  assert.equal(order.orderCases(glazeItem, { quantity: 1.2, unit: 'lb', source: 'recipe' }, 0), 1);
   assert.equal(fs.readFileSync(path.join(__dirname, 'order-math.js'), 'utf8').includes('salt sea kosher'), true);
   assert.equal(fs.readFileSync(path.join(__dirname, 'weekly-page.js'), 'utf8').includes('usesSuggestedRecipe'), true);
   const honey = { name: 'Honey Pure Blend', pack: '4 / 1 GAL', countUnit: 'gallon', tempZone: 'Refrigeration', itemNumber: '793069' };

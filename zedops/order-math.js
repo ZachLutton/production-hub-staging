@@ -192,7 +192,7 @@
     if (/onion red slab|slab slice/i.test(item.name || '')) return true;
     if (/\bbrisket\b/i.test(item.name || '') && !/hash/i.test(item.name || '')) return true;
     if (/blackened|red fish|redfish/i.test(item.name || '')) return true;
-    if (isBakingPantry(item)) return true;
+    if (isBakingPantry(item) || isBalsamicGlaze(item)) return true;
     return /caramelized onion|onion caramelized/i.test(item.name || '');
   }
 
@@ -206,6 +206,7 @@
     if (/blackened redfish|blackening seasoning|blackened seasoning|chef paul prudhomme/.test(name)) return 'bek__774477';
     if (/baking powder/.test(name)) return 'bek__696005';
     if (/baking soda/.test(name)) return 'bek__696131';
+    if (/balsamic glaze|glaze balsamic/.test(name) && name.indexOf('vinegar') === -1) return 'bek__660356';
     return '';
   }
 
