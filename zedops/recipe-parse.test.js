@@ -206,6 +206,18 @@ test('cases always round up and an exact case does not', () => {
   assert.equal(onionPurchase.pounds, 2.5);
   assert.deepEqual(onionPurchase.sources, ['Bacon & Gruyere Egg Bite Filling']);
   assert.equal(order.filterCatalog('Sliced Caramelized Onions', [onion], { solidOnly: true })[0].itemNumber, '1136442');
+  const redOnionPurchase = recipe.purchaseByName(parsed, 'Red Onion');
+  assert.equal(redOnionPurchase.pounds, 1.5);
+  assert.deepEqual(redOnionPurchase.sources, ['Pickled Red Onion']);
+  const dicedOnionPurchase = recipe.purchaseByName(parsed, 'Diced Red Onion');
+  assert.equal(dicedOnionPurchase.pounds, 21.8);
+  const slab = { itemNumber: '182907', name: 'Onion Red Slab Slice 1/4 In', pack: '1 / 5 LB', countUnit: 'pound', tempZone: 'Refrigeration' };
+  const dicedOnion = { itemNumber: '231714', name: 'Onion Red Diced 1/4 Inch', pack: '2 / 5 LB', countUnit: 'pound', tempZone: 'Refrigeration' };
+  assert.equal(order.filterCatalog('Red Onion', [dicedOnion, slab], { solidOnly: true })[0].itemNumber, '182907');
+  assert.equal(order.filterCatalog('Diced Red Onion', [dicedOnion, slab], { solidOnly: true })[0].itemNumber, '231714');
+  const slabNeed = order.orderNeed(slab, { recipe: { quantity: redOnionPurchase.pounds, unit: 'lb' }, countUnit: 'pound' });
+  assert.equal(slabNeed.quantity, 1.5);
+  assert.equal(order.orderCases(slab, slabNeed, 0), 1);
   const marinara = { name: 'Sauce Marinara Rtu', pack: '6 / #10 CAN', countUnit: 'can', itemNumber: '660333', tempZone: 'Dry' };
   assert.equal(order.packAmount(marinara.pack).each, 6.5);
   assert.equal(order.packAmount(marinara.pack).perCase, 39);

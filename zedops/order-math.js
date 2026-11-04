@@ -434,7 +434,9 @@
       [/baking soda/, /baking soda/],
       [/vanilla extract|extract vanilla|vanilla/, /vanilla/],
       [/quick oat|oats quick|oatmeal|rolled oat/, /oat/],
-      [/marsala|wine marsala/, /marsala/]
+      [/marsala|wine marsala/, /marsala/],
+      [/^red onion$/, /onion red slab|slab slice/],
+      [/diced red onion|red onion diced/, /onion red diced|red diced/]
     ];
     for (var i = 0; i < rules.length; i++) {
       if (rules[i][0].test(q) && rules[i][1].test(name)) return 40;
