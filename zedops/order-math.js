@@ -173,7 +173,36 @@
   function usesSuggestedRecipe(item) {
     if (!item) return false;
     if (isPantryLiquid(item) || isKosherSalt(item) || canEachLb(item && item.pack)) return true;
+    if (/onion red slab|slab slice/i.test(item.name || '')) return true;
     return /caramelized onion|onion caramelized/i.test(item.name || '');
+  }
+
+  // "Red Onion" inside Pickled Red Onion is the slab, not the diced onion.
+  // A saved match that points at 231714 still has to order 182907.
+  function forcedRecipeItemId(line) {
+    var name = fold(line && line.name);
+    if (name === 'red onion') return 'bek__182907';
+    return '';
+  }
+
+  function recipeLineFor(item, lines) {
+    var pounds = 0;
+    var unit = 'lb';
+    var eachFactor = null;
+    var hit = false;
+    Object.keys(lines || {}).forEach(function (key) {
+      if (key === '_meta') return;
+      var line = lines[key];
+      if (!line) return;
+      var owner = forcedRecipeItemId(line) || line.catalogId || '';
+      if (!item || owner !== item.id) return;
+      pounds += Number(line.pounds) || 0;
+      unit = line.unit || unit;
+      if (line.eachFactor) eachFactor = Number(line.eachFactor);
+      hit = true;
+    });
+    if (!hit || !(pounds > 0)) return null;
+    return { pounds: Math.round(pounds * 1000) / 1000, unit: unit, eachFactor: eachFactor };
   }
 
   function isPantryLiquid(item) {
@@ -929,6 +958,8 @@
     orderWarning: orderWarning,
     isPantryLiquid: isPantryLiquid,
     usesSuggestedRecipe: usesSuggestedRecipe,
+    forcedRecipeItemId: forcedRecipeItemId,
+    recipeLineFor: recipeLineFor,
     isGlazeSauceOrCondiment: isGlazeSauceOrCondiment,
     packAmount: packAmount,
     perCaseInCountUnit: perCaseInCountUnit,

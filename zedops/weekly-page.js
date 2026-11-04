@@ -241,18 +241,9 @@
     return saved ? (Number(saved.value) || 0) : 0;
   }
   function recipeNeed(item) {
-    var qty = 0;
-    var unit = 'lb';
-    var factor = null;
-    Object.keys(state.recipe || {}).forEach(function (key) {
-      var line = state.recipe[key];
-      if (!line || line.catalogId !== item.id) return;
-      qty += Number(line.pounds) || 0;
-      unit = line.unit || 'lb';
-      if (line.eachFactor) factor = Number(line.eachFactor);
-    });
-    if (!(qty > 0)) return null;
-    return { quantity: qty, unit: unit, eachFactor: factor };
+    var found = ZedOrder.recipeLineFor(item, state.recipe);
+    if (!found) return null;
+    return { quantity: found.pounds, unit: found.unit || 'lb', eachFactor: found.eachFactor };
   }
   function plateSummaryNow() {
     if (!state.plate || !(Number(state.plate.totalCook) >= 0)) return null;
@@ -1231,7 +1222,7 @@
   function assignInitialMatch(row, items) {
     var saved = state.matches[row.key];
     if (saved && (Object.prototype.hasOwnProperty.call(saved, 'catalogId') || saved.hideMode)) {
-      row.catalogId = saved.catalogId || '';
+      row.catalogId = ZedOrder.forcedRecipeItemId(row) || saved.catalogId || '';
       row.eachFactor = saved.eachFactor == null ? '' : saved.eachFactor;
       row.hideMode = saved.hideMode || '';
       row.matchSaved = true;
