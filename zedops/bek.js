@@ -469,7 +469,7 @@
       var list = Array.isArray(rows) ? rows : d.catalog.asList(rows);
       list.forEach(function (item, index) {
         if (!item) return;
-        var key = d.weekly.getItemKey(sectionName, item, index);
+        var key = d.weekly.getItemKey(sectionName, item, d.weekly.itemIndex(item, index));
         if (d.weekly.isRowHidden(item, hidden, key)) return;
         if (!Object.prototype.hasOwnProperty.call(counts, key)) return;
         var number = d.catalog.itemNumberText(item.itemNumber);

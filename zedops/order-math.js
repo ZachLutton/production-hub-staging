@@ -344,6 +344,9 @@
       var caseLb = pack.unit === 'lb' ? pack.perCase : pack.perCase / 16;
       if (caseLb > 0) return casesToOrder(Number(need.quantity) / caseLb, have, 1);
     }
+    if (canonUnit(countUnit) === 'ea' && item && Number(item.eachPerCase) > 0 && canonUnit(need.unit) === 'ea') {
+      return casesToOrder(Number(need.quantity) || 0, have, Number(item.eachPerCase));
+    }
     var needQty = needInCountUnit(need.quantity, need.unit, countUnit, need.eachFactor, item && item.lbPerUnit, item);
     var perCase = perCaseInCountUnit(pack, countUnit);
     return casesToOrder(needQty, have, perCase || 1);

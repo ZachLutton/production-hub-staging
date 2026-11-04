@@ -12,6 +12,21 @@
       .replace(/__LBRACK__/g, '[').replace(/__RBRACK__/g, ']');
   }
 
+  function mapRimParUnit(unit) {
+    var key = String(unit || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    if (key === 'rolls' || key === 'roll') return 'each';
+    if (key === 'gallon' || key === 'gallons' || key === 'gal') return 'gal';
+    if (key === 'case' || key === 'cases') return 'case';
+    if (key === 'box' || key === 'boxes' || key === 'full stack') return 'each';
+    return '';
+  }
+
+  function itemIndex(item, index) {
+    var saved = item && item.weeklyIndex;
+    if (saved != null && saved !== '' && isFinite(Number(saved))) return Number(saved);
+    return index;
+  }
+
   function getItemKey(sectionName, item, idx) {
     var sectionId = String(sectionName || '').replace(/[^a-zA-Z0-9]/g, '_');
     var raw = (item && (item.itemNumber || item.name)) || 'item';
@@ -47,6 +62,8 @@
 
   return {
     unescapeSection: unescapeSection,
+    mapRimParUnit: mapRimParUnit,
+    itemIndex: itemIndex,
     getItemKey: getItemKey,
     isRowHidden: isRowHidden,
     itemList: itemList,

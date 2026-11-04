@@ -98,23 +98,55 @@
     return state.catalog.items[id] || null;
   }
 
+  var RIM_GUIDE_SEED = 'rim-live-1';
+  function loadLocationTables() {
+    return fetch('zedops/weekly-location-items.json').then(function (response) {
+      if (!response.ok) throw new Error('Could not load the store item list.');
+      return response.json();
+    });
+  }
   function ensureInventory(loc) {
     var monthlyId = loc.monthlyLocationId || loc.id;
     var ref = db.ref('staging_inventory/' + monthlyId + '/items');
     return ref.once('value').then(function (snap) {
-      if (!ZedWeekly.itemsNodeEmpty(snap.val())) return snap.val();
-      if (monthlyId !== 'rim' && monthlyId !== 'main') return snap.val() || {};
-      return fetch('zedops/weekly-location-items.json').then(function (response) {
-        if (!response.ok) throw new Error('Could not load the store item list.');
-        return response.json();
-      }).then(function (tables) {
+      var current = snap.val();
+      if (monthlyId !== 'rim' && monthlyId !== 'main') return current || {};
+      if (monthlyId !== 'rim' && !ZedWeekly.itemsNodeEmpty(current)) return current;
+      return loadLocationTables().then(function (tables) {
         var payload = tables[monthlyId];
-        if (!payload) return {};
-        return ref.transaction(function (current) {
-          return ZedWeekly.itemsNodeEmpty(current) ? payload : undefined;
-        }).then(function () { return ref.once('value'); }).then(function (again) { return again.val() || payload; });
+        if (!payload) return current || {};
+        if (monthlyId !== 'rim') {
+          return ref.transaction(function (existing) {
+            return ZedWeekly.itemsNodeEmpty(existing) ? payload : undefined;
+          }).then(function () { return ref.once('value'); }).then(function (again) { return again.val() || payload; });
+        }
+        var versionRef = db.ref('staging_inventory/rim/itemsSeed');
+        return versionRef.once('value').then(function (versionSnap) {
+          if (versionSnap.val() === RIM_GUIDE_SEED && !ZedWeekly.itemsNodeEmpty(current)) return current;
+          return ref.set(payload).then(function () {
+            return versionRef.set(RIM_GUIDE_SEED);
+          }).then(function () { return payload; });
+        });
       });
     });
+  }
+  function seedRimPars() {
+    if (state.role !== 'admin') return Promise.resolve();
+    return fetch('zedops/rim-pars-seed.json').then(function (response) {
+      if (!response.ok) return null;
+      return response.json();
+    }).then(function (seed) {
+      if (!seed || !seed.length) return null;
+      return db.ref(ZedStorage.PATHS.pars + '/rim').once('value').then(function (snap) {
+        var existing = snap.val() || {};
+        var jobs = [];
+        seed.forEach(function (row) {
+          if (!row || !row.id || existing[row.id]) return;
+          jobs.push(ZedStorage.setPar(db, 'rim', row.id, { value: row.value, unit: row.unit }));
+        });
+        return Promise.all(jobs);
+      });
+    }).catch(showError);
   }
 
   function rowsForStore(loc) {
@@ -133,11 +165,9 @@
       Object.keys(sections).forEach(function (section) {
         sections[section].forEach(function (item, index) {
           if (!item || item.hidden === true) return;
-          var id = itemIdForInventory(item);
-          var known = catalogItem(id);
-          rows.push({
-            id: id,
-            item: known || {
+              var id = itemIdForInventory(item);
+              var known = catalogItem(id);
+              var shown = known ? Object.assign({}, known) : {
               id: id,
               vendor: 'bek',
               itemNumber: item.itemNumber || '',
@@ -147,9 +177,17 @@
               label: section,
               countUnit: 'each',
               kind: 'supply',
-              guidePar: null
-            },
-            legacyKey: ZedWeekly.getItemKey(section, item, index),
+                guidePar: null
+              };
+              if (item.countUnit) {
+                shown.countUnit = item.countUnit;
+                shown.countUnitChosen = true;
+              }
+              if (Number(item.eachPerCase) > 0) shown.eachPerCase = Number(item.eachPerCase);
+              rows.push({
+                id: id,
+                item: shown,
+                legacyKey: ZedWeekly.getItemKey(section, item, ZedWeekly.itemIndex(item, index)),
             section: section,
             source: 'inventory'
           });
@@ -388,7 +426,7 @@
             Object.keys(sections).forEach(function (section) {
               (sections[section] || []).forEach(function (item, index) {
                 if (!item) return;
-                var key = ZedWeekly.getItemKey(section, item, index);
+                var key = ZedWeekly.getItemKey(section, item, ZedWeekly.itemIndex(item, index));
                 if (counts[key] == null) return;
                 map[itemIdForInventory(item)] = Number(counts[key]) || 0;
               });
@@ -2006,6 +2044,23 @@
     ZedPdf.downloadPdf('bek-order-' + state.weekKey + '.pdf', ZedPdf.buildPdf({ title: 'Weekly BEK order', lines: bekOrderLines() }));
     setPageStatus('Order submitted. The BEK PDF downloaded.');
   });
+  document.getElementById('pdfPaper').addEventListener('click', function () {
+    var loc = currentStore();
+    var lines = ['Store: ' + (loc ? loc.name : ''), 'Item #    Name    Pack    On hand ________    Order ________', ''];
+    var last = '';
+    (state.rows || []).forEach(function (row) {
+      if (row.section !== last) {
+        lines.push(row.section || 'Items');
+        last = row.section;
+      }
+      var item = row.item || {};
+      lines.push((item.itemNumber || '—') + '  ' + (item.name || '') + '  ' + (item.pack || '') + '  On hand ________  Order ________');
+    });
+    ZedPdf.downloadPdf('paper-order-guide-' + (loc ? loc.id : 'store') + '.pdf', ZedPdf.buildPdf({
+      title: 'Paper order guide — ' + (loc ? loc.name : ''),
+      lines: lines
+    }));
+  });
   document.getElementById('pdfOrder').addEventListener('click', function () {
     if (!confirmOrder()) return;
     ZedPdf.downloadPdf('bek-order-' + state.weekKey + '.pdf', ZedPdf.buildPdf({ title: 'Weekly BEK order', lines: bekOrderLines() }));
@@ -2046,7 +2101,7 @@
       state.catalog = ZedSchema.migrateCatalog({ schemaVersion: raw.schemaVersion || 1, items: raw.items || {}, shelf: raw.shelf || {} });
       state.locationDoc = snaps[1].val() || {};
       fillStores();
-      return reload();
+      return seedRimPars().then(function () { return reload(); });
     }).catch(showError);
   }
 

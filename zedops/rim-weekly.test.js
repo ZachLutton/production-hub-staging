@@ -18,14 +18,25 @@ function memory() {
 
 test('the Rim weekly list is the inventory list, not the BEK catalog', () => {
   const sections = weekly.sectionsFromSnapshot(tables.rim);
-  assert.equal(Array.isArray(sections['Walk-in Cooler']), true);
-  assert.equal(sections['Walk-in Cooler'][0].itemNumber, '106810');
+  assert.equal(Object.keys(sections).length, 6);
+  assert.equal(Array.isArray(sections['Bathroom Supplies']), true);
+  assert.equal(sections['Bathroom Supplies'][0].itemNumber, '881026');
+  assert.equal(sections['Bathroom Supplies'][0].eachPerCase, 6);
   const count = Object.values(sections).reduce(function (sum, rows) { return sum + rows.length; }, 0);
-  assert.ok(count > 200, 'rim list ' + count);
-  assert.equal(sections['Plating Team Supplies'].some(function (item) { return item.itemNumber === '161647'; }), true);
-  assert.equal(sections['Front of House Supplies'].some(function (item) { return item.name === 'Pumpkin Seeds'; }), true);
+  assert.equal(count, 47);
+  assert.equal(sections['Front of House Supplies'].some(function (item) { return item.name === 'Cranberry Mix'; }), false);
+  const towel = sections['Bathroom Supplies'][0];
+  const towelKey = weekly.getItemKey('Bathroom Supplies', towel, weekly.itemIndex(towel, 99));
+  assert.equal(towelKey, 'i_Bathroom_Supplies_881026_0');
   const catalog = bek.buildCatalog(require('./seed.json'));
   assert.ok(count !== catalog.shelf.guide.length);
+  assert.equal(weekly.mapRimParUnit('Rolls'), 'each');
+  assert.equal(weekly.mapRimParUnit('gallon'), 'gal');
+  assert.equal(weekly.mapRimParUnit('case'), 'case');
+  assert.equal(weekly.mapRimParUnit('boxes'), 'each');
+  assert.equal(weekly.mapRimParUnit('full stack'), 'each');
+  const main = weekly.sectionsFromSnapshot(tables.main);
+  assert.equal(main['Walk-in Cooler'][0].itemNumber, '106810');
   const logic = fs.readFileSync(path.join(__dirname, 'weekly-page.js'), 'utf8');
   assert.equal(logic.includes('staging_inventory/'), true);
   assert.equal(logic.includes('weekly-location-items.json'), true);
@@ -61,10 +72,10 @@ test('a list saved as an object still shows, and an existing list is not replace
 
 test('combined totals add Rim weekly on-hand to the Colonnade count by item number', () => {
   const sections = weekly.sectionsFromSnapshot(tables.rim);
-  const item = sections['Walk-in Cooler'][0];
-  const key = weekly.getItemKey('Walk-in Cooler', item, 0);
+  const item = sections['Bathroom Supplies'][0];
+  const key = weekly.getItemKey('Bathroom Supplies', item, 0);
   const legacy = bek.legacyOnHandByItemNumber(
-    { 'Walk-in Cooler': sections['Walk-in Cooler'] },
+    { 'Bathroom Supplies': sections['Bathroom Supplies'] },
     {},
     { [key]: 2 },
     {}
