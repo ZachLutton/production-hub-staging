@@ -74,10 +74,16 @@
     return name.indexOf('kosher') !== -1 && name.indexOf('salt') !== -1;
   }
 
-  // each, case, lb, or gal. Kosher salt is one box unless an admin already chose a unit.
+  function isBalsamicGlaze(item) {
+    var name = String(item && item.name || '').toLowerCase();
+    return name.indexOf('glaze') !== -1 && name.indexOf('balsamic') !== -1;
+  }
+
+  // each, case, lb, or gal. Kosher salt is one box, and balsamic glaze is one bottle,
+  // unless an admin already chose a unit.
   function resolvedCountUnit(item) {
     if (item && item.countUnitChosen && item.countUnit) return item.countUnit;
-    if (isKosherSalt(item)) return 'each';
+    if (isKosherSalt(item) || isBalsamicGlaze(item)) return 'each';
     return volumeCountUnit(item);
   }
 
@@ -100,6 +106,13 @@
     var name = String(item && item.name || '').toLowerCase();
     if (/bleach|sanitizer|cleaner|degreaser|detergent|soap|disinfectant|rinse aid|wash treatment/.test(name)) return false;
     return /honey|syrup|oil|vinegar/.test(name);
+  }
+
+  // Glazes, sauces, and condiments are food even on a supply shelf. The shelf does not decide.
+  function isGlazeSauceOrCondiment(item) {
+    var name = String(item && item.name || '').toLowerCase();
+    if (/bleach|sanitizer|cleaner|degreaser|detergent|soap|disinfectant|rinse aid|wash treatment/.test(name)) return false;
+    return /glaze|sauce|ketchup|mustard|mayonnaise|mayo|dressing|aioli|relish|salsa|condiment/.test(name);
   }
 
   // "11 / 1 LB" is 11 pounds in a case. "4 / 1 GAL" is 4 gallons. "6 / .5 GAL" is 3 gallons.
@@ -198,9 +211,10 @@
     }
     if (canonUnit(unit) === 'ea') {
       var boxLb = pieceWeightLb(item);
+      var piecePack = packAmount(item && item.pack);
       if (boxLb > 0) {
         result.convertedQuantity = Number(result.quantity) / boxLb;
-        result.convertedUnit = 'box';
+        result.convertedUnit = piecePack && piecePack.unit === 'oz' ? 'bottle' : 'box';
       }
     }
     return result;
@@ -261,6 +275,7 @@
     if (item.orderRole === 'supply') return false;
     if (item.kind === 'special' && /salmon|mahi|filet/i.test(item.name || '')) return true;
     if (isDrySeasoning(item)) return true;
+    if (isGlazeSauceOrCondiment(item)) return true;
     var zone = String(item.tempZone || '').toLowerCase();
     if (zone.indexOf('retail ready') !== -1) return true;
     if (zone.indexOf('refriger') !== -1) return true;
@@ -294,7 +309,8 @@
       [/onion powder/, /onion powder/],
       [/cinnamon/, /cinnamon/],
       [/parsley flake|parsley dried|dried parsley/, /parsley flake/],
-      [/kosher salt|salt sea kosher/, /kosher salt|salt sea kosher/]
+      [/kosher salt|salt sea kosher/, /kosher salt|salt sea kosher/],
+      [/balsamic glaze|glaze balsamic/, /glaze balsamic/]
     ];
     for (var i = 0; i < rules.length; i++) {
       if (rules[i][0].test(q) && rules[i][1].test(name)) return 40;
@@ -501,6 +517,7 @@
     volumeCountUnit: volumeCountUnit,
     resolvedCountUnit: resolvedCountUnit,
     isPantryLiquid: isPantryLiquid,
+    isGlazeSauceOrCondiment: isGlazeSauceOrCondiment,
     packAmount: packAmount,
     perCaseInCountUnit: perCaseInCountUnit,
     shortfall: shortfall,

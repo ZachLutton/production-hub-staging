@@ -102,6 +102,29 @@ test('cases always round up and an exact case does not', () => {
   assert.equal(order.orderCases(salt, { quantity: 36, unit: 'lb' }, 0), 1);
   assert.equal(order.orderCases(salt, { quantity: 36.1, unit: 'lb' }, 0), 2);
   assert.equal(order.filterCatalog('Kosher Salt', [salt], { solidOnly: true })[0].itemNumber, '183640');
+  const glaze = {
+    name: 'Glaze Balsamic', brand: 'Roland', pack: '6 / 12.9 OZ', countUnit: 'ounce',
+    tempZone: 'Dry', label: 'Plating Team Supplies', itemNumber: '660356'
+  };
+  const vinegar = { name: 'Vinegar Balsamic', pack: '2 / 5 LTR', countUnit: 'liter', tempZone: 'Dry', itemNumber: '686235' };
+  const pecanShelf = { name: 'Pecan Pieces Medium Fancy', pack: '1 / 5 LB', countUnit: 'pound', tempZone: 'Retail Ready Item Dry', label: 'Label Printing Table' };
+  assert.equal(order.isFoodItem(glaze), true);
+  assert.equal(order.isFoodItem(Object.assign({}, glaze, { orderRole: 'supply' })), false);
+  assert.equal(order.resolvedCountUnit(glaze), 'each');
+  assert.equal(order.resolvedCountUnit(Object.assign({}, glaze, { countUnit: 'oz', countUnitChosen: true })), 'oz');
+  const glazeNeed = order.orderNeed(glaze, { recipe: { quantity: 1, unit: 'lb' }, standingPar: 4, countUnit: 'each' });
+  assert.equal(glazeNeed.source, 'recipe');
+  assert.equal(order.needText(glazeNeed), '1 lb ≈ 1.2 bottle');
+  assert.equal(order.orderCases(glaze, glazeNeed, 0), 1);
+  assert.equal(order.orderCases(glaze, glazeNeed, 2), 0);
+  assert.equal(order.needInCountUnit(1, 'lb', 'oz'), 16);
+  assert.equal(order.filterCatalog('Balsamic Glaze', [glaze, vinegar], { solidOnly: true })[0].itemNumber, '660356');
+  assert.equal(order.filterCatalog('Vinegar, balsamic', [glaze, vinegar], { solidOnly: true })[0].itemNumber, '686235');
+  const pecanNeed = order.orderNeed(pecanShelf, { recipe: { quantity: 3, unit: 'lb' }, standingPar: 9, countUnit: 'pound' });
+  assert.equal(pecanNeed.source, 'recipe');
+  assert.equal(pecanNeed.quantity, 3);
+  const glazeInFile = recipe.purchaseByName(parsed, 'Balsamic Glaze') || recipe.purchaseByName(parsed, 'Glaze, balsamic');
+  assert.equal(glazeInFile, null);
   assert.equal(fs.readFileSync(path.join(__dirname, 'weekly-page.js'), 'utf8').includes('salt sea kosher'), true);
   const honey = { name: 'Honey Pure Blend', pack: '4 / 1 GAL', countUnit: 'gallon', tempZone: 'Refrigeration', itemNumber: '793069' };
   const honeyNeed = order.orderNeed(honey, { recipe: { quantity: 12.6, unit: 'lb' }, countUnit: 'gallon' });
