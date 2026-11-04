@@ -224,6 +224,9 @@
       if (write.op === 'update' && write.value && Object.prototype.hasOwnProperty.call(write.value, 'countUnit')) {
         throw new Error('A guide change must not reset a count unit someone edited.');
       }
+      if (write.op === 'update' && write.value && Object.prototype.hasOwnProperty.call(write.value, 'lbPerUnit')) {
+        throw new Error('A guide change must not reset a pounds-per-unit override.');
+      }
     });
     return writes;
   }

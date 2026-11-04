@@ -54,6 +54,31 @@ test('cases always round up and an exact case does not', () => {
   assert.equal(order.casesToOrder(113.4, 0, order.packAmount('1 / 25 LB').perCase), 5);
   assert.equal(order.casesToOrder(133.9, 0, order.packAmount('4 / 3 LB').perCase), 12);
   assert.equal(order.needInCountUnit(10, 'ea', 'lb', 0.5), 5);
+  const milk = {
+    id: 'bek__171985', itemNumber: '171985', name: 'Milk Lowfat 1% Gallon',
+    pack: '4 / 1 GAL', countUnit: 'gallon', tempZone: 'Refrigeration'
+  };
+  assert.equal(order.packAmount('4 / 1 GAL').perCase, 4);
+  assert.equal(order.packAmount('4 / 1 GAL').unit, 'gal');
+  assert.equal(order.packAmount('6 / .5 GAL').perCase, 3);
+  assert.equal(order.packAmount('1 / 1 QT').unit, 'qt');
+  assert.equal(order.packAmount('4 / 128 OZ').perCase, 512);
+  assert.equal(order.perCaseInCountUnit(order.packAmount('4 / 128 OZ'), 'gallon'), 4);
+  const gallons = order.needInCountUnit(40.1, 'lb', 'gallon', null, null);
+  assert.ok(Math.abs(gallons - (40.1 / 8.6)) < 1e-9);
+  assert.equal(order.orderCases(milk, { quantity: 40.1, unit: 'lb' }, 7), 0);
+  assert.equal(order.orderCases(milk, { quantity: 40.1, unit: 'lb' }, 0), 2);
+  assert.equal(order.orderCases(milk, { quantity: 8.6 * 4, unit: 'lb' }, 0), 1);
+  assert.equal(order.orderCases(milk, { quantity: 8.6 * 4.1, unit: 'lb' }, 0), 2);
+  const heavier = Object.assign({}, milk, { lbPerUnit: 10 });
+  assert.ok(order.needInCountUnit(40.1, 'lb', 'gal', null, 10) < gallons);
+  assert.equal(order.orderCases(heavier, { quantity: 40.1, unit: 'lb' }, 7), 0);
+  const need = order.orderNeed(milk, { recipe: { quantity: 40.1, unit: 'lb' }, countUnit: 'gallon' });
+  assert.equal(order.needText(need), '40.1 lb ≈ 4.7 gal');
+  assert.equal(order.orderCases({ pack: '11 / 1 LB', countUnit: 'pound' }, { quantity: 31.2, unit: 'lb' }, 0), 3);
+  const page = fs.readFileSync(path.join(__dirname, 'weekly-page.js'), 'utf8');
+  assert.equal(page.includes('data-lb-per'), true);
+  assert.equal(page.includes('orderCases'), true);
 });
 
 test('item search is fuzzy and the match count separates saved picks from blanks', () => {

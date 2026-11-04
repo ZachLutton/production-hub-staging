@@ -4,18 +4,74 @@
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (root) root.ZedOrder = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
-  var UNIT = { lb: 'lb', lbs: 'lb', pound: 'lb', pounds: 'lb', gal: 'gal', gallon: 'gal', oz: 'oz', ounce: 'oz', ea: 'ea', each: 'ea', ct: 'ea' };
+  var UNIT = {
+    lb: 'lb', lbs: 'lb', pound: 'lb', pounds: 'lb',
+    gal: 'gal', gallon: 'gal', gallons: 'gal',
+    qt: 'qt', qts: 'qt', quart: 'qt', quarts: 'qt',
+    pt: 'pt', pts: 'pt', pint: 'pt', pints: 'pt',
+    floz: 'floz', fluidounce: 'floz', fluidounces: 'floz',
+    l: 'l', ltr: 'l', liter: 'l', liters: 'l', litre: 'l', litres: 'l',
+    ml: 'ml', milliliter: 'ml', milliliters: 'ml',
+    oz: 'oz', ounce: 'oz', ounces: 'oz',
+    ea: 'ea', each: 'ea', ct: 'ea'
+  };
+  // How many of that unit are in one gallon. Milk and water are about 8.6 lb per gallon.
+  var LB_PER_GAL = 8.6;
+  var UNITS_PER_GAL = { gal: 1, qt: 4, pt: 8, floz: 128, l: 3.785411784, ml: 3785.411784 };
+  var UNIT_LABEL = { lb: 'lb', gal: 'gal', qt: 'qt', pt: 'pt', floz: 'fl oz', l: 'L', ml: 'ml', oz: 'oz', ea: 'each' };
 
   function canonUnit(value) {
     var key = String(value || '').toLowerCase().replace(/[^a-z]/g, '');
     return UNIT[key] || key || '';
   }
 
-  // "11 / 1 LB" is 11 pounds in a case. "4 / 3 LB" is 12 pounds in a case.
+  function isVolumeUnit(unit) {
+    return Object.prototype.hasOwnProperty.call(UNITS_PER_GAL, canonUnit(unit));
+  }
+
+  function unitLabel(unit) {
+    var key = canonUnit(unit);
+    return UNIT_LABEL[key] || key || '';
+  }
+
+  // Pounds in one count unit. An item override wins. Otherwise volume uses 8.6 lb/gal.
+  function defaultLbPer(unit) {
+    var per = UNITS_PER_GAL[canonUnit(unit)];
+    if (!per) return null;
+    return LB_PER_GAL / per;
+  }
+
+  function lbPerOf(unit, override) {
+    var custom = Number(override);
+    if (custom > 0) return custom;
+    return defaultLbPer(unit);
+  }
+
+  // "11 / 1 LB" is 11 pounds in a case. "4 / 1 GAL" is 4 gallons. "6 / .5 GAL" is 3 gallons.
   function packAmount(pack) {
-    var match = String(pack || '').match(/(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)\s*([A-Za-z]+)/);
+    var text = String(pack || '');
+    var match = text.match(/(\d*\.\d+|\d+)\s*\/\s*(\d*\.\d+|\d+)\s*([A-Za-z]+(?:\s+[A-Za-z]+)?)/);
     if (!match) return null;
-    return { perCase: Number(match[1]) * Number(match[2]), unit: canonUnit(match[3]) };
+    return {
+      perCase: Number(match[1]) * Number(match[2]),
+      each: Number(match[2]),
+      unit: canonUnit(match[3]),
+      raw: text
+    };
+  }
+
+  // Case size expressed in the unit the store counts. 4 / 128 OZ counted as gallons is 4 gal.
+  function perCaseInCountUnit(pack, countUnit) {
+    if (!pack || !(pack.perCase > 0)) return 1;
+    var from = pack.unit;
+    var to = canonUnit(countUnit);
+    if (!to || from === to) return pack.perCase;
+    if (from === 'oz' && isVolumeUnit(to) && pack.each === 128) from = 'floz';
+    if (isVolumeUnit(from) && isVolumeUnit(to)) {
+      var converted = pack.perCase / UNITS_PER_GAL[from] * UNITS_PER_GAL[to];
+      if (converted > 0) return converted;
+    }
+    return 1;
   }
 
   function shortfall(need, onHand) {
@@ -32,8 +88,22 @@
     return Math.ceil(gap / size - 1e-9);
   }
 
+  function roundQty(number) {
+    if (!isFinite(number)) return '';
+    if (Math.abs(number - Math.round(number)) < 1e-9) return String(Math.round(number));
+    return String(Math.round(number * 100) / 100);
+  }
+
+  function roundApprox(number) {
+    var n = Math.round(Number(number) * 10) / 10;
+    if (!isFinite(n)) return '';
+    if (Math.abs(n - Math.round(n)) < 1e-9) return String(Math.round(n));
+    return String(n);
+  }
+
   // Recipe pounds (or eaches) expressed in the unit the store counts.
-  function needInCountUnit(quantity, quantityUnit, countUnit, eachFactor) {
+  // lbPerUnit is an optional pounds-per-count-unit override for a volume pack.
+  function needInCountUnit(quantity, quantityUnit, countUnit, eachFactor, lbPerUnit) {
     var qty = Number(quantity) || 0;
     var from = canonUnit(quantityUnit);
     var to = canonUnit(countUnit);
@@ -42,7 +112,39 @@
     if (from === 'lb' && to === 'ea' && factor > 0) return qty / factor;
     if (from === 'ea' && to === 'lb' && factor > 0) return qty * factor;
     if (to === 'case' && factor > 0) return qty / factor;
+    if (from === 'lb' && isVolumeUnit(to)) {
+      var per = lbPerOf(to, lbPerUnit);
+      if (per > 0) return qty / per;
+    }
     return qty;
+  }
+
+  function withVolume(item, result, countUnit) {
+    var unit = countUnit || (item && item.countUnit) || '';
+    if (!result || canonUnit(result.unit) !== 'lb' || !isVolumeUnit(unit)) return result;
+    result.convertedQuantity = needInCountUnit(result.quantity, result.unit, unit, result.eachFactor, item && item.lbPerUnit);
+    result.convertedUnit = unitLabel(unit);
+    return result;
+  }
+
+  function needText(need) {
+    if (!need) return '';
+    var text = roundQty(need.quantity) + (need.unit ? ' ' + unitLabel(need.unit) : '');
+    if (need.convertedQuantity != null && need.convertedUnit) {
+      text += ' ≈ ' + roundApprox(need.convertedQuantity) + ' ' + need.convertedUnit;
+    }
+    return text;
+  }
+
+  // Need and on hand are both in the count unit. Cases round up.
+  function orderCases(item, need, onHand) {
+    if (!need) return 0;
+    var pack = packAmount(item && item.pack);
+    var countUnit = (item && item.countUnit) || (pack && pack.unit) || 'each';
+    var needQty = needInCountUnit(need.quantity, need.unit, countUnit, need.eachFactor, item && item.lbPerUnit);
+    var perCase = perCaseInCountUnit(pack, countUnit);
+    var have = onHand == null || onHand === '' ? 0 : Number(onHand) || 0;
+    return casesToOrder(needQty, have, perCase || 1);
   }
 
   // Food comes from the BEK temp zone, not the shelf the item sits on.
@@ -77,12 +179,12 @@
     if (isFoodItem(item)) {
       var recipeQty = input.recipe ? Number(input.recipe.quantity) || 0 : 0;
       if (!(recipeQty > 0)) return { quantity: 0, unit: 'lb', eachFactor: null, source: 'recipe' };
-      return {
+      return withVolume(item, {
         quantity: recipeQty,
         unit: (input.recipe && input.recipe.unit) || 'lb',
         eachFactor: input.recipe ? input.recipe.eachFactor : null,
         source: 'recipe'
-      };
+      }, input.countUnit || (item && item.countUnit));
     }
     var par = Number(input.standingPar) || 0;
     var unit = input.countUnit || (item && item.countUnit) || 'each';
@@ -249,10 +351,16 @@
 
   return {
     canonUnit: canonUnit,
+    isVolumeUnit: isVolumeUnit,
+    unitLabel: unitLabel,
+    defaultLbPer: defaultLbPer,
     packAmount: packAmount,
+    perCaseInCountUnit: perCaseInCountUnit,
     shortfall: shortfall,
     casesToOrder: casesToOrder,
     needInCountUnit: needInCountUnit,
+    needText: needText,
+    orderCases: orderCases,
     isFoodItem: isFoodItem,
     orderNeed: orderNeed,
     filterCatalog: filterCatalog,

@@ -204,8 +204,7 @@
     });
   }
   function needLabel(need) {
-    var qty = ZedBek.formatQty(need.quantity);
-    var text = qty + (need.unit ? ' ' + need.unit : '') + ' · ' + need.source;
+    var text = ZedOrder.needText(need) + ' · ' + need.source;
     if (need.reason) text += ' — ' + need.reason;
     return text;
   }
@@ -219,20 +218,7 @@
       if (!(size > 0) && fromPack) size = fromPack.perCase;
       return ZedOrder.casesToOrder(need.quantity, handOf(row, loc) || 0, size || 1);
     }
-    var pack = ZedOrder.packAmount(row.item.pack);
-    var countUnit = row.item.countUnit || (pack && pack.unit) || 'each';
-    var needQty = ZedOrder.needInCountUnit(need.quantity, need.unit, countUnit, need.eachFactor);
-    var perCase = 1;
-    if (pack && ZedOrder.canonUnit(pack.unit) === ZedOrder.canonUnit(countUnit)) perCase = pack.perCase;
-    else if (ZedOrder.canonUnit(countUnit) !== ZedOrder.canonUnit(need.unit) && pack) {
-      needQty = ZedOrder.needInCountUnit(need.quantity, need.unit, pack.unit, need.eachFactor);
-      var onHand = handOf(row, loc);
-      if (onHand != null && ZedOrder.canonUnit(countUnit) === ZedOrder.canonUnit(pack.unit)) {
-        return ZedOrder.casesToOrder(needQty, onHand, pack.perCase);
-      }
-      return ZedOrder.casesToOrder(needQty, 0, pack.perCase);
-    }
-    return ZedOrder.casesToOrder(needQty, handOf(row, loc) || 0, perCase);
+    return ZedOrder.orderCases(row.item, need, handOf(row, loc));
   }
 
   function loadSupport(loc) {
@@ -734,6 +720,12 @@
     var food = ZedOrder.isFoodItem(item);
     var roleBtn = state.role === 'admin'
       ? '<button type="button" data-order-role="' + esc(row.id) + '">' + (food ? 'Food' : 'Supply') + '</button>' : '';
+    var density = '';
+    if (state.role === 'admin' && ZedOrder.isVolumeUnit(item.countUnit)) {
+      var perLabel = ZedOrder.unitLabel(item.countUnit);
+      var savedPer = Number(item.lbPerUnit) > 0 ? item.lbPerUnit : '';
+      density = '<div><label>lb per ' + esc(perLabel) + ' <input data-lb-per="' + esc(row.id) + '" type="number" min="0" step="any" inputmode="decimal" placeholder="' + esc(Math.round(ZedOrder.defaultLbPer(item.countUnit) * 1000) / 1000) + '" aria-label="Pounds per ' + esc(perLabel) + ' for ' + esc(item.name) + '" value="' + (savedPer === '' ? '' : esc(savedPer)) + '" style="width:80px;font-size:16px;min-height:44px"></label> <span data-lb-note="' + esc(row.id) + '"></span></div>';
+    }
     var parCell = '';
     if (!food && state.role === 'admin') {
       var parValue = parOf(row, loc);
@@ -743,7 +735,7 @@
       esc(item.name) + temp + '</div><div class="item-brand">' + esc(item.brand || '') + '</div></td><td>' + esc(item.pack || '') +
       '</td><td data-need-for="' + esc(row.id) + '">' + esc(needText) + '</td><td><input class="onhand-input" data-hand="' + esc(row.id) + '" type="number" min="0" step="any" value="' +
       (hand == null ? '' : esc(hand)) + '"></td><td class="need-order">' + (cases > 0 ? cases + ' cs' : '0') + '</td>' +
-      (state.role === 'admin' ? '<td>' + parCell + roleBtn + '</td>' : '') + '</tr>';
+      (state.role === 'admin' ? '<td>' + parCell + density + roleBtn + '</td>' : '') + '</tr>';
   }
 
   function renderOrder() {
@@ -1137,6 +1129,49 @@
   });
   document.getElementById('itemTable').addEventListener('change', function (event) {
     var input = event.target;
+    if (input.getAttribute && input.getAttribute('data-lb-per') != null) {
+      var densityId = input.getAttribute('data-lb-per');
+      var densityRow = null;
+      state.rows.forEach(function (candidate) { if (candidate.id === densityId) densityRow = candidate; });
+      var densityItem = densityRow && densityRow.item;
+      var densityNote = document.querySelector('[data-lb-note="' + densityId + '"]');
+      if (!densityItem) return;
+      var densityRaw = String(input.value || '').trim();
+      var perUnit = ZedOrder.unitLabel(densityItem.countUnit);
+      var densityFields = { lbPerUnit: null };
+      if (densityRaw !== '') {
+        var densityValue = Number(densityRaw);
+        if (!(densityValue > 0)) {
+          if (densityNote) densityNote.textContent = 'Enter pounds per ' + perUnit + ', or leave blank for the water default.';
+          setPageStatus('Enter pounds per ' + perUnit + ' for ' + densityItem.name + ', or leave it blank.', true);
+          return;
+        }
+        densityFields = { lbPerUnit: densityValue };
+      }
+      ZedStorage.setItemFields(db, densityId, densityFields).then(function () {
+        if (densityFields.lbPerUnit == null) delete densityItem.lbPerUnit;
+        else densityItem.lbPerUnit = densityFields.lbPerUnit;
+        if (densityNote) densityNote.textContent = 'Saved';
+        var tr = input.closest('tr');
+        var needCell = tr && tr.querySelector('[data-need-for="' + densityId + '"]');
+        var orderCell = tr && tr.querySelector('.need-order');
+        var loc = currentStore();
+        if (needCell) needCell.textContent = needLabel(needFor(densityRow, loc));
+        if (orderCell) {
+          var cases = casesFor(densityRow, loc);
+          orderCell.textContent = cases > 0 ? cases + ' cs' : '0';
+        }
+        renderSummary(loc);
+        setPageStatus(densityFields.lbPerUnit == null
+          ? 'Saved. ' + densityItem.name + ' uses ' + (Math.round(ZedOrder.defaultLbPer(densityItem.countUnit) * 1000) / 1000) + ' lb per ' + perUnit + '.'
+          : 'Saved. ' + densityItem.name + ' uses ' + densityFields.lbPerUnit + ' lb per ' + perUnit + '.');
+        markSaved();
+      }).catch(function (err) {
+        if (densityNote) densityNote.textContent = (err && err.message) || 'Could not save that weight.';
+        showError(err);
+      });
+      return;
+    }
     if (!input.getAttribute || input.getAttribute('data-par') == null) return;
     var id = input.getAttribute('data-par');
     var row = null;
