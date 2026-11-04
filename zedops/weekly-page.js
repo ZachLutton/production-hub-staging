@@ -357,6 +357,11 @@
     if (hand == null || hand === '') return '—';
     return hand + (unit ? ' ' + unit : '');
   }
+  function needBlock(row, loc) {
+    var need = needFor(row, loc);
+    var math = ZedOrder.orderExplain(row.item, need, handOf(row, loc));
+    return '<div class="need-main">' + esc(needLabel(need)) + '</div><div class="need-math">' + esc(math) + '</div>';
+  }
   function casesFor(row, loc) {
     var ordered = orderFor(row, loc);
     return ordered.unit === 'cs' ? ordered.amount : 0;
@@ -1024,8 +1029,8 @@
       var need = needFor(row, loc);
       var ordered = orderFor(row, loc);
       if (!(need && need.quantity > 0) && !(ordered.amount > 0)) return;
-      lines.push('<tr><td class="item-num">' + esc(item.itemNumber || 'no BEK #') + '</td><td>' + esc(item.name) + '</td><td>' +
-        esc(needLabel(need)) + '</td><td>' + esc(handLabel(row, loc)) + '</td><td class="need-order">' + esc(orderLabel(ordered)) + '</td></tr>');
+      lines.push('<tr><td class="item-num">' + esc(item.itemNumber || 'no BEK #') + '</td><td>' + esc(item.name) + '</td><td class="need-cell">' +
+        needBlock(row, loc) + '</td><td>' + esc(handLabel(row, loc)) + '</td><td class="need-order">' + esc(orderLabel(ordered)) + '</td></tr>');
     });
     var flags = [];
     state.rows.forEach(function (row) {
@@ -1095,7 +1100,7 @@
     var hand = handOf(row);
     var ordered = orderFor(row, loc);
     var cases = ordered.unit === 'cs' ? ordered.amount : 0;
-    var needText = needLabel(need);
+    var needText = needBlock(row, loc);
     var temp = item.temporary ? ' <span class="temp-badge">TEMPORARY</span>' : '';
     var food = ZedOrder.isFoodItem(item);
     var countChoices = ['each', 'case', 'lb', 'gal', 'oz'];
@@ -1139,7 +1144,7 @@
     var warnLine = warn.flagged ? '<div class="order-warn">' + esc(warn.reasons.join(' ')) + '</div>' : '';
     return '<tr' + (warn.flagged ? ' class="order-flag"' : '') + '><td class="item-num">' + esc(item.itemNumber || 'no BEK #') + '</td><td><div class="item-name">' +
       esc(item.name) + temp + '</div><div class="item-brand">' + esc(item.brand || '') + '</div>' + weightLine + '</td><td>' + esc(item.pack || '') +
-      '</td><td data-need-for="' + esc(row.id) + '">' + esc(needText) + '</td><td><input class="onhand-input" data-hand="' + esc(row.id) + '" type="number" min="0" step="any" inputmode="decimal" aria-label="On hand ' + esc(item.name) + ' in ' + esc(countNow) + '" value="' +
+      '</td><td class="need-cell" data-need-for="' + esc(row.id) + '">' + needText + '</td><td><input class="onhand-input" data-hand="' + esc(row.id) + '" type="number" min="0" step="any" inputmode="decimal" aria-label="On hand ' + esc(item.name) + ' in ' + esc(countNow) + '" value="' +
       (hand == null ? '' : esc(hand)) + '"></td><td class="need-order">' + esc(orderLabel(ordered)) + warnLine + '</td>' +
       controls + '</tr>';
   }
@@ -1165,7 +1170,7 @@
         var ordered = orderFor(row, loc);
         total += Number(ordered.amount) || 0;
         orderUnit = ordered.unit || orderUnit;
-        return '<td>' + esc(needLabel(need)) + '</td><td>' + esc(handLabel(row, loc)) + '</td>';
+        return '<td class="need-cell">' + needBlock(row, loc) + '</td><td>' + esc(handLabel(row, loc)) + '</td>';
       }).join('');
       return '<tr><td class="item-num">' + esc(item.itemNumber || 'no BEK #') + '</td><td><div class="item-name">' + esc(item.name) +
         (item.temporary ? ' <span class="temp-badge">TEMPORARY</span>' : '') + '</div></td>' + cells +
@@ -1516,21 +1521,25 @@
     state.orderConfirmed = false;
     var id = input.dataset.hand;
     var raw = input.value.trim();
+    if (!state.hands[state.locationId]) state.hands[state.locationId] = {};
+    if (raw === '') {
+      delete state.onHand[id];
+      delete state.hands[state.locationId][id];
+    } else {
+      state.onHand[id] = Number(raw);
+      state.hands[state.locationId][id] = Number(raw);
+    }
+    var cell = input.parentElement && input.parentElement.nextElementSibling;
+    var row = null;
+    state.rows.forEach(function (candidate) { if (candidate.id === id) row = candidate; });
+    var locNow = currentStore();
+    if (row) {
+      var needCell = document.querySelector('[data-need-for="' + id + '"]');
+      if (needCell) needCell.innerHTML = needBlock(row, locNow);
+      if (cell) cell.textContent = orderLabel(orderFor(row, locNow));
+      renderSummary(locNow);
+    }
     ZedStorage.setOnHand(db, state.locationId, state.weekKey, id, raw === '' ? null : raw).then(function () {
-      if (!state.hands[state.locationId]) state.hands[state.locationId] = {};
-      if (raw === '') {
-        delete state.onHand[id];
-        delete state.hands[state.locationId][id];
-      } else {
-        state.onHand[id] = Number(raw);
-        state.hands[state.locationId][id] = Number(raw);
-      }
-      var cell = input.parentElement && input.parentElement.nextElementSibling;
-      var row = null;
-      state.rows.forEach(function (candidate) { if (candidate.id === id) row = candidate; });
-      if (cell && row) {
-        cell.textContent = orderLabel(orderFor(row, currentStore()));
-      }
       var mealInput = document.querySelector('[data-meal-hand="' + id + '"]');
       if (mealInput && mealInput !== input) mealInput.value = raw;
       var typeId = mealInput && mealInput.getAttribute('data-meal-type');
@@ -1596,7 +1605,7 @@
         var needCell = tr && tr.querySelector('[data-need-for="' + densityId + '"]');
         var orderCell = tr && tr.querySelector('.need-order');
         var loc = currentStore();
-        if (needCell) needCell.textContent = needLabel(needFor(densityRow, loc));
+        if (needCell) needCell.innerHTML = needBlock(densityRow, loc);
         if (orderCell) {
           orderCell.textContent = orderLabel(orderFor(densityRow, loc));
         }
@@ -1636,7 +1645,7 @@
       var needCell = tr && tr.querySelector('[data-need-for="' + id + '"]');
       var orderCell = tr && tr.querySelector('.need-order');
       var loc = currentStore();
-      if (needCell) needCell.textContent = needLabel(needFor(row, loc));
+      if (needCell) needCell.innerHTML = needBlock(row, loc);
       if (orderCell) {
         orderCell.textContent = orderLabel(orderFor(row, loc));
       }

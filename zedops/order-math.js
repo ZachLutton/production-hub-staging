@@ -413,6 +413,73 @@
     return casesToOrder(needQty, have, perCase || 1);
   }
 
+  function explainQty(number) {
+    var n = Number(number);
+    if (!isFinite(n)) return '0';
+    var hundred = Math.round(n * 100) / 100;
+    if (Math.abs(hundred - Math.round(hundred)) < 1e-9) return String(Math.round(hundred));
+    var tenth = Math.round(n * 10) / 10;
+    if (Math.abs(hundred - tenth) < 0.011) return String(tenth);
+    return String(hundred);
+  }
+
+  function countWord(item) {
+    var number = String(item && item.itemNumber || '');
+    if (number === '212500') return 'jar';
+    if (number === '393413') return 'carton';
+    var unit = canonUnit(resolvedCountUnit(item));
+    if (unit === 'gal') return 'gal';
+    if (unit === 'lb' || unit === 'pound') return 'lb';
+    if (unit === 'oz') return 'oz';
+    if (unit === 'ea') return 'ea';
+    return unitLabel(unit) || 'ea';
+  }
+
+  // The same subtraction the order uses, written out so a count can be checked.
+  function orderExplain(item, need, onHand) {
+    if (!need || !item) return '';
+    var result = orderResult(item, need, onHand);
+    var word = countWord(item);
+    var pack = packAmount(item.pack);
+    var countUnit = resolvedCountUnit(item);
+    var have = onHand == null || onHand === '' ? 0 : Number(onHand) || 0;
+    var needQty = Number(need.quantity) || 0;
+    var haveQty = have;
+    var per = 1;
+    var piece = 0;
+    if (pieceOrder(need)) {
+      per = piecesPerCase(item, need.eachFactor);
+      piece = namePortionLb(item) || 0;
+      if (!(per > 0)) per = 0;
+      else haveQty = onHandAsPieces(item, onHand, need.eachFactor);
+    } else if (canonUnit(countUnit) === 'ea' && canonUnit(need.unit) === 'lb') {
+      piece = pieceWeightLb(item, need.eachFactor) || 0;
+      if (piece > 0) {
+        needQty = (Number(need.quantity) || 0) / piece;
+        var perBox = boxesPerCase(pack);
+        var caseLb = pack && pack.unit === 'lb' ? pack.perCase : (pack && pack.unit === 'oz' ? pack.perCase / 16 : 0);
+        if (!(pack && pack.each > 0) && caseLb > 0) perBox = caseLb / piece;
+        per = perBox || 1;
+      }
+    } else {
+      needQty = needInCountUnit(need.quantity, need.unit, countUnit, need.eachFactor, item.lbPerUnit, item);
+      per = perCaseInCountUnit(pack, countUnit) || 1;
+      if (String(item.itemNumber || '') === '800401' && canonUnit(countUnit) === 'lb') per = 12;
+    }
+    var net = needQty - haveQty;
+    if (!(net > 0)) net = 0;
+    var orderWord = result.unit === 'ea' ? word : 'cs';
+    var parts = [];
+    if (piece > 0 && canonUnit(countUnit) === 'ea') {
+      parts.push(explainQty(have) + ' ' + word + ' × ' + explainQty(piece) + ' lb = ' + explainQty(have * piece) + ' lb on hand');
+    }
+    var formula = roundApprox(needQty) + ' ' + word + ' need − ' + roundApprox(haveQty) + ' ' + word + ' on hand = ' + roundApprox(net) + ' ' + word;
+    if (result.unit !== 'ea' && per > 0) formula += ' ÷ ' + explainQty(per) + ' ' + word + '/cs';
+    formula += ' → ' + result.amount + ' ' + orderWord;
+    parts.push(formula);
+    return parts.join('. ');
+  }
+
   // Dry spices and seasonings are food even though the temp zone says Dry.
   // The Saute Line shelf is that set. A name match covers the same kind of item on another shelf.
   function isBakingPantry(item) {
@@ -871,6 +938,7 @@
     needText: needText,
     piecesPerCase: piecesPerCase,
     orderResult: orderResult,
+    orderExplain: orderExplain,
     orderCases: orderCases,
     isFoodItem: isFoodItem,
     isRetailResale: isRetailResale,

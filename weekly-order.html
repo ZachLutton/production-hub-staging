@@ -8,10 +8,10 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <script src="firebase-config.js?v=20261104z"></script>
-    <script src="inventory-store.js?v=20261104z"></script>
-    <script src="staging-boot.js?v=20261104z"></script>
-    <script src="hub-auth.js?v=20261104z"></script>
+    <script src="firebase-config.js?v=20261104aa"></script>
+    <script src="inventory-store.js?v=20261104aa"></script>
+    <script src="staging-boot.js?v=20261104aa"></script>
+    <script src="hub-auth.js?v=20261104aa"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; padding: 10px; }
@@ -38,13 +38,17 @@
         .section-header { background: #e8f5e0; padding: 12px 14px; }
         .section-header-title { color: #2d5016; font-weight: 700; }
         .order-table { width: 100%; border-collapse: collapse; }
-        .order-table th, .order-table td { padding: 8px; border-bottom: 1px solid #eee; text-align: left; vertical-align: top; }
+        .order-table th, .order-table td { padding: 8px; border-bottom: 1px solid #eee; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
         .order-table th { font-size: 12px; text-transform: uppercase; color: #666; }
+        #orderSummary, #orderView { overflow-x: hidden; max-width: 100%; }
+        #orderSummary .order-table, #orderView .order-table { table-layout: fixed; width: 100%; }
+        .need-cell { white-space: normal; min-width: 0; }
+        .need-math { display: block; margin-top: 3px; color: #777; font-size: 11px; font-weight: 400; line-height: 1.35; white-space: normal; overflow-wrap: anywhere; }
         .item-name { font-weight: 700; color: #2d5016; }
         .item-brand, .item-num { color: #888; font-size: 12px; }
         .onhand-input { width: 90px; padding: 8px; font-size: 16px; text-align: right; }
         .admin-controls { white-space: nowrap; vertical-align: middle; }
-        .order-table td[data-need-for] { white-space: nowrap; }
+        .order-table td[data-need-for] { white-space: normal; }
         .row-controls { display: grid; grid-template-columns: 96px 158px 104px; column-gap: 8px; align-items: center; width: max-content; }
         .row-controls.has-density { grid-template-columns: 96px 158px 104px 168px; }
         .row-controls .ctrl-par input,
@@ -99,7 +103,7 @@
             <div style="text-align:left;margin-bottom:10px;"><span style="display:inline-block;background:#F9A825;color:#333;font-size:13px;font-weight:700;padding:8px 14px;border-radius:6px;">STAGING. One weekly order for every store. The live hub is not changed.</span></div>
             <div style="text-align:left;margin-bottom:10px;"><a class="back-btn" href="dashboard.html">← Back to Dashboard</a></div>
             <h1>Weekly Order <span style="background:#F9A825;color:#333;font-size:12px;padding:2px 8px;border-radius:4px;">STAGING</span></h1>
-            <div id="buildStamp" class="build-stamp">Build 20261104z</div>
+            <div id="buildStamp" class="build-stamp">Build 20261104aa</div>
             <div class="header-controls">
                 <label for="locationSelect">Store:</label>
                 <select id="locationSelect"></select>
@@ -159,28 +163,28 @@
             <div class="panel" id="standardsPanel"></div>
             <div class="panel" id="storePanel"></div>
         </div>
-        <footer class="build-stamp">Build 20261104z</footer>
+        <footer class="build-stamp">Build 20261104aa</footer>
     </div>
-    <script src="zedops/catalog.js?v=20261104z"></script>
-    <script src="zedops/schema.js?v=20261104z"></script>
-    <script src="zedops/locations.js?v=20261104z"></script>
-    <script src="zedops/storage.js?v=20261104z"></script>
-    <script src="zedops/weekly-hidden.js?v=20261104z"></script>
-    <script src="zedops/xlsx.js?v=20261104z"></script>
-    <script src="zedops/pdf.js?v=20261104z"></script>
-    <script src="zedops/bek.js?v=20261104z"></script>
-    <script src="zedops/recipe-parse.js?v=20261104z"></script>
-    <script src="zedops/recipe-pdf.js?v=20261104z"></script>
-    <script src="zedops/order-math.js?v=20261104z"></script>
-    <script src="zedops/meal-supplies.js?v=20261104z"></script>
-    <script src="zedops/plate-parse.js?v=20261104z"></script>
-    <script src="zedops/cook-parse.js?v=20261104z"></script>
-    <script src="zedops/plate-pdf.js?v=20261104z"></script>
+    <script src="zedops/catalog.js?v=20261104aa"></script>
+    <script src="zedops/schema.js?v=20261104aa"></script>
+    <script src="zedops/locations.js?v=20261104aa"></script>
+    <script src="zedops/storage.js?v=20261104aa"></script>
+    <script src="zedops/weekly-hidden.js?v=20261104aa"></script>
+    <script src="zedops/xlsx.js?v=20261104aa"></script>
+    <script src="zedops/pdf.js?v=20261104aa"></script>
+    <script src="zedops/bek.js?v=20261104aa"></script>
+    <script src="zedops/recipe-parse.js?v=20261104aa"></script>
+    <script src="zedops/recipe-pdf.js?v=20261104aa"></script>
+    <script src="zedops/order-math.js?v=20261104aa"></script>
+    <script src="zedops/meal-supplies.js?v=20261104aa"></script>
+    <script src="zedops/plate-parse.js?v=20261104aa"></script>
+    <script src="zedops/cook-parse.js?v=20261104aa"></script>
+    <script src="zedops/plate-pdf.js?v=20261104aa"></script>
     <script>
         if (window.pdfjsLib) {
             pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
         }
     </script>
-    <script src="zedops/weekly-page.js?v=20261104z"></script>
+    <script src="zedops/weekly-page.js?v=20261104aa"></script>
 </body>
 </html>
