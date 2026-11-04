@@ -239,12 +239,18 @@ test('the count week is the Tuesday it is due, in Chicago, and prices wait for t
   assert.equal(page.indexOf('id="recipeTools"') < page.indexOf('id="storeView"'), true);
   assert.equal(page.indexOf('id="orderSummary"') < page.indexOf('id="storeView"'), true);
   assert.equal(page.indexOf('id="storeView"') < page.indexOf('id="adminTools"'), true);
-  assert.equal(page.includes('Build 20261104al'), true);
-  assert.equal(page.includes('weekly-page.js?v=20261104al'), true);
+  assert.equal(page.includes('Build 20261104am'), true);
+  assert.equal(page.includes('weekly-page.js?v=20261104am'), true);
+  assert.equal(page.includes('id="pdfOnHand"'), true);
   assert.equal(page.includes('button:disabled'), true);
   assert.equal(page.includes('id="plateFile"'), true);
   assert.equal(page.includes('id="mealChecks"'), true);
   assert.equal(logic.includes('function showView'), true);
+  const onHandPdf = logic.slice(logic.indexOf('function downloadOnHandPdf'), logic.indexOf("getElementById('pdfPaper')"));
+  assert.equal(onHandPdf.includes('zedrics-onhand-'), true);
+  assert.equal(onHandPdf.includes('setOnHand'), false);
+  assert.equal(onHandPdf.includes('buildSheetPdf'), true);
+  assert.equal(onHandPdf.includes('requireAdmin'), false);
   assert.equal(logic.includes('openCookDate'), true);
   assert.equal(logic.includes('Upload that week'), true);
   assert.equal(bek.isLastMonday(new Date('2026-10-26T21:30:00-05:00')), true);
@@ -304,6 +310,28 @@ test('a downloaded PDF is a real PDF and a spreadsheet keeps a leading zero', as
   assert.equal(text.startsWith('%PDF-1.4'), true);
   assert.equal(text.includes('Cooking Wine Marsala'), true);
   assert.equal(text.includes('%%EOF'), true);
+  const onHandPdfBytes = Buffer.from(pdf.buildSheetPdf({
+    title: "Zedric's On-Hand Inventory — Colonnade — week of 2026-11-11",
+    generated: 'Generated Nov 4, 2026, 1:52 PM CT',
+    sections: [{
+      title: 'Walk-in Cooler',
+      rows: [
+        { number: '028201', name: 'Juice Lemon', unit: 'gallon', onHand: '', entered: '' },
+        { number: '171985', name: 'Milk 2% Gal', unit: 'gallon', onHand: '0', entered: 'Ada · Nov 4, 1:00 PM CT' }
+      ]
+    }]
+  })).toString('latin1');
+  assert.equal(onHandPdfBytes.includes('0.949 0.396 0.129 rg'), true);
+  assert.equal(onHandPdfBytes.includes('Helvetica-Bold'), true);
+  assert.equal(onHandPdfBytes.includes("Zedric's On-Hand Inventory"), true);
+  assert.equal(onHandPdfBytes.includes('Walk-in Cooler'), true);
+  assert.equal(onHandPdfBytes.includes('028201'), true);
+  assert.equal(onHandPdfBytes.includes('Juice Lemon'), true);
+  assert.equal(onHandPdfBytes.includes('Last entered'), true);
+  assert.equal(onHandPdfBytes.includes('not counted'), false);
+  assert.equal(onHandPdfBytes.includes('(0) Tj'), true);
+  const lemon = onHandPdfBytes.slice(onHandPdfBytes.indexOf('Juice Lemon'), onHandPdfBytes.indexOf('171985'));
+  assert.equal(lemon.includes('(0) Tj'), false);
 
   const shared = '<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><si><t>Item #</t></si><si><t>Item Name</t></si><si><t>Pack / Size</t></si><si><t>Price</t></si><si><t>Label Name</t></si><si><t>028201</t></si><si><t>Juice Lemon</t></si><si><t>6 / .5 GAL</t></si><si><t>Walk-in Cooler</t></si></sst>';
   const sheet = '<worksheet><sheetData><row><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c><c r="C1" t="s"><v>2</v></c><c r="D1" t="s"><v>3</v></c><c r="E1" t="s"><v>4</v></c></row><row><c r="A2" t="s"><v>5</v></c><c r="B2" t="s"><v>6</v></c><c r="C2" t="s"><v>7</v></c><c r="D2"><v>10.24</v></c><c r="E2" t="s"><v>8</v></c></row></sheetData></worksheet>';

@@ -2103,6 +2103,77 @@
     ZedPdf.downloadPdf('bek-order-' + state.weekKey + '.pdf', ZedPdf.buildPdf({ title: 'Weekly BEK order', lines: bekOrderLines() }));
     setPageStatus('Order submitted. The BEK PDF downloaded.');
   });
+  function chicagoClock(now) {
+    return new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Chicago',
+      month: 'short', day: 'numeric', year: 'numeric',
+      hour: 'numeric', minute: '2-digit', hour12: true
+    }).format(now || new Date());
+  }
+  function enteredLabel(who, when) {
+    var parts = [];
+    if (who) parts.push(String(who));
+    if (when != null && when !== '') {
+      var date = typeof when === 'number' || /^\d+$/.test(String(when)) ? new Date(Number(when)) : new Date(when);
+      if (!isNaN(date.getTime())) parts.push(chicagoClock(date) + ' CT');
+      else parts.push(String(when));
+    }
+    return parts.join(' · ');
+  }
+  function countRecord(row, loc) {
+    loc = loc || currentStore();
+    var bag = loc && state.hands ? state.hands[loc.id] : null;
+    if ((!bag || bag[row.id] == null || bag[row.id] === '') && loc && loc.id === state.locationId) bag = state.onHand;
+    var raw = bag ? bag[row.id] : null;
+    if ((raw == null || raw === '') && loc && state.legacyById && state.legacyById[loc.id] && state.legacyById[loc.id][row.id] != null) {
+      raw = state.legacyById[loc.id][row.id];
+    }
+    if ((raw == null || raw === '') && loc && loc.id === state.locationId && row.legacyKey && state.legacyOnHand[row.legacyKey] != null) {
+      raw = state.legacyOnHand[row.legacyKey];
+    }
+    if (raw == null || raw === '') return { amount: '', entered: '' };
+    if (typeof raw === 'object') {
+      var amount = raw.value == null || raw.value === '' ? '' : ZedBek.formatQty(raw.value);
+      return { amount: amount, entered: enteredLabel(raw.by || raw.name || raw.enteredBy || '', raw.at || raw.updatedAt || raw.enteredAt || '') };
+    }
+    return { amount: ZedBek.formatQty(raw), entered: '' };
+  }
+  function onHandSections(loc) {
+    var groups = [];
+    var index = {};
+    (state.rows || []).forEach(function (row) {
+      var title = row.section || 'Items';
+      if (row.source === 'special') title = 'Special Order (send direct to BEK rep)';
+      if (row.source === 'vendorChecks') title = 'Other vendors';
+      if (!Object.prototype.hasOwnProperty.call(index, title)) {
+        index[title] = groups.length;
+        groups.push({ title: title, rows: [] });
+      }
+      var item = row.item || {};
+      var counted = countRecord(row, loc);
+      var unit = ZedOrder.unitLabel(ZedOrder.resolvedCountUnit(item)) || item.countUnit || '';
+      groups[index[title]].rows.push({
+        number: item.itemNumber || '',
+        name: item.name || '',
+        unit: unit,
+        onHand: counted.amount,
+        entered: counted.entered
+      });
+    });
+    return groups;
+  }
+  function downloadOnHandPdf() {
+    var loc = currentStore();
+    var cook = state.weekKey || '';
+    var place = loc ? loc.name : 'Store';
+    var slug = loc && loc.id ? String(loc.id).toLowerCase().replace(/[^a-z0-9]+/g, '-') : 'store';
+    ZedPdf.downloadPdf('zedrics-onhand-' + slug + '-' + cook + '.pdf', ZedPdf.buildSheetPdf({
+      title: "Zedric's On-Hand Inventory — " + place + " — week of " + cook,
+      generated: 'Generated ' + chicagoClock(new Date()) + ' CT',
+      sections: onHandSections(loc)
+    }));
+  }
+  document.getElementById('pdfOnHand').addEventListener('click', downloadOnHandPdf);
   document.getElementById('pdfPaper').addEventListener('click', function () {
     var loc = currentStore();
     var lines = ['Store: ' + (loc ? loc.name : ''), 'Item #    Name    Pack    On hand ________    Order ________', ''];
