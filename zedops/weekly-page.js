@@ -789,7 +789,7 @@
       row.matchSaved = true;
       return;
     }
-    var suggestion = ZedOrder.filterCatalog(row.name, items, { hidden: state.catalogHidden })[0];
+    var suggestion = ZedOrder.filterCatalog(row.name, items, { hidden: state.catalogHidden, solidOnly: true })[0];
     row.catalogId = suggestion ? suggestion.id : '';
     row.eachFactor = '';
     row.hideMode = '';
@@ -799,13 +799,24 @@
     var el = document.getElementById('recipeStatus');
     if (el) el.textContent = text;
   }
+  function reviewCountText(rows) {
+    var saved = 0;
+    var suggested = 0;
+    var open = 0;
+    var hidden = 0;
+    (rows || []).forEach(function (row) {
+      if (!row) return;
+      if (row.hideMode) { hidden += 1; return; }
+      if (row.matchSaved && row.catalogId) saved += 1;
+      else if (row.catalogId) suggested += 1;
+      else open += 1;
+    });
+    return saved + ' saved, ' + suggested + ' suggested, ' + open + ' unmatched' + (hidden ? ', ' + hidden + ' hidden' : '');
+  }
   function updateMatchCount() {
     var purchases = state.pendingRecipe ? state.pendingRecipe.purchases : [];
-    var visible = purchases.filter(function (row) { return !row.hideMode; });
-    var counts = ZedOrder.matchCounts(visible);
-    var hidden = purchases.length - visible.length;
     var el = document.getElementById('matchCount');
-    if (el) el.textContent = counts.matched + ' matched, ' + counts.unmatched + ' unmatched' + (hidden ? ', ' + hidden + ' hidden' : '');
+    if (el) el.textContent = reviewCountText(purchases);
   }
   function renderRecipeReview() {
     var panel = document.getElementById('recipePanel');
@@ -829,20 +840,19 @@
     panel.style.display = 'block';
     panel._pending = pending;
     panel.setAttribute('data-built', '1');
-    var counts = ZedOrder.matchCounts(pending.purchases);
-    var hiddenRows = pending.purchases.filter(function (row) { return row.hideMode; }).length;
     panel.innerHTML = '<h2>Review raw purchases before the order is applied</h2><p id="recipeCycleWarning" class="recipe-warn"></p><p>Cook date ' + esc(pending.cookDate || '') +
-      '. These are raw weights. Cooked totals and sub-recipe outputs are not ordered twice. A match is saved as soon as you confirm that row. The week\'s order uses them only after you approve.</p>' +
+      '. These are raw weights. Cooked totals and sub-recipe outputs are not ordered twice. A match is saved only when you choose the BEK item on that row. A suggestion is not saved, and Approve does not save suggestions.</p>' +
       '<div class="match-tools"><input id="matchFilter" type="search" placeholder="Find an ingredient" autocomplete="off" enterkeyhint="search"><strong id="matchCount">' +
-      counts.matched + ' matched, ' + counts.unmatched + ' unmatched' + (hiddenRows ? ', ' + hiddenRows + ' hidden' : '') + '</strong>' +
+      reviewCountText(pending.purchases) + '</strong>' +
       '<label><input type="checkbox" id="showHiddenIngredients"' + (state.showHiddenIngredients ? ' checked' : '') + '> Show hidden ingredients</label></div>' +
       '<table class="order-table"><thead><tr><th>Ingredient</th><th>Raw amount</th><th>BEK item</th><th>Each factor</th><th></th></tr></thead><tbody>' +
       pending.purchases.map(function (row, index) {
         var chosen = row.catalogId ? state.catalog.items[row.catalogId] : null;
         var hiddenNote = row.hideMode === 'ignore' ? 'Ignored — not ordered' : (row.hideMode === 'replace' ? 'Replaced — weight carries over' : '');
+        var savedLabel = row.matchSaved ? 'Saved' : (row.catalogId ? 'Suggested — not saved' : '');
         var hasWeight = Number(row.pounds) > 0;
         return '<tr class="' + (row.catalogId ? '' : 'unmatched') + (row.hideMode ? ' ingredient-hidden' : '') + '" data-ingredient="' + esc(row.name) + '" data-index="' + index + '"' + (row.hideMode && !state.showHiddenIngredients ? ' hidden' : '') + '><td>' + esc(row.name) +
-          '<div class="row-saved" data-saved="' + index + '">' + (row.matchSaved ? 'Saved' : '') + (hiddenNote ? ' · ' + hiddenNote : '') + '</div></td><td>' + esc(row.pounds) + ' lb</td><td>' +
+          '<div class="row-saved" data-saved="' + index + '">' + savedLabel + (hiddenNote && savedLabel ? ' · ' : '') + hiddenNote + '</div></td><td>' + esc(row.pounds) + ' lb</td><td>' +
           '<div class="match-box"><button type="button" class="match-chosen" data-open="' + index + '" aria-haspopup="listbox" aria-expanded="false">' + esc(choiceLabel(chosen)) + '</button>' +
           '<div class="match-pop" data-pop="' + index + '" hidden><label class="show-hidden-label"><input type="checkbox" data-show-hidden-catalog="' + index + '"' + (state.showHiddenCatalog ? ' checked' : '') + '> Show hidden items</label><input type="search" data-search="' + index + '" placeholder="Name, brand, or item #" autocomplete="off" enterkeyhint="search">' +
           '<ul role="listbox" data-list="' + index + '"></ul></div></div>' +
@@ -919,9 +929,12 @@
       button.setAttribute('aria-expanded', 'false');
     });
   }
-  function saveMatch(index) {
+  function saveMatch(index, options) {
+    var opts = options || {};
     var row = state.pendingRecipe && state.pendingRecipe.purchases[index];
     if (!row) return Promise.resolve();
+    // The stored key is the ingredient name. The row index is only how the click finds that name.
+    if (!opts.confirm && row.matchSaved !== true) return Promise.resolve();
     var factorEl = document.querySelector('[data-factor="' + index + '"]');
     var eachFactor = factorEl && factorEl.value !== '' ? Number(factorEl.value) : null;
     row.eachFactor = eachFactor == null ? '' : eachFactor;
@@ -1293,14 +1306,19 @@
       var applyIndex = applyHide.getAttribute('data-apply-hide');
       var applyRow = state.pendingRecipe.purchases[applyIndex];
       var checked = document.querySelector('input[name="hide-mode-' + applyIndex + '"]:checked');
+      var hideMode = checked ? checked.value : 'replace';
+      if (hideMode !== 'ignore' && applyRow.matchSaved !== true) {
+        setPageStatus('Confirm the BEK item on this row before replacing. A suggestion is not saved.', true);
+        return;
+      }
       var plan = ZedOrder.planIngredientHide(applyRow, {
-        mode: checked ? checked.value : 'replace',
-        catalogId: applyRow.catalogId
+        mode: hideMode,
+        catalogId: applyRow.matchSaved ? applyRow.catalogId : ''
       });
       if (!plan.ok) { setPageStatus(plan.error + ' Replace is the default so the weight is not dropped.', true); return; }
       applyRow.hideMode = plan.hideMode;
       applyRow.catalogId = plan.catalogId;
-      saveMatch(applyIndex).then(function () {
+      saveMatch(applyIndex, { confirm: true }).then(function () {
         var tr = document.querySelector('tr[data-index="' + applyIndex + '"]');
         if (tr) {
           tr.classList.add('ingredient-hidden');
@@ -1323,8 +1341,9 @@
     if (unhideRow) {
       var unhideIndex = unhideRow.getAttribute('data-unhide-row');
       var unhide = state.pendingRecipe.purchases[unhideIndex];
+      if (!unhide || unhide.matchSaved !== true) return;
       unhide.hideMode = '';
-      saveMatch(unhideIndex).then(function () {
+      saveMatch(unhideIndex, { confirm: true }).then(function () {
         var tr = document.querySelector('tr[data-index="' + unhideIndex + '"]');
         if (tr) {
           tr.classList.remove('ingredient-hidden');
@@ -1363,7 +1382,7 @@
       row.catalogId = option.getAttribute('data-id') || '';
       row.matchSaved = false;
       closeMatchPops();
-      saveMatch(matchIndex).catch(showError);
+      saveMatch(matchIndex, { confirm: true }).catch(showError);
     }
   });
   document.getElementById('recipePanel').addEventListener('change', function (event) {
@@ -1389,11 +1408,16 @@
     }
     var factor = event.target.getAttribute && event.target.getAttribute('data-factor');
     if (factor == null) return;
+    var factorRow = state.pendingRecipe && state.pendingRecipe.purchases[factor];
+    if (!factorRow) return;
+    factorRow.eachFactor = search.value === '' ? '' : Number(search.value);
+    if (factorRow.matchSaved !== true) return;
+    var factorKey = factorRow.key;
     clearTimeout(search._factorTimer);
     search._factorTimer = setTimeout(function () {
-      var row = state.pendingRecipe && state.pendingRecipe.purchases[factor];
-      if (!row) return;
-      row.eachFactor = search.value === '' ? '' : Number(search.value);
+      var current = state.pendingRecipe && state.pendingRecipe.purchases[factor];
+      if (!current || current.key !== factorKey || current.matchSaved !== true) return;
+      current.eachFactor = search.value === '' ? '' : Number(search.value);
       saveMatch(factor).catch(showError);
     }, 400);
   });

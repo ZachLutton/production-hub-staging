@@ -144,7 +144,9 @@
         if (tokens.length && hit === tokens.length) score = 30;
         else if (fuzzy(compact, flat)) score = 10;
       }
-      if (score) ranked.push({ item: item, score: score, name: item.name || '' });
+      // solidOnly keeps a real hit (item number, full phrase, or every word). A loose
+      // letter match stays available in the search box and is never pre-selected.
+      if (score && !(opts.solidOnly && score < 30)) ranked.push({ item: item, score: score, name: item.name || '' });
     });
     ranked.sort(function (a, b) {
       if (b.score !== a.score) return b.score - a.score;
@@ -209,13 +211,13 @@
     return addCalendarDays(countsDue, 8);
   }
 
-  // One approval replaces that week's lines. Ignored or unmatched rows are left out, so the weight is not ordered.
-  // Matches are remembered by ingredient name, including hideMode.
+  // One approval replaces that week's lines. A suggestion is not a match: only a row
+  // the user already confirmed is written to the ingredient map or the week's order.
   function planRecipeApproval(purchases, week) {
     var matches = {};
     var lines = {};
     (purchases || []).forEach(function (row) {
-      if (!row || !row.key) return;
+      if (!row || !row.key || row.matchSaved !== true) return;
       var catalogId = row.hideMode === 'ignore' ? '' : (row.catalogId || '');
       var eachFactor = row.eachFactor === '' || row.eachFactor == null ? null : Number(row.eachFactor);
       matches[row.key] = {

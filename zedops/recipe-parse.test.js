@@ -200,6 +200,7 @@ test('a single approve writes once, and a listener cannot approve again', async 
   assert.equal(order.recipeWeek('2026-11-03'), '2026-11-11');
   const purchases = parsed.purchases.map(function (row, index) {
     const copy = Object.assign({}, row);
+    copy.matchSaved = true;
     if (index === 0) {
       copy.hideMode = 'ignore';
       copy.catalogId = 'bek__meal';
@@ -207,15 +208,22 @@ test('a single approve writes once, and a listener cannot approve again', async 
     else copy.catalogId = 'bek__654028';
     return copy;
   });
+  const cheddar = purchases.find(function (row) { return row.key === 'cheddar_monterey_jack_cheese'; });
+  assert.ok(cheddar);
+  cheddar.matchSaved = false;
+  cheddar.catalogId = 'bek__152510';
+  cheddar.hideMode = '';
   const pageState = { approvingRecipe: false, pendingRecipe: { cookDate: '2026-11-04', purchases: purchases } };
   const pending = order.claimApproval(pageState);
   assert.equal(order.claimApproval(pageState), null);
   const plan = order.planRecipeApproval(pending.purchases, order.recipeWeek(pending.cookDate));
-  const ordered = purchases.filter(function (row) { return row.hideMode !== 'ignore' && row.catalogId; });
+  const ordered = purchases.filter(function (row) { return row.matchSaved === true && row.hideMode !== 'ignore' && row.catalogId; });
   assert.equal(Object.keys(plan.lines).length, ordered.length);
   assert.equal(plan.lines[purchases[0].key], undefined);
   assert.equal(plan.matches[purchases[0].key].hideMode, 'ignore');
   assert.equal(plan.matches[purchases[0].key].catalogId, '');
+  assert.equal(plan.matches[cheddar.key], undefined);
+  assert.equal(plan.lines[cheddar.key], undefined);
   const kept = purchases.find(function (row) { return row.catalogId === 'bek__654028' && row.hideMode !== 'ignore'; });
   assert.equal(plan.lines[kept.key].catalogId, 'bek__654028');
   assert.equal(plan.lines[kept.key].pounds, kept.pounds);
@@ -254,12 +262,15 @@ test('a single approve writes once, and a listener cannot approve again', async 
   assert.equal((await realRef('staging_zedops_recipe/2026-11-10/keep_me/name').once('value')).val(), 'Other week');
   assert.equal((await realRef('staging_zedops_ingredient_map/already_remembered/catalogId').once('value')).val(), 'bek__9');
   assert.equal((await realRef('staging_zedops_ingredient_map/' + purchases[0].key + '/hideMode').once('value')).val(), 'ignore');
+  assert.equal((await realRef('staging_zedops_ingredient_map/cheddar_monterey_jack_cheese').once('value')).val(), null);
+  assert.equal((await realRef('staging_zedops_ingredient_map/' + kept.key + '/catalogId').once('value')).val(), 'bek__654028');
   pageState.approvingRecipe = false;
   pageState.pendingRecipe = { cookDate: '2026-11-04', purchases: purchases };
   const again = order.claimApproval(pageState);
   await storage.saveRecipeApproval(db, order.planRecipeApproval(again.purchases, '2026-11-04'));
   assert.equal(updates, 2);
   assert.equal(Object.keys((await realRef('staging_zedops_recipe/2026-11-04').once('value')).val()).length, ordered.length);
+  assert.equal((await realRef('staging_zedops_ingredient_map/cheddar_monterey_jack_cheese').once('value')).val(), null);
   const page = fs.readFileSync(path.join(__dirname, 'weekly-page.js'), 'utf8');
   assert.equal(page.includes('alert('), false);
   assert.equal(page.includes('confirm('), false);
@@ -270,4 +281,41 @@ test('a single approve writes once, and a listener cannot approve again', async 
   const reload = page.slice(page.indexOf('function reload('), page.indexOf('function fillStores'));
   assert.equal(render.includes('saveRecipeApproval') || render.includes('.update(') || render.includes('.set('), false);
   assert.equal(reload.includes('saveRecipeApproval') || reload.includes('.set('), false);
+});
+
+test('a suggestion is not saved, and cheddar cheese is not offered as feta', () => {
+  const cheeses = [
+    { id: 'bek__152510', itemNumber: '152510', name: 'Cheese Feta Crumbles', brand: 'Kronos' },
+    { id: 'bek__104973', itemNumber: '104973', name: 'Cheese Cheddar Jack Shrd Fancy', brand: 'Masters Gallery' },
+    { id: 'bek__129831', itemNumber: '129831', name: 'Salt Wtr Softener Crystals', brand: '' }
+  ];
+  assert.equal(order.filterCatalog('Cheddar & Monterey Jack Cheese', cheeses, { solidOnly: true }).length, 0);
+  assert.equal(order.filterCatalog('Glenview Farms Mild Cheddar & Monterey Jack Cheese Blend', cheeses, { solidOnly: true }).length, 0);
+  assert.equal(order.filterCatalog('cheese', cheeses)[0].itemNumber, '104973');
+  assert.equal(order.filterCatalog('Cheese, feta', cheeses, { solidOnly: true })[0].itemNumber, '152510');
+  assert.equal(order.filterCatalog('feta', cheeses)[0].itemNumber, '152510');
+  const suggested = {
+    key: 'cheddar_monterey_jack_cheese', name: 'Cheddar & Monterey Jack Cheese', pounds: 16.4,
+    catalogId: 'bek__152510', matchSaved: false, eachFactor: ''
+  };
+  const confirmed = {
+    key: 'cheese_feta', name: 'Cheese, feta', pounds: 1,
+    catalogId: 'bek__152510', matchSaved: true, eachFactor: ''
+  };
+  const plan = order.planRecipeApproval([suggested, confirmed], '2026-11-11');
+  assert.equal(plan.matches[suggested.key], undefined);
+  assert.equal(plan.lines[suggested.key], undefined);
+  assert.equal(plan.matches[confirmed.key].catalogId, 'bek__152510');
+  assert.equal(plan.lines[confirmed.key].pounds, 1);
+  const page = fs.readFileSync(path.join(__dirname, 'weekly-page.js'), 'utf8');
+  const save = page.slice(page.indexOf('function saveMatch'), page.indexOf('function approveBlockMessage'));
+  assert.equal(save.includes('opts.confirm'), true);
+  assert.equal(save.includes('row.matchSaved'), true);
+  assert.equal(save.includes('row.key'), true);
+  const factor = page.slice(page.indexOf("getAttribute('data-factor')"), page.indexOf("document.addEventListener('click'"));
+  assert.equal(factor.includes('current.key !== factorKey'), true);
+  assert.equal(factor.includes('matchSaved'), true);
+  const hide = page.slice(page.indexOf("getAttribute('data-apply-hide')"), page.indexOf("getAttribute('data-unhide-row')"));
+  assert.equal(hide.includes('A suggestion is not saved'), true);
+  assert.equal(page.includes('Approve does not save suggestions'), true);
 });
