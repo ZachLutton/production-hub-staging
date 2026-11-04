@@ -748,10 +748,14 @@
     var roleBtn = state.role === 'admin'
       ? '<button type="button" data-order-role="' + esc(row.id) + '">' + (food ? 'Food' : 'Supply') + '</button>' : '';
     var density = '';
-    if (state.role === 'admin' && ZedOrder.isVolumeUnit(item.countUnit)) {
-      var perLabel = ZedOrder.unitLabel(item.countUnit);
+    var countedUnit = ZedOrder.resolvedCountUnit(item);
+    if (state.role === 'admin' && (ZedOrder.isVolumeUnit(countedUnit) || ZedOrder.canonUnit(countedUnit) === 'ea')) {
+      var perLabel = ZedOrder.canonUnit(countedUnit) === 'ea' ? 'each' : ZedOrder.unitLabel(countedUnit);
       var savedPer = Number(item.lbPerUnit) > 0 ? item.lbPerUnit : '';
-      density = '<div><label>lb per ' + esc(perLabel) + ' <input data-lb-per="' + esc(row.id) + '" type="number" min="0" step="any" inputmode="decimal" placeholder="' + esc(Math.round(ZedOrder.defaultLbPer(ZedOrder.volumeCountUnit(item), item) * 1000) / 1000) + '" aria-label="Pounds per ' + esc(perLabel) + ' for ' + esc(item.name) + '" value="' + (savedPer === '' ? '' : esc(savedPer)) + '" style="width:80px;font-size:16px;min-height:44px"></label> <span data-lb-note="' + esc(row.id) + '"></span></div>';
+      var perDefault = ZedOrder.canonUnit(countedUnit) === 'ea'
+        ? ZedOrder.defaultPieceLb(item)
+        : ZedOrder.defaultLbPer(countedUnit, item);
+      density = '<div><label>lb per ' + esc(perLabel) + ' <input data-lb-per="' + esc(row.id) + '" type="number" min="0" step="any" inputmode="decimal" placeholder="' + esc(perDefault == null ? '' : Math.round(perDefault * 1000) / 1000) + '" aria-label="Pounds per ' + esc(perLabel) + ' for ' + esc(item.name) + '" value="' + (savedPer === '' ? '' : esc(savedPer)) + '" style="width:80px;font-size:16px;min-height:44px"></label> <span data-lb-note="' + esc(row.id) + '"></span></div>';
     }
     var parCell = '';
     if (!food && state.role === 'admin') {

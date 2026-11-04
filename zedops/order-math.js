@@ -84,16 +84,33 @@
   function resolvedCountUnit(item) {
     if (item && item.countUnitChosen && item.countUnit) return item.countUnit;
     if (isKosherSalt(item) || isBalsamicGlaze(item)) return 'each';
+    var packText = String(item && item.pack || '');
+    if (namePortionLb(item) && /(\d*\.\d+|\d+)\s*lb\s*case\b/i.test(packText)) return 'each';
     return volumeCountUnit(item);
   }
 
-  function pieceWeightLb(item) {
-    if (item && Number(item.lbPerUnit) > 0 && canonUnit(resolvedCountUnit(item)) === 'ea') return Number(item.lbPerUnit);
+  function namePortionLb(item) {
+    var match = String(item && item.name || '').match(/(\d+(?:\.\d+)?)\s*oz\b/i);
+    if (!match) return null;
+    var ounces = Number(match[1]);
+    return ounces > 0 ? ounces / 16 : null;
+  }
+
+  function defaultPieceLb(item) {
     var pack = packAmount(item && item.pack);
-    if (!pack || !(pack.each > 0)) return null;
-    if (pack.unit === 'lb') return pack.each;
-    if (pack.unit === 'oz') return pack.each / 16;
-    return null;
+    if (pack && pack.each > 0) {
+      if (pack.unit === 'lb') return pack.each;
+      if (pack.unit === 'oz') return pack.each / 16;
+      return null;
+    }
+    return namePortionLb(item);
+  }
+
+  function pieceWeightLb(item, eachFactor) {
+    var edited = Number(eachFactor);
+    if (edited > 0) return edited;
+    if (item && Number(item.lbPerUnit) > 0 && canonUnit(resolvedCountUnit(item)) === 'ea') return Number(item.lbPerUnit);
+    return defaultPieceLb(item);
   }
 
   function boxesPerCase(pack) {
@@ -119,13 +136,17 @@
   function packAmount(pack) {
     var text = String(pack || '');
     var match = text.match(/(\d*\.\d+|\d+)\s*\/\s*(\d*\.\d+|\d+)\s*([A-Za-z]+(?:\s+[A-Za-z]+)?)/);
-    if (!match) return null;
-    return {
-      perCase: Number(match[1]) * Number(match[2]),
-      each: Number(match[2]),
-      unit: canonUnit(match[3]),
-      raw: text
-    };
+    if (match) {
+      return {
+        perCase: Number(match[1]) * Number(match[2]),
+        each: Number(match[2]),
+        unit: canonUnit(match[3]),
+        raw: text
+      };
+    }
+    var loose = text.match(/(\d*\.\d+|\d+)\s*lb\s*case\b/i);
+    if (!loose) return null;
+    return { perCase: Number(loose[1]), each: 0, unit: 'lb', raw: text };
   }
 
   // Case size expressed in the unit the store counts. 4 / 128 OZ counted as gallons is 4 gal.
@@ -134,6 +155,8 @@
     var from = pack.unit;
     var to = canonUnit(countUnit);
     if (!to || from === to) return pack.perCase;
+    if (from === 'oz' && to === 'lb') return pack.perCase / 16;
+    if (from === 'lb' && to === 'oz') return pack.perCase * 16;
     if (from === 'oz' && isVolumeUnit(to) && pack.each === 128) from = 'floz';
     if (isVolumeUnit(from) && isVolumeUnit(to)) {
       var converted = pack.perCase / UNITS_PER_GAL[from] * UNITS_PER_GAL[to];
@@ -210,7 +233,7 @@
       return result;
     }
     if (canonUnit(unit) === 'ea') {
-      var boxLb = pieceWeightLb(item);
+      var boxLb = pieceWeightLb(item, result.eachFactor);
       var piecePack = packAmount(item && item.pack);
       if (boxLb > 0) {
         result.convertedQuantity = Number(result.quantity) / boxLb;
@@ -239,8 +262,13 @@
     var countUnit = resolvedCountUnit(item);
     var have = onHand == null || onHand === '' ? 0 : Number(onHand) || 0;
     if (canonUnit(countUnit) === 'ea' && canonUnit(need.unit) === 'lb') {
-      var boxLb = pieceWeightLb(item);
-      if (boxLb > 0) return casesToOrder(Number(need.quantity) / boxLb, have, boxesPerCase(pack));
+      var boxLb = pieceWeightLb(item, need.eachFactor);
+      if (boxLb > 0) {
+        var perBox = boxesPerCase(pack);
+        var caseLb = pack && pack.unit === 'lb' ? pack.perCase : (pack && pack.unit === 'oz' ? pack.perCase / 16 : 0);
+        if (!(pack && pack.each > 0) && caseLb > 0) perBox = caseLb / boxLb;
+        return casesToOrder(Number(need.quantity) / boxLb, have, perBox);
+      }
     }
     if (canonUnit(countUnit) === 'case' && canonUnit(need.unit) === 'lb' && pack && (pack.unit === 'lb' || pack.unit === 'oz')) {
       var caseLb = pack.unit === 'lb' ? pack.perCase : pack.perCase / 16;
@@ -516,6 +544,7 @@
     defaultLbPer: defaultLbPer,
     volumeCountUnit: volumeCountUnit,
     resolvedCountUnit: resolvedCountUnit,
+    defaultPieceLb: defaultPieceLb,
     isPantryLiquid: isPantryLiquid,
     isGlazeSauceOrCondiment: isGlazeSauceOrCondiment,
     packAmount: packAmount,

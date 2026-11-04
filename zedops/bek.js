@@ -8,7 +8,7 @@
   var TZ = 'America/Chicago';
 
   var EXTRA_SPECIALS = [
-    { internalKey: 'local_salmon_4oz', name: '4 oz salmon filets', pack: '10 lb case', countUnit: 'pound', temporary: false },
+    { internalKey: 'local_salmon_4oz', name: '4 oz salmon filets', pack: '10 lb case', countUnit: 'each', temporary: false },
     { internalKey: 'local_mahi_8oz', name: '8 oz mahi filets', pack: '10 lb case', countUnit: 'pound', temporary: true }
   ];
 
@@ -55,6 +55,7 @@
       ROLL: 'roll', CS: 'case', QT: 'quart', FT: 'foot'
     };
     if (named[unit]) return named[unit];
+    if (/(\d+(?:\.\d+)?)\s*oz\b/i.test(String(name || '')) && /(\d+(?:\.\d+)?)\s*lb\s*case\b/i.test(text)) return 'each';
     if (/salmon|mahi|filet/i.test(String(name || ''))) return 'pound';
     return 'each';
   }
