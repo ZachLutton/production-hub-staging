@@ -287,6 +287,10 @@
     var units = onHub && summary && !reason ? ZedMeals.unitsFor(type, summary) : 0;
     return { quantity: units, unit: 'each', reason: reason };
   }
+  function garnishFor(item) {
+    if (!item || !window.ZedGarnish) return null;
+    return ZedGarnish.forItem(item, plateDishList(state.plate));
+  }
   function pendingPounds(item) {
     if (!item || !state.pendingRecipe) return 0;
     var qty = 0;
@@ -304,6 +308,17 @@
     var pending = onHub && !supplyChoice ? pendingPounds(row.item) : 0;
     if (pending > 0 && (!recipe || pending > (Number(recipe.quantity) || 0))) {
       recipe = { quantity: pending, unit: 'lb', eachFactor: null };
+    }
+    var garnish = onHub && !supplyChoice ? garnishFor(row.item) : null;
+    if (garnish && garnish.pounds > 0) {
+      var already = recipe ? Number(recipe.quantity) || 0 : 0;
+      recipe = {
+        quantity: already + garnish.pounds,
+        unit: 'lb',
+        eachFactor: null,
+        source: already > 0 ? 'recipe' : 'plate garnish',
+        reason: garnish.reason
+      };
     }
     var retail = ZedOrder.isRetailResale(Object.assign({}, row.item, { label: row.item.label || row.section }));
     var fromRecipe = !supplyChoice && !retail && !!(recipe && Number(recipe.quantity) > 0);

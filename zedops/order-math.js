@@ -888,12 +888,14 @@
     if (isFoodItem(item) || (input.forceFood && !isRetailResale(item))) {
       var recipeQty = input.recipe ? Number(input.recipe.quantity) || 0 : 0;
       if (!(recipeQty > 0)) return { quantity: 0, unit: 'lb', eachFactor: null, source: 'recipe' };
-      return withVolume(item, {
+      var plated = withVolume(item, {
         quantity: recipeQty,
         unit: (input.recipe && input.recipe.unit) || 'lb',
         eachFactor: input.recipe ? input.recipe.eachFactor : null,
-        source: 'recipe'
+        source: (input.recipe && input.recipe.source) || 'recipe',
+        reason: (input.recipe && input.recipe.reason) || ''
       }, input.countUnit || (item && item.countUnit));
+      return plated;
     }
     var par = Number(input.standingPar) || 0;
     var unit = input.countUnit || (item && item.countUnit) || 'each';

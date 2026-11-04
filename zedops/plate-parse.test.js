@@ -232,6 +232,37 @@ test('the 11/11 cook list totals cups by size and maps each counts', () => {
   assert.deepEqual(order.orderResult(catalog.bek__104426, { quantity: 150, unit: 'ea', source: 'plate list' }, 1), { amount: 0, unit: 'cs' });
 });
 
+test('Seared Beef plates add balsamic glaze at 0.25 oz each', () => {
+  const garnish = require('./garnish.js');
+  const order = require('./order-math.js');
+  const plate = require('./plate-parse.js');
+  const bek = require('./bek.js');
+  const text = fs.readFileSync(path.join(__dirname, 'fixtures', 'plate-2026-11-04.txt'), 'utf8');
+  const parsed = plate.parsePlateList(text);
+  const seared = parsed.dishes.filter(function (dish) { return /seared beef/i.test(dish.name); })[0];
+  assert.equal(seared.count, 70);
+  const item = bek.buildCatalog(require('./seed.json')).items.bek__660356;
+  const found = garnish.forItem(item, parsed.dishes);
+  assert.equal(found.ounces, 17.5);
+  assert.equal(found.pounds, 1.094);
+  const need = order.orderNeed(item, { recipe: { quantity: found.pounds, unit: 'lb', source: 'plate garnish', reason: found.reason }, countUnit: 'each' });
+  assert.equal(need.source, 'plate garnish');
+  assert.equal(order.orderResult(item, need, 0).unit, 'cs');
+  assert.equal(order.orderResult(item, need, 0).amount, 1);
+  const cards = garnish.parseAssembly([
+    'Seared Beef Tenderloin',
+    'Sautéed Diced Beef Tenderloin,4,oz',
+    'Balsamic Glaze,0.25,oz',
+    'Red Skin Potato Mashers,4,oz'
+  ].join('\n'), [{ name: 'Balsamic Glaze', itemNumber: '660356' }]);
+  assert.equal(cards.length, 1);
+  assert.equal(cards[0].lines.length, 1);
+  assert.equal(cards[0].lines[0].name, 'Balsamic Glaze');
+  assert.equal(cards[0].lines[0].quantity, 0.25);
+  const page = fs.readFileSync(path.join(__dirname, 'weekly-page.js'), 'utf8');
+  assert.equal(page.includes('garnishFor(row.item)'), true);
+});
+
 test('Greek Chicken Bowl takes two souffle cups and two lids per plate', () => {
   const dishes = [{ key: 'greek_chicken_bowl', name: 'Greek Chicken Bowl', count: 100 }];
   const cup = { itemNumber: '111634', name: 'Cup Plas Souffle 1.5 Oz Trans' };
