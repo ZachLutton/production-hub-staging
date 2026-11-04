@@ -220,6 +220,8 @@ test('cases always round up and an exact case does not', () => {
   assert.equal(order.perCaseInCountUnit(order.packAmount('4 / 128 OZ'), 'gallon'), 4);
   const page = fs.readFileSync(path.join(__dirname, 'weekly-page.js'), 'utf8');
   assert.equal(page.includes('data-lb-per'), true);
+  assert.equal(page.includes('showDensity = state.role === \'admin\' && food && ZedOrder.isVolumeUnit(countedUnit)'), true);
+  assert.equal(page.includes('row-controls'), true);
   assert.equal(page.includes('orderCases'), true);
 });
 

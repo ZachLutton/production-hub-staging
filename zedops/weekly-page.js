@@ -834,26 +834,28 @@
       : '';
     var roleBtn = state.role === 'admin'
       ? '<button type="button" data-order-role="' + esc(row.id) + '">' + (food ? 'Food' : 'Supply') + '</button>' : '';
-    var density = '';
     var countedUnit = ZedOrder.resolvedCountUnit(item);
-    if (state.role === 'admin' && (ZedOrder.isVolumeUnit(countedUnit) || ZedOrder.canonUnit(countedUnit) === 'ea')) {
-      var perLabel = ZedOrder.canonUnit(countedUnit) === 'ea' ? 'each' : ZedOrder.unitLabel(countedUnit);
+    var showDensity = state.role === 'admin' && food && ZedOrder.isVolumeUnit(countedUnit);
+    var density = '';
+    if (showDensity) {
+      var perLabel = ZedOrder.unitLabel(countedUnit);
       var savedPer = Number(item.lbPerUnit) > 0 ? item.lbPerUnit : '';
-      var perDefault = ZedOrder.canonUnit(countedUnit) === 'ea'
-        ? ZedOrder.defaultPieceLb(item)
-        : ZedOrder.defaultLbPer(countedUnit, item);
-      density = '<div><label>lb per ' + esc(perLabel) + ' <input data-lb-per="' + esc(row.id) + '" type="number" min="0" step="any" inputmode="decimal" placeholder="' + esc(perDefault == null ? '' : Math.round(perDefault * 1000) / 1000) + '" aria-label="Pounds per ' + esc(perLabel) + ' for ' + esc(item.name) + '" value="' + (savedPer === '' ? '' : esc(savedPer)) + '" style="width:80px;font-size:16px;min-height:44px"></label> <span data-lb-note="' + esc(row.id) + '"></span></div>';
+      var perDefault = ZedOrder.defaultLbPer(countedUnit, item);
+      density = '<label>lb per ' + esc(perLabel) + ' <input data-lb-per="' + esc(row.id) + '" type="number" min="0" step="any" inputmode="decimal" placeholder="' + esc(perDefault == null ? '' : Math.round(perDefault * 1000) / 1000) + '" aria-label="Pounds per ' + esc(perLabel) + ' for ' + esc(item.name) + '" value="' + (savedPer === '' ? '' : esc(savedPer)) + '"></label><span class="field-note" data-lb-note="' + esc(row.id) + '"></span>';
     }
     var parCell = '';
     if (!food && state.role === 'admin') {
       var parValue = parOf(row, loc);
-      parCell = '<input data-par="' + esc(row.id) + '" type="number" min="0" step="any" inputmode="decimal" aria-label="Standing par for ' + esc(item.name) + '" value="' + (parValue ? esc(parValue) : '') + '" style="width:90px;font-size:16px;min-height:44px"> <span data-par-note="' + esc(row.id) + '"></span>';
+      parCell = '<input data-par="' + esc(row.id) + '" type="number" min="0" step="any" inputmode="decimal" aria-label="Standing par for ' + esc(item.name) + '" value="' + (parValue ? esc(parValue) : '') + '"><span class="field-note" data-par-note="' + esc(row.id) + '"></span>';
     }
+    var controls = state.role === 'admin'
+      ? '<td class="admin-controls"><div class="row-controls' + (showDensity ? ' has-density' : '') + '"><div class="ctrl-par">' + parCell + '</div><div class="ctrl-count">' + countSelect + '</div><div class="ctrl-role">' + roleBtn + '</div><div class="ctrl-density">' + density + '</div></div></td>'
+      : '';
     return '<tr><td class="item-num">' + esc(item.itemNumber || 'no BEK #') + '</td><td><div class="item-name">' +
       esc(item.name) + temp + '</div><div class="item-brand">' + esc(item.brand || '') + '</div></td><td>' + esc(item.pack || '') +
       '</td><td data-need-for="' + esc(row.id) + '">' + esc(needText) + '</td><td><input class="onhand-input" data-hand="' + esc(row.id) + '" type="number" min="0" step="any" inputmode="decimal" aria-label="On hand ' + esc(item.name) + ' in ' + esc(countNow) + '" value="' +
       (hand == null ? '' : esc(hand)) + '"></td><td class="need-order">' + (cases > 0 ? cases + ' cs' : '0') + '</td>' +
-      (state.role === 'admin' ? '<td>' + parCell + countSelect + density + roleBtn + '</td>' : '') + '</tr>';
+      controls + '</tr>';
   }
 
   function renderOrder() {
