@@ -263,7 +263,7 @@ test('cases always round up and an exact case does not', () => {
   assert.equal(order.defaultPieceLb(marinara), 6.5);
   assert.equal(order.isFoodItem(marinara), true);
   const marinaraNeed = order.orderNeed(marinara, { recipe: { quantity: 94, unit: 'lb' }, countUnit: 'each' });
-  assert.equal(order.needText(marinaraNeed), '94 lb ≈ 14.5 can');
+  assert.equal(order.needText(marinaraNeed), '94 lb ≈ 14.5 cans');
   assert.equal(order.orderCases(marinara, marinaraNeed, 7), 2);
   assert.equal(order.orderCases(Object.assign({}, marinara, { lbPerUnit: 7 }), marinaraNeed, 7), 2);
   const crushed = { name: 'Tomato Crushed Angela Mia', pack: '6 / #10 CAN', countUnit: 'can', tempZone: 'Dry' };
@@ -390,7 +390,7 @@ test('gallon, carton, and chip rows order in the count unit', () => {
   assert.equal(fs.readFileSync(path.join(__dirname, 'weekly-page.js'), 'utf8').includes('handLabel'), true);
   assert.equal(order.orderExplain({ name: 'Asparagus', pack: '1 / 5 LB', countUnit: 'pound' }, { quantity: 21, unit: 'lb', source: 'recipe' }, 6), '21 lb need − 6 lb on hand = 15 lb ÷ 5 lb/cs → 3 cs');
   assert.equal(order.orderExplain(milk, milkNeed, 0), '4.7 gal need − 0 gal on hand = 4.7 gal ÷ 4 gal/cs → 2 cs');
-  assert.equal(order.orderExplain(whites, whiteNeed, 12), '12 carton × 2 lb = 24 lb on hand. 12.9 carton need − 12 carton on hand = 0.9 carton ÷ 15 carton/cs → 1 cs');
+  assert.equal(order.orderExplain(whites, whiteNeed, 12), '12 carton × 2 lb = 24 lb on hand. Saved 12 kept as cartons, not converted from lb. 12.9 carton need − 12 carton on hand = 0.9 carton ÷ 15 carton/cs → 1 cs');
   assert.equal(order.orderExplain(blend, blendNeed, 0), '79.3 lb need − 0 lb on hand = 79.3 lb ÷ 40 lb/cs → 2 cs');
   assert.equal(order.orderExplain(chips, chipNeed, 12), '1 lb need − 12 lb on hand = 0 lb ÷ 12 lb/cs → 0 cs');
   const page = fs.readFileSync(path.join(__dirname, 'weekly-page.js'), 'utf8');
@@ -580,6 +580,14 @@ test('food follows the temp zone, even on a supply shelf, and a supply par saves
   assert.equal(order.needText(oatNeed), '10.3 lb ≈ 3.9 containers');
   assert.equal(order.orderCases(oats, oatNeed, 10.3), 0);
   assert.equal(order.orderCases(oats, oatNeed, 0), 1);
+  const evap = spices.bek__798001;
+  assert.equal(evap.pack, '24 / 12 OZ');
+  assert.equal(order.resolvedCountUnit(evap), 'each');
+  const evapNeed = order.orderNeed(evap, { recipe: { quantity: 1.6, unit: 'lb' }, countUnit: 'each', forceFood: true });
+  assert.equal(order.needText(evapNeed), '1.6 lb ≈ 2.1 cans');
+  assert.equal(order.orderCases(evap, evapNeed, 6), 0);
+  assert.equal(order.orderExplain(evap, evapNeed, 6).indexOf('Saved 6 kept as cans, not converted from oz') > -1, true);
+  assert.equal(order.orderExplain(evap, evapNeed, 6).indexOf('4.5 lb on hand') > -1, true);
   const text = fs.readFileSync(path.join(__dirname, 'fixtures', 'scaled-recipe-2026-11-04.txt'), 'utf8');
   const parsedWeek = recipe.parseScaledRecipes(text);
   parsedWeek.purchases.filter(function (row) { return row.pounds > 0 && row.pounds <= 2; }).forEach(function (row) {

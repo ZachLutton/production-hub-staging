@@ -386,7 +386,8 @@
       var piecePack = packAmount(item && item.pack);
       if (boxLb > 0) {
         result.convertedQuantity = Number(result.quantity) / boxLb;
-        result.convertedUnit = piecePack && piecePack.canSize ? 'can' : (isJarSpice(item) ? 'container' : (piecePack && piecePack.unit === 'oz' ? 'bottle' : (/egg white/i.test(String(item && item.name || '')) ? 'carton' : 'box')));
+        var containerWord = countWord(item);
+        result.convertedUnit = piecePack && piecePack.canSize ? 'can' : (isJarSpice(item) ? containerWord : (piecePack && piecePack.unit === 'oz' ? 'bottle' : (/egg white/i.test(String(item && item.name || '')) ? 'carton' : 'box')));
       }
     }
     return result;
@@ -398,6 +399,7 @@
     if (need.convertedQuantity != null && need.convertedUnit) {
       var shownUnit = need.convertedUnit;
       if (shownUnit === 'container' && Math.abs(Number(need.convertedQuantity) - 1) >= 0.05) shownUnit = 'containers';
+      if (shownUnit === 'can' && Math.abs(Number(need.convertedQuantity) - 1) >= 0.05) shownUnit = 'cans';
       text += ' ≈ ' + roundApprox(need.convertedQuantity) + ' ' + shownUnit;
     }
     if (need.pieceQuantity != null && need.pieceUnit) {
@@ -501,6 +503,7 @@
   function countWord(item) {
     var number = String(item && item.itemNumber || '');
     if (number === '212500' || number === '685406') return 'jar';
+    if (number === '798001') return 'can';
     if (isJarSpice(item)) return 'container';
     if (number === '393413') return 'carton';
     var unit = canonUnit(resolvedCountUnit(item));
@@ -548,6 +551,10 @@
     var parts = [];
     if (piece > 0 && canonUnit(countUnit) === 'ea') {
       parts.push(explainQty(have) + ' ' + word + ' × ' + explainQty(piece) + ' lb = ' + explainQty(have * piece) + ' lb on hand');
+      var storedUnit = canonUnit(item.countUnit);
+      if (have && (storedUnit === 'oz' || storedUnit === 'lb' || storedUnit === 'pound' || storedUnit === 'ounce')) {
+        parts.push('Saved ' + explainQty(have) + ' kept as ' + word + 's, not converted from ' + (storedUnit === 'lb' || storedUnit === 'pound' ? 'lb' : 'oz'));
+      }
     }
     var formula = roundApprox(needQty) + ' ' + word + ' need − ' + roundApprox(haveQty) + ' ' + word + ' on hand = ' + roundApprox(net) + ' ' + word;
     if (result.unit !== 'ea' && per > 0) formula += ' ÷ ' + explainQty(per) + ' ' + word + '/cs';
