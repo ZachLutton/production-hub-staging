@@ -206,6 +206,36 @@ test('cases always round up and an exact case does not', () => {
   assert.equal(onionPurchase.pounds, 2.5);
   assert.deepEqual(onionPurchase.sources, ['Bacon & Gruyere Egg Bite Filling']);
   assert.equal(order.filterCatalog('Sliced Caramelized Onions', [onion], { solidOnly: true })[0].itemNumber, '1136442');
+  const marinara = { name: 'Sauce Marinara Rtu', pack: '6 / #10 CAN', countUnit: 'can', itemNumber: '660333', tempZone: 'Dry' };
+  assert.equal(order.packAmount(marinara.pack).each, 6.5);
+  assert.equal(order.packAmount(marinara.pack).perCase, 39);
+  assert.equal(order.packAmount(marinara.pack).cans, 6);
+  assert.equal(order.canEachLb('6 / #5 CAN'), 3.5);
+  assert.equal(order.canEachLb('6 / #2.5 CAN'), 1.75);
+  assert.equal(order.resolvedCountUnit(marinara), 'each');
+  assert.equal(order.defaultPieceLb(marinara), 6.5);
+  assert.equal(order.isFoodItem(marinara), true);
+  const marinaraNeed = order.orderNeed(marinara, { recipe: { quantity: 94, unit: 'lb' }, countUnit: 'each' });
+  assert.equal(order.needText(marinaraNeed), '94 lb ≈ 14.5 can');
+  assert.equal(order.orderCases(marinara, marinaraNeed, 7), 2);
+  assert.equal(order.orderCases(Object.assign({}, marinara, { lbPerUnit: 7 }), marinaraNeed, 7), 2);
+  const crushed = { name: 'Tomato Crushed Angela Mia', pack: '6 / #10 CAN', countUnit: 'can', tempZone: 'Dry' };
+  const enchilada = { name: 'Sauce Enchilada Mild Rtu', pack: '6 / #10 CAN', countUnit: 'can', tempZone: 'Dry' };
+  const ketchup = { name: 'Ketchup Fancy', pack: '6 / #10 CAN', countUnit: 'can', tempZone: 'Dry' };
+  const applesauce = { name: 'Applesauce Unsweetened Fancy', pack: '6 / #10 CAN', countUnit: 'can', tempZone: 'Dry' };
+  const beans = { name: 'Bean Black In Brine', pack: '6 / #10 CAN', countUnit: 'can', tempZone: 'Dry' };
+  function casesFor(item, pounds, onHand) {
+    return order.orderCases(item, order.orderNeed(item, { recipe: { quantity: pounds, unit: 'lb' }, countUnit: 'each' }), onHand);
+  }
+  assert.equal(casesFor(crushed, 39.8, 0), 2);
+  assert.equal(casesFor(crushed, 39.8, 2), 1);
+  assert.equal(casesFor(enchilada, 18.9, 0), 1);
+  assert.equal(casesFor(ketchup, 5.3, 0), 1);
+  assert.equal(casesFor(ketchup, 5.3, 3), 0);
+  assert.equal(casesFor(applesauce, 2.8, 0), 1);
+  assert.equal(casesFor(beans, 17.1, 0), 1);
+  assert.equal(order.filterCatalog('Angela Mia Marinara Sauce', [marinara], { solidOnly: true })[0].itemNumber, '660333');
+  assert.equal(order.filterCatalog('Angela Mia Crushed Tomatoes', [crushed], { solidOnly: true })[0].name, crushed.name);
   const onionNeed = order.orderNeed(onion, { recipe: { quantity: onionPurchase.pounds, unit: 'lb' }, countUnit: 'each', forceFood: true });
   assert.equal(onionNeed.quantity, 2.5);
   assert.equal(order.orderCases(onion, onionNeed, 0), 1);
@@ -220,7 +250,7 @@ test('cases always round up and an exact case does not', () => {
   assert.equal(order.perCaseInCountUnit(order.packAmount('4 / 128 OZ'), 'gallon'), 4);
   const page = fs.readFileSync(path.join(__dirname, 'weekly-page.js'), 'utf8');
   assert.equal(page.includes('data-lb-per'), true);
-  assert.equal(page.includes('showDensity = state.role === \'admin\' && food && ZedOrder.isVolumeUnit(countedUnit)'), true);
+  assert.equal(page.includes('showCanEach'), true);
   assert.equal(page.includes('row-controls'), true);
   assert.equal(page.includes('orderCases'), true);
 });

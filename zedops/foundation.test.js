@@ -50,7 +50,7 @@ test('the guide seed keeps 187 text item numbers, 12 shelf areas, and marsala by
   ]);
   assert.equal(catalog.VENDORS[0].id, 'bek');
   assert.equal(bek.defaultCountUnit('4 / 5 LB', ''), 'pound');
-  assert.equal(bek.defaultCountUnit('6 / #10 CAN', ''), 'can');
+  assert.equal(bek.defaultCountUnit('6 / #10 CAN', ''), 'each');
   const again = bek.diffUpload(built, { kind: 'guide', rows: seed.guide });
   assert.equal(again.empty, true, JSON.stringify({ moved: again.moved.length, added: again.added.length, dropped: again.dropped.length, up: again.priceUp.length, down: again.priceDown.length }));
   const specials = bek.diffUpload(built, { kind: 'special', rows: seed.special });
@@ -239,8 +239,8 @@ test('the count week is the Tuesday it is due, in Chicago, and prices wait for t
   assert.equal(page.indexOf('id="recipeTools"') < page.indexOf('id="storeView"'), true);
   assert.equal(page.indexOf('id="orderSummary"') < page.indexOf('id="storeView"'), true);
   assert.equal(page.indexOf('id="storeView"') < page.indexOf('id="adminTools"'), true);
-  assert.equal(page.includes('Build 20261104p'), true);
-  assert.equal(page.includes('weekly-page.js?v=20261104p'), true);
+  assert.equal(page.includes('Build 20261104q'), true);
+  assert.equal(page.includes('weekly-page.js?v=20261104q'), true);
   assert.equal(page.includes('button:disabled'), true);
   assert.equal(page.includes('id="plateFile"'), true);
   assert.equal(page.includes('id="mealChecks"'), true);

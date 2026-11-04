@@ -47,7 +47,7 @@
     if (/glaze/i.test(String(name || '')) && /balsamic/i.test(String(name || ''))) return 'each';
     var text = String(pack || '');
     if (/128\s*oz/i.test(text)) return 'gallon';
-    if (/#10\s*can/i.test(text)) return 'can';
+    if (/#\s*\d+(?:\.\d+)?\s*can/i.test(text)) return 'each';
     var match = text.match(/\/\s*[\d./-]*\s*([A-Za-z]+)/);
     var unit = match ? match[1].toUpperCase() : '';
     var named = {

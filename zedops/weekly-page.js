@@ -856,12 +856,14 @@
     var roleBtn = state.role === 'admin'
       ? '<button type="button" data-order-role="' + esc(row.id) + '">' + (food ? 'Food' : 'Supply') + '</button>' : '';
     var countedUnit = ZedOrder.resolvedCountUnit(item);
-    var showDensity = state.role === 'admin' && food && ZedOrder.isVolumeUnit(countedUnit);
+    var canLb = ZedOrder.canEachLb(item && item.pack);
+    var showCanEach = food && ZedOrder.canonUnit(countedUnit) === 'ea' && canLb > 0;
+    var showDensity = state.role === 'admin' && food && (ZedOrder.isVolumeUnit(countedUnit) || showCanEach);
     var density = '';
     if (showDensity) {
-      var perLabel = ZedOrder.unitLabel(countedUnit);
+      var perLabel = showCanEach ? 'each' : ZedOrder.unitLabel(countedUnit);
       var savedPer = Number(item.lbPerUnit) > 0 ? item.lbPerUnit : '';
-      var perDefault = ZedOrder.defaultLbPer(countedUnit, item);
+      var perDefault = showCanEach ? canLb : ZedOrder.defaultLbPer(countedUnit, item);
       density = '<label>lb per ' + esc(perLabel) + ' <input data-lb-per="' + esc(row.id) + '" type="number" min="0" step="any" inputmode="decimal" placeholder="' + esc(perDefault == null ? '' : Math.round(perDefault * 1000) / 1000) + '" aria-label="Pounds per ' + esc(perLabel) + ' for ' + esc(item.name) + '" value="' + (savedPer === '' ? '' : esc(savedPer)) + '"></label><span class="field-note" data-lb-note="' + esc(row.id) + '"></span>';
     }
     var parCell = '';

@@ -14,12 +14,14 @@
     ml: 'ml', milliliter: 'ml', milliliters: 'ml',
     oz: 'oz', ounce: 'oz', ounces: 'oz',
     g: 'g', gram: 'g', grams: 'g',
-    ea: 'ea', each: 'ea', ct: 'ea'
+    ea: 'ea', each: 'ea', ct: 'ea', can: 'ea', cans: 'ea'
   };
   // How many of that unit are in one gallon. Milk and water are about 8.6 lb per gallon.
   var LB_PER_GAL = 8.6;
   var UNITS_PER_GAL = { gal: 1, qt: 4, pt: 8, floz: 128, l: 3.785411784, ml: 3785.411784 };
-  var UNIT_LABEL = { lb: 'lb', gal: 'gal', qt: 'qt', pt: 'pt', floz: 'fl oz', l: 'L', ml: 'ml', oz: 'oz', ea: 'each' };
+  var UNIT_LABEL = { lb: 'lb', gal: 'gal', qt: 'qt', pt: 'pt', floz: 'fl oz', l: 'L', ml: 'ml', oz: 'oz', ea: 'each', can: 'can' };
+  // Net weight of one can. A #10 can is 6.5 lb. The others are the usual foodservice nets.
+  var CAN_LB = { '10': 6.5, '5': 3.5, '3': 2.06, '2.5': 1.75, '2': 1.25, '303': 1, '300': 0.875 };
 
   function canonUnit(value) {
     var key = String(value || '').toLowerCase().replace(/[^a-z]/g, '');
@@ -84,6 +86,7 @@
   function resolvedCountUnit(item) {
     if (item && item.countUnitChosen && item.countUnit) return item.countUnit;
     if (isKosherSalt(item) || isBalsamicGlaze(item)) return 'each';
+    if (canEachLb(item && item.pack)) return 'each';
     var packText = String(item && item.pack || '');
     if (namePortionLb(item) && /(\d*\.\d+|\d+)\s*lb\s*case\b/i.test(packText)) return 'each';
     return volumeCountUnit(item);
@@ -96,7 +99,17 @@
     return ounces > 0 ? ounces / 16 : null;
   }
 
+  function canEachLb(pack) {
+    var text = String(pack || '');
+    var match = text.match(/#\s*(\d+(?:\.\d+)?)\s*can\b/i);
+    if (!match) return null;
+    var weight = CAN_LB[match[1]];
+    return weight > 0 ? weight : null;
+  }
+
   function defaultPieceLb(item) {
+    var fromCan = canEachLb(item && item.pack);
+    if (fromCan > 0) return fromCan;
     var pack = packAmount(item && item.pack);
     if (pack && pack.each > 0) {
       if (pack.unit === 'lb') return pack.each;
@@ -121,7 +134,7 @@
 
   function usesSuggestedRecipe(item) {
     if (!item) return false;
-    if (isPantryLiquid(item) || isKosherSalt(item)) return true;
+    if (isPantryLiquid(item) || isKosherSalt(item) || canEachLb(item && item.pack)) return true;
     return /caramelized onion|onion caramelized/i.test(item.name || '');
   }
 
@@ -145,6 +158,14 @@
     if (dozenTwo) {
       var count = Number(dozenTwo[1]);
       return { perCase: count * 2, each: 2, unit: 'lb', raw: text };
+    }
+    var can = text.match(/(\d*\.\d+|\d+)\s*\/\s*#\s*(\d+(?:\.\d+)?)\s*can\b/i);
+    if (can) {
+      var cans = Number(can[1]);
+      var eachLb = CAN_LB[can[2]] || 0;
+      if (eachLb > 0) {
+        return { perCase: cans * eachLb, each: eachLb, unit: 'lb', cans: cans, canSize: can[2], raw: text };
+      }
     }
     var match = text.match(/(\d*\.\d+|\d+)\s*\/\s*(\d*\.\d+|\d+)\s*([A-Za-z]+(?:\s+[A-Za-z]+)?)/);
     if (match) {
@@ -248,7 +269,7 @@
       var piecePack = packAmount(item && item.pack);
       if (boxLb > 0) {
         result.convertedQuantity = Number(result.quantity) / boxLb;
-        result.convertedUnit = piecePack && piecePack.unit === 'oz' ? 'bottle' : 'box';
+        result.convertedUnit = piecePack && piecePack.canSize ? 'can' : (piecePack && piecePack.unit === 'oz' ? 'bottle' : 'box');
       }
     }
     return result;
@@ -320,6 +341,7 @@
     if (isDrySeasoning(item)) return true;
     if (isGlazeSauceOrCondiment(item)) return true;
     if (/caramelized onion|onion caramelized/i.test(item.name || '')) return true;
+    if (canEachLb(item && item.pack)) return true;
     var zone = String(item.tempZone || '').toLowerCase();
     if (zone.indexOf('retail ready') !== -1) return true;
     if (zone.indexOf('refriger') !== -1) return true;
@@ -355,7 +377,14 @@
       [/parsley flake|parsley dried|dried parsley/, /parsley flake/],
       [/kosher salt|salt sea kosher/, /kosher salt|salt sea kosher/],
       [/balsamic glaze|glaze balsamic/, /glaze balsamic/],
-      [/caramelized onion|onion caramelized/, /onion caramelized|caramelized onion/]
+      [/caramelized onion|onion caramelized/, /onion caramelized|caramelized onion/],
+      [/marinara/, /marinara/],
+      [/crushed tomato|tomato crushed/, /tomato crushed/],
+      [/enchilada/, /enchilada/],
+      [/ketchup/, /ketchup/],
+      [/fire roasted red pepper|roasted red pepper/, /red bell diced|pepper red bell/],
+      [/apple sauce|applesauce/, /applesauce/],
+      [/black bean/, /bean black|black bean/]
     ];
     for (var i = 0; i < rules.length; i++) {
       if (rules[i][0].test(q) && rules[i][1].test(name)) return 40;
@@ -562,6 +591,7 @@
     volumeCountUnit: volumeCountUnit,
     resolvedCountUnit: resolvedCountUnit,
     defaultPieceLb: defaultPieceLb,
+    canEachLb: canEachLb,
     isPantryLiquid: isPantryLiquid,
     usesSuggestedRecipe: usesSuggestedRecipe,
     isGlazeSauceOrCondiment: isGlazeSauceOrCondiment,
