@@ -84,4 +84,62 @@ test('the 11/4 plate list splits muffins and cookies off the meal trays', async 
   assert.equal((await db.ref('staging_zedops_plate/pack/' + muffin.key + '/packId').once('value')).val(), 'meal_container');
   assert.equal((await db.ref('staging_zedops_plate/case/cup_9oz/caseSize').once('value')).val(), 1000);
   assert.throws(function () { storage.assertWritable('staging_zedops_plate'); });
+  await assert.rejects(function () { return storage.setPlateTotal(db, '2026-11-04', { totalCook: 4897, dishes: [] }); });
+});
+
+test('the 11/11 plate list keeps split dish lines and fills cups and lids', async () => {
+  const text11 = fs.readFileSync(path.join(__dirname, 'fixtures', 'plate-2026-11-11.txt'), 'utf8');
+  const parsed = plate.parsePlateList(text11);
+  assert.equal(parsed.cookDate, '2026-11-11');
+  assert.equal(parsed.totalCook, 166);
+  const dishSum = parsed.dishes.reduce(function (sum, dish) { return sum + dish.count; }, 0);
+  assert.equal(dishSum, 166);
+  const cookie = parsed.dishes.filter(function (dish) { return dish.name === 'Chocolate Chip Cookie'; })[0];
+  const chew = parsed.dishes.filter(function (dish) { return dish.name === 'Peanut Butter & Chocolate Chews'; })[0];
+  const muffin = parsed.dishes.filter(function (dish) { return dish.name === 'Chocolate, Pecan, & Zucchini Muffin'; })[0];
+  const bites = parsed.dishes.filter(function (dish) { return dish.name === 'Bacon & Gruyere Egg Bites w/ Cauliflower Hashbrowns'; })[0];
+  assert.equal(cookie.count, 20);
+  assert.equal(chew.count, 30);
+  assert.equal(muffin.count, 20);
+  assert.equal(bites.count, 56);
+  const summary = meals.tally(parsed.dishes, {}, parsed.totalCook);
+  assert.equal(summary.cup, 70);
+  assert.equal(summary.containers, 96);
+  const lines = meals.linesFor(summary, { cup_9oz: 0, lid_9oz: 0 }, {});
+  assert.equal(lines[1].need, 70);
+  assert.equal(lines[2].need, 70);
+  assert.equal(lines[1].cases, 1);
+  assert.equal(lines[2].cases, 1);
+  assert.equal(meals.cupNeedReason({ totalCook: 166, dishes: parsed.dishes }, summary), '');
+  const spelled = plate.parsePlateList('Colonnade Plate List for Wednesday November 11, 2026 Total Cook: 166\nOatmeal Cookie    4\n');
+  assert.equal(spelled.cookDate, '2026-11-11');
+  assert.equal(spelled.totalCook, 166);
+  assert.equal(spelled.dishes[0].count, 4);
+  const stored = { cookDate: '2026-11-11', totalCook: 166, fileName: 'plate-11-11.pdf', approvedAt: '2026-11-04T15:00:00Z', sourceText: text11 };
+  const repaired = plate.deriveFromStored(stored);
+  assert.equal(repaired.dishes.length, parsed.dishes.length);
+  assert.equal(meals.tally(repaired.dishes, {}, repaired.totalCook).cup, 70);
+  assert.equal(plate.deriveFromStored(repaired), null);
+  assert.equal(plate.deriveFromStored({ totalCook: 166, dishes: parsed.dishes }), null);
+  const db = store.createInventoryDb({ storage: { getItem: function () { return null; }, setItem: function () {} } });
+  await storage.setPlateTotal(db, '2026-11-11', {
+    totalCook: repaired.totalCook,
+    dishes: repaired.dishes,
+    fileName: repaired.fileName,
+    approvedAt: repaired.approvedAt,
+    sourceText: repaired.sourceText
+  });
+  const saved = (await db.ref('staging_zedops_plate/2026-11-11').once('value')).val();
+  assert.equal(saved.totalCook, 166);
+  assert.equal(saved.dishes[cookie.key].count, 20);
+  assert.equal(saved.dishes[muffin.key].count, 20);
+  assert.equal(saved.sourceText.includes('Chocolate Chip Cookie'), true);
+  const again = plate.deriveFromStored(saved);
+  assert.equal(again, null);
+  const page = fs.readFileSync(path.join(__dirname, 'weekly-page.js'), 'utf8');
+  const upload = page.slice(page.indexOf('function onPlateFile'), page.indexOf('function renderRecipeTools'));
+  assert.equal(upload.includes('saveParsedPlate'), true);
+  assert.equal(upload.includes('no dish lines'), true);
+  assert.equal(page.includes('deriveFromStored'), true);
+  assert.equal(page.includes('sourceText'), true);
 });

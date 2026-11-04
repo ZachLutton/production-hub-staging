@@ -110,15 +110,22 @@
     var dishes = {};
     (value.dishes || []).forEach(function (dish) {
       if (!dish || !dish.key) return;
-      dishes[dish.key] = { name: String(dish.name || ''), count: Number(dish.count) || 0 };
+      var count = Number(dish.count) || 0;
+      if (!(count > 0)) return;
+      dishes[dish.key] = { name: String(dish.name || ''), count: count };
     });
-    return refOf(db, path).set({
+    if (!Object.keys(dishes).length) {
+      return Promise.reject(new Error('That plate list has no dish lines, so nothing was saved.'));
+    }
+    var record = {
       cookDate: cookDate,
       totalCook: total,
       dishes: dishes,
       fileName: String(value.fileName || ''),
       approvedAt: String(value.approvedAt || '')
-    });
+    };
+    if (value.sourceText) record.sourceText = String(value.sourceText);
+    return refOf(db, path).set(record);
   }
 
   function setPackChoice(db, dishKey, value) {

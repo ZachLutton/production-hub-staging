@@ -42,7 +42,8 @@
     }).then(function (text) {
       report({ phase: 'parse' });
       var parsed = plateApi().parsePlateList(text);
-      report({ phase: 'done', totalCook: parsed.totalCook });
+      parsed.sourceText = text;
+      report({ phase: 'done', totalCook: parsed.totalCook, dishes: (parsed.dishes || []).length });
       return parsed;
     });
   }

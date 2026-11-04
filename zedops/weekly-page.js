@@ -258,6 +258,11 @@
       state.legacyPars = snaps[6] ? (snaps[6].val() || {}) : {};
       return db.ref(ZedStorage.PATHS.plate + '/' + week).once('value').then(function (plateSnap) {
         state.plate = plateSnap.val() || null;
+        var repaired = ZedPlate.deriveFromStored(state.plate);
+        if (!repaired) return null;
+        state.plate = repaired;
+        return ZedStorage.setPlateTotal(db, week, repaired);
+      }).then(function () {
         return db.ref(ZedStorage.PATHS.plate + '/pack').once('value');
       }).then(function (packSnap) {
         state.packChoices = (packSnap && packSnap.val()) || {};
@@ -501,8 +506,8 @@
     var summary = packagingSummary(pending.dishes || [], pending.totalCook);
     panel.style.display = 'block';
     panel.innerHTML = '<h2>Review the plate list</h2><p' + (warn ? ' class="recipe-warn"' : '') + '>' +
-      (warn || ('Total Cook ' + esc(pending.totalCook) + ' for ' + esc(ZedBek.shortDate(pending.cookDate)) + '. Trays ' + esc(summary.containers) + '. Cups and lids ' + esc(summary.cup) + '. Approving saves the dishes. Packaging is not added to the BEK order.')) +
-      '</p>' + dishTable(summary) + '<button type="button" id="approvePlate"' + (warn ? ' disabled' : '') + '>Approve plate list</button> <button type="button" id="discardPlate">Discard</button>';
+      (warn || ('Total Cook ' + esc(pending.totalCook) + ' for ' + esc(ZedBek.shortDate(pending.cookDate)) + '. ' + esc((pending.dishes || []).length) + ' dishes. Trays ' + esc(summary.containers) + '. Cups and lids ' + esc(summary.cup) + ', one each per muffin, cookie, or chew.')) +
+      '</p>' + dishTable(summary) + '<button type="button" id="approvePlate"' + (warn || !(pending.dishes || []).length ? ' disabled' : '') + '>Approve plate list</button> <button type="button" id="discardPlate">Discard</button>';
     var approve = document.getElementById('approvePlate');
     var discard = document.getElementById('discardPlate');
     if (approve) approve.onclick = approvePlate;
@@ -512,46 +517,57 @@
     };
   }
 
-  function approvePlate() {
-    var pending = state.pendingPlate;
-    if (!pending) return;
-    var warn = ZedBek.recipeCycleWarning(pending.cookDate, state.weekKey);
+  function saveParsedPlate(parsed) {
+    if (!parsed) return Promise.resolve();
+    var warn = ZedBek.recipeCycleWarning(parsed.cookDate, state.weekKey);
     if (warn) {
       setPageStatus(warn, true);
-      return;
+      return Promise.resolve();
     }
-    if (!(Number(pending.totalCook) >= 0)) {
+    if (!(Number(parsed.totalCook) >= 0)) {
       setPageStatus('That plate list has no Total Cook, so nothing was saved.', true);
-      return;
+      return Promise.resolve();
+    }
+    if (!parsed.dishes || !parsed.dishes.length) {
+      setPageStatus('That plate list has a Total Cook but no dish lines, so nothing was saved.', true);
+      return Promise.resolve();
     }
     var button = document.getElementById('approvePlate');
     if (button) button.disabled = true;
     var approvedAt = new Date().toISOString();
-    ZedStorage.setPlateTotal(db, state.weekKey, {
-      totalCook: pending.totalCook,
-      dishes: pending.dishes || [],
-      fileName: state.plateFileName || '',
-      approvedAt: approvedAt
+    var summary = packagingSummary(parsed.dishes, parsed.totalCook);
+    return ZedStorage.setPlateTotal(db, state.weekKey, {
+      totalCook: parsed.totalCook,
+      dishes: parsed.dishes,
+      fileName: state.plateFileName || parsed.fileName || '',
+      approvedAt: approvedAt,
+      sourceText: parsed.sourceText || ''
     }).then(function () {
       var dishes = {};
-      (pending.dishes || []).forEach(function (dish) {
-        if (dish && dish.key) dishes[dish.key] = { name: dish.name, count: Number(dish.count) || 0 };
+      parsed.dishes.forEach(function (dish) {
+        if (dish && dish.key && Number(dish.count) > 0) dishes[dish.key] = { name: dish.name, count: Number(dish.count) || 0 };
       });
       state.plate = {
         cookDate: state.weekKey,
-        totalCook: Number(pending.totalCook),
+        totalCook: Number(parsed.totalCook),
         dishes: dishes,
-        fileName: state.plateFileName || '',
-        approvedAt: approvedAt
+        fileName: state.plateFileName || parsed.fileName || '',
+        approvedAt: approvedAt,
+        sourceText: parsed.sourceText || ''
       };
       state.pendingPlate = null;
-      setPageStatus('Plate list saved for ' + ZedBek.shortDate(state.weekKey) + '. Total Cook ' + state.plate.totalCook + '.');
+      setPageStatus('Plate list saved for ' + ZedBek.shortDate(state.weekKey) + '. ' + Object.keys(dishes).length + ' dishes. Cups and lids ' + summary.cup + '.');
       render();
       markSaved();
     }).catch(function (err) {
       if (button) button.disabled = false;
       showError(err);
+      renderPlateReview();
     });
+  }
+
+  function approvePlate() {
+    saveParsedPlate(state.pendingPlate);
   }
 
   function savedRecipeText() {
@@ -567,7 +583,9 @@
     var plate = state.plate;
     if (!plate || !(Number(plate.totalCook) >= 0)) return '';
     var dishes = plateDishList(plate);
-    var detail = 'Total Cook ' + plate.totalCook + (dishes.length ? ' · ' + dishes.length + ' dishes' : '');
+    var summary = packagingSummary(dishes, plate.totalCook);
+    var detail = 'Total Cook ' + plate.totalCook;
+    if (dishes.length) detail += ' · ' + dishes.length + ' dishes · cups and lids ' + summary.cup;
     return ZedBek.savedUploadLine(plate.fileName, detail, plate.approvedAt);
   }
   function renderSavedUploads() {
@@ -603,11 +621,24 @@
           setStatus('Chosen: ' + file.name + '. Could not find the cook date and Total Cook.');
           return;
         }
+        if (!parsed.dishes || !parsed.dishes.length) {
+          state.pendingPlate = null;
+          setStatus('Chosen: ' + file.name + '. Total Cook ' + parsed.totalCook + ' was found, but no dish lines. Nothing was saved.');
+          setPageStatus('That plate list has a Total Cook but no dish lines, so nothing was saved.', true);
+          renderPlateReview();
+          return;
+        }
         state.pendingPlate = parsed;
         var warn = ZedBek.recipeCycleWarning(parsed.cookDate, state.weekKey);
-        setStatus('Done. ' + file.name + ' — Total Cook ' + parsed.totalCook + ' for ' + ZedBek.shortDate(parsed.cookDate) + '.' + (warn ? ' ' + warn : ''));
-        if (warn) setPageStatus(warn, true);
-        renderPlateReview();
+        var summary = packagingSummary(parsed.dishes, parsed.totalCook);
+        if (warn) {
+          setStatus('Chosen: ' + file.name + '. Total Cook ' + parsed.totalCook + ' for ' + ZedBek.shortDate(parsed.cookDate) + '. ' + parsed.dishes.length + ' dishes. ' + warn);
+          setPageStatus(warn, true);
+          renderPlateReview();
+          return;
+        }
+        setStatus('Chosen: ' + file.name + '. Saving ' + parsed.dishes.length + ' dishes. Cups and lids ' + summary.cup + '.');
+        saveParsedPlate(parsed);
       }).catch(function (err) {
         state.plateBusy = false;
         setStatus('Chosen: ' + file.name + '. ' + ((err && err.message) || 'Could not parse that PDF.'));
