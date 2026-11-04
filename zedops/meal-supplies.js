@@ -59,6 +59,49 @@
     return packId === 'cup_9oz' ? '9 oz cup and lid' : 'Meal container';
   }
 
+  // Built-in plate links. An admin save for that item replaces these.
+  function defaultPlateItems(item, dishes) {
+    var number = String(item && item.itemNumber || '').replace(/^0+/, '');
+    var rows = [];
+    (dishes || []).forEach(function (dish) {
+      if (!dish || !dish.key) return;
+      if (number === '393795' && /omelet/i.test(dish.name || '')) {
+        rows.push({ key: dish.key, name: dish.name || '', count: Number(dish.count) || 0, qty: 1 });
+      }
+    });
+    return rows;
+  }
+
+  function plateItemRows(item, dishes, saved) {
+    if (saved && typeof saved === 'object') {
+      var rows = [];
+      Object.keys(saved).forEach(function (key) {
+        var spec = saved[key];
+        if (!spec) return;
+        var qty = Number(spec.qty);
+        if (!(qty > 0)) return;
+        var dish = null;
+        (dishes || []).forEach(function (row) { if (row && row.key === key) dish = row; });
+        rows.push({
+          key: key,
+          name: (dish && dish.name) || spec.name || key,
+          count: dish ? (Number(dish.count) || 0) : 0,
+          qty: qty
+        });
+      });
+      return rows;
+    }
+    return defaultPlateItems(item, dishes);
+  }
+
+  function plateItemPieces(item, dishes, saved) {
+    var rows = plateItemRows(item, dishes, saved);
+    if (!rows.length) return null;
+    var pieces = 0;
+    rows.forEach(function (row) { pieces += row.count * row.qty; });
+    return pieces;
+  }
+
   function tally(dishes, choices, totalCook) {
     var cup = 0;
     var rows = [];
@@ -152,6 +195,9 @@
 
   return {
     packForDish: packForDish,
+    defaultPlateItems: defaultPlateItems,
+    plateItemRows: plateItemRows,
+    plateItemPieces: plateItemPieces,
     packLabel: packLabel,
     tally: tally,
     typeOf: typeOf,

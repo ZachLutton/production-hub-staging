@@ -143,3 +143,31 @@ test('the 11/11 plate list keeps split dish lines and fills cups and lids', asyn
   assert.equal(page.includes('deriveFromStored'), true);
   assert.equal(page.includes('sourceText'), true);
 });
+
+test('the 11/4 omelette dishes order one cheddar omelette each', async () => {
+  const parsed = plate.parsePlateList(text);
+  const omelette = { id: 'bek__393795', name: 'Egg Omelette W/cheddar Chs', pack: '72 / 3.5 OZ', countUnit: 'lb', itemNumber: '393795', tempZone: 'Frozen' };
+  const other = { id: 'bek__492773', name: 'Turkey Sausage Patty Cooked', pack: '128 / 1.25 OZ', countUnit: 'lb', itemNumber: '492773' };
+  const linked = meals.defaultPlateItems(omelette, parsed.dishes);
+  assert.equal(linked.length, 1);
+  assert.equal(linked[0].name, 'Bacon, Tomato, & Mushroom Omelet One-Size');
+  assert.equal(linked[0].count, 90);
+  assert.equal(linked[0].qty, 1);
+  assert.equal(meals.plateItemPieces(omelette, parsed.dishes, null), 90);
+  assert.equal(meals.plateItemPieces(other, parsed.dishes, null), null);
+  const saved = {};
+  saved[linked[0].key] = { name: linked[0].name, qty: 2 };
+  assert.equal(meals.plateItemPieces(omelette, parsed.dishes, saved), 180);
+  assert.equal(meals.plateItemPieces(omelette, parsed.dishes, {}), null);
+  const need = order.orderNeed(omelette, { plateList: { quantity: 90, unit: 'each' }, standingPar: 2, countUnit: 'lb' });
+  assert.equal(need.source, 'plate list');
+  assert.equal(order.orderCases(omelette, need, 14), 1);
+  const db = store.createInventoryDb({ storage: { getItem: function () { return null; }, setItem: function () {} } });
+  await storage.setPlateLink(db, omelette.id, saved);
+  assert.equal((await db.ref('staging_zedops_plate/link/' + omelette.id + '/' + linked[0].key + '/qty').once('value')).val(), 2);
+  await storage.setPlateLink(db, omelette.id, {});
+  assert.equal((await db.ref('staging_zedops_plate/link/' + omelette.id).once('value')).val(), null);
+  const page = fs.readFileSync(path.join(__dirname, 'weekly-page.js'), 'utf8');
+  assert.equal(page.includes('plateItemPieces'), true);
+  assert.equal(page.includes('393795'), false);
+});

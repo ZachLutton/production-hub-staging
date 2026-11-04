@@ -44,7 +44,7 @@
     if (parts[0] === PATHS.ingredientMap && parts.length !== 2) throw new Error('Ingredient matches are saved one name at a time.');
     if (parts[0] === PATHS.recipe && parts.length !== 3) throw new Error('Recipe lines are saved one ingredient at a time.');
     if (parts[0] === PATHS.plate) {
-      var plateOk = parts.length === 2 || (parts.length === 3 && (parts[1] === 'pack' || parts[1] === 'case'));
+      var plateOk = parts.length === 2 || (parts.length === 3 && (parts[1] === 'pack' || parts[1] === 'case' || parts[1] === 'link'));
       if (!plateOk) throw new Error('A plate list is saved one cook date, one dish, or one case size at a time.');
     }
     if (parts[0] === PATHS.hidden && parts.length !== 3) throw new Error('Hidden items are saved one item at a time.');
@@ -135,6 +135,18 @@
     var path = PATHS.plate + '/pack/' + dishKey;
     if (value == null) return refOf(db, path).remove();
     return refOf(db, path).set({ name: String(value.name || ''), packId: value.packId === 'cup_9oz' ? 'cup_9oz' : 'meal_container' });
+  }
+
+  function setPlateLink(db, itemId, dishes) {
+    var path = PATHS.plate + '/link/' + itemId;
+    var saved = {};
+    Object.keys(dishes || {}).forEach(function (key) {
+      var spec = dishes[key];
+      if (!spec || !(Number(spec.qty) > 0)) return;
+      saved[key] = { name: String(spec.name || ''), qty: Number(spec.qty) };
+    });
+    if (!Object.keys(saved).length) return refOf(db, path).remove();
+    return refOf(db, path).set(saved);
   }
 
   function setCaseSize(db, supplyId, caseSize) {
@@ -285,6 +297,7 @@
     setRecipeLine: setRecipeLine,
     setPlateTotal: setPlateTotal,
     setPackChoice: setPackChoice,
+    setPlateLink: setPlateLink,
     setCaseSize: setCaseSize,
     saveRecipeApproval: saveRecipeApproval,
     setLocation: setLocation,

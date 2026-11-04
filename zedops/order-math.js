@@ -119,6 +119,12 @@
     return count > 0 ? count : 1;
   }
 
+  function usesSuggestedRecipe(item) {
+    if (!item) return false;
+    if (isPantryLiquid(item) || isKosherSalt(item)) return true;
+    return /caramelized onion|onion caramelized/i.test(item.name || '');
+  }
+
   function isPantryLiquid(item) {
     var name = String(item && item.name || '').toLowerCase();
     if (/bleach|sanitizer|cleaner|degreaser|detergent|soap|disinfectant|rinse aid|wash treatment/.test(name)) return false;
@@ -135,6 +141,11 @@
   // "11 / 1 LB" is 11 pounds in a case. "4 / 1 GAL" is 4 gallons. "6 / .5 GAL" is 3 gallons.
   function packAmount(pack) {
     var text = String(pack || '');
+    var dozenTwo = text.trim().match(/^(\d+)\s*\/\s*2$/);
+    if (dozenTwo) {
+      var count = Number(dozenTwo[1]);
+      return { perCase: count * 2, each: 2, unit: 'lb', raw: text };
+    }
     var match = text.match(/(\d*\.\d+|\d+)\s*\/\s*(\d*\.\d+|\d+)\s*([A-Za-z]+(?:\s+[A-Za-z]+)?)/);
     if (match) {
       return {
@@ -261,6 +272,10 @@
     var pack = packAmount(item && item.pack);
     var countUnit = resolvedCountUnit(item);
     var have = onHand == null || onHand === '' ? 0 : Number(onHand) || 0;
+    if (need.source === 'plate list' && canonUnit(need.unit) === 'ea' && canonUnit(countUnit) === 'lb' && pack && pack.unit === 'oz' && pack.each > 0) {
+      var pieceLb = pack.each / 16;
+      return casesToOrder(Number(need.quantity) || 0, have / pieceLb, pack.perCase / pack.each);
+    }
     if (canonUnit(countUnit) === 'ea' && canonUnit(need.unit) === 'lb') {
       var boxLb = pieceWeightLb(item, need.eachFactor);
       if (boxLb > 0) {
@@ -304,6 +319,7 @@
     if (item.kind === 'special' && /salmon|mahi|filet/i.test(item.name || '')) return true;
     if (isDrySeasoning(item)) return true;
     if (isGlazeSauceOrCondiment(item)) return true;
+    if (/caramelized onion|onion caramelized/i.test(item.name || '')) return true;
     var zone = String(item.tempZone || '').toLowerCase();
     if (zone.indexOf('retail ready') !== -1) return true;
     if (zone.indexOf('refriger') !== -1) return true;
@@ -338,7 +354,8 @@
       [/cinnamon/, /cinnamon/],
       [/parsley flake|parsley dried|dried parsley/, /parsley flake/],
       [/kosher salt|salt sea kosher/, /kosher salt|salt sea kosher/],
-      [/balsamic glaze|glaze balsamic/, /glaze balsamic/]
+      [/balsamic glaze|glaze balsamic/, /glaze balsamic/],
+      [/caramelized onion|onion caramelized/, /onion caramelized|caramelized onion/]
     ];
     for (var i = 0; i < rules.length; i++) {
       if (rules[i][0].test(q) && rules[i][1].test(name)) return 40;
@@ -546,6 +563,7 @@
     resolvedCountUnit: resolvedCountUnit,
     defaultPieceLb: defaultPieceLb,
     isPantryLiquid: isPantryLiquid,
+    usesSuggestedRecipe: usesSuggestedRecipe,
     isGlazeSauceOrCondiment: isGlazeSauceOrCondiment,
     packAmount: packAmount,
     perCaseInCountUnit: perCaseInCountUnit,

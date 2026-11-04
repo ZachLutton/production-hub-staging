@@ -22,6 +22,7 @@
     plate: null,
     pendingPlate: null,
     packChoices: {},
+    plateLinks: {},
     caseSizes: {},
     matches: {},
     catalogHidden: {},
@@ -185,6 +186,17 @@
   }
   function plateListFor(item, loc) {
     if (!item) return null;
+    var dishes = plateDishList(state.plate);
+    var saved = state.plateLinks ? state.plateLinks[item.id] : null;
+    var pieces = ZedMeals.plateItemPieces(item, dishes, saved && typeof saved === 'object' ? saved : null);
+    if (pieces != null) {
+      var onHubItem = loc && ZedLocations.listSourceOf(loc) === 'catalog';
+      var linked = ZedMeals.plateItemRows(item, dishes, saved && typeof saved === 'object' ? saved : null);
+      var reason = onHubItem ? linked.map(function (row) {
+        return row.count + ' ' + row.name + ' × ' + row.qty;
+      }).join('; ') : '';
+      return { quantity: onHubItem ? pieces : 0, unit: 'each', reason: reason };
+    }
     var type = ZedMeals.typeForItemNumber(item.itemNumber);
     if (!type || !type.catalogNumber) return null;
     var onHub = loc && ZedLocations.listSourceOf(loc) === 'catalog';
@@ -206,11 +218,11 @@
     loc = loc || currentStore();
     var onHub = loc && ZedLocations.listSourceOf(loc) === 'catalog';
     var recipe = onHub ? recipeNeed(row.item) : null;
-    var pending = onHub && ZedOrder.isPantryLiquid(row.item) ? pendingPounds(row.item) : 0;
+    var pending = onHub && ZedOrder.usesSuggestedRecipe(row.item) ? pendingPounds(row.item) : 0;
     if (pending > 0 && (!recipe || pending > (Number(recipe.quantity) || 0))) {
       recipe = { quantity: pending, unit: 'lb', eachFactor: null };
     }
-    var fromRecipe = recipe && Number(recipe.quantity) > 0 && ZedOrder.isPantryLiquid(row.item);
+    var fromRecipe = recipe && Number(recipe.quantity) > 0 && ZedOrder.usesSuggestedRecipe(row.item);
     return ZedOrder.orderNeed(row.item, {
       plateList: plateListFor(row.item, loc),
       recipe: recipe,
@@ -229,10 +241,13 @@
     if (!need) return 0;
     if (need.source === 'plate list') {
       var type = ZedMeals.typeForItemNumber(row.item && row.item.itemNumber);
-      var size = type && Number(state.caseSizes[type.id]) > 0 ? Number(state.caseSizes[type.id]) : (type && type.caseSize);
-      var fromPack = ZedOrder.packAmount(row.item && row.item.pack);
-      if (!(size > 0) && fromPack) size = fromPack.perCase;
-      return ZedOrder.casesToOrder(need.quantity, handOf(row, loc) || 0, size || 1);
+      if (type) {
+        var size = Number(state.caseSizes[type.id]) > 0 ? Number(state.caseSizes[type.id]) : type.caseSize;
+        var fromPack = ZedOrder.packAmount(row.item && row.item.pack);
+        if (!(size > 0) && fromPack) size = fromPack.perCase;
+        return ZedOrder.casesToOrder(need.quantity, handOf(row, loc) || 0, size || 1);
+      }
+      return ZedOrder.orderCases(row.item, need, handOf(row, loc));
     }
     return ZedOrder.orderCases(row.item, need, handOf(row, loc));
   }
@@ -276,6 +291,9 @@
           if (saved[id] && Number(saved[id].caseSize) > 0) sizes[id] = Number(saved[id].caseSize);
         });
         state.caseSizes = sizes;
+        return db.ref(ZedStorage.PATHS.plate + '/link').once('value');
+      }).then(function (linkSnap) {
+        state.plateLinks = (linkSnap && linkSnap.val()) || {};
       }).catch(function (err) {
         state.plate = state.plate || null;
         showError(err);
@@ -444,11 +462,80 @@
       '<option value="cup_9oz"' + (dish.packId === 'cup_9oz' ? ' selected' : '') + '>9 oz cup and lid</option></select>';
   }
 
-  function dishTable(summary) {
+  function linksOnDish(dish) {
+    var out = [];
+    var dishes = plateDishList(state.plate);
+    var items = state.catalog && state.catalog.items ? state.catalog.items : {};
+    Object.keys(items).forEach(function (id) {
+      var item = items[id];
+      var saved = state.plateLinks && state.plateLinks[id];
+      var rows = ZedMeals.plateItemRows(item, dishes, saved && typeof saved === 'object' ? saved : null);
+      rows.forEach(function (row) {
+        if (row.key === dish.key) out.push({ itemId: id, itemNumber: item.itemNumber, name: item.name, qty: row.qty });
+      });
+    });
+    return out;
+  }
+
+  function plateItemEditor(dish) {
+    var links = linksOnDish(dish);
+    if (state.role !== 'admin') {
+      if (!links.length) return '';
+      return '<div>' + links.map(function (link) {
+        return esc(link.qty) + ' × BEK ' + esc(link.itemNumber) + ' ' + esc(link.name);
+      }).join('<br>') + '</div>';
+    }
+    var first = links[0] || {};
+    var rest = links.slice(1).map(function (link) {
+      return '<div>' + esc(link.qty) + ' × BEK ' + esc(link.itemNumber) + ' ' + esc(link.name) + '</div>';
+    }).join('');
+    return '<div>' + rest +
+      '<label>Item # <input data-plate-link-item="' + esc(dish.key) + '" data-plate-link-name="' + esc(dish.name) + '" value="' + esc(first.itemNumber || '') + '" style="width:90px" aria-label="Plate item for ' + esc(dish.name) + '"></label> ' +
+      '<label>per plate <input data-plate-link-qty="' + esc(dish.key) + '" type="number" min="0" step="any" value="' + (first.qty == null ? '' : esc(first.qty)) + '" style="width:70px" aria-label="Per plate for ' + esc(dish.name) + '"></label></div>';
+  }
+
+  function materializeLinks(item) {
+    var saved = state.plateLinks && state.plateLinks[item.id];
+    if (saved && typeof saved === 'object') {
+      var copy = {};
+      Object.keys(saved).forEach(function (key) {
+        if (saved[key] && Number(saved[key].qty) > 0) copy[key] = { name: saved[key].name || '', qty: Number(saved[key].qty) };
+      });
+      return copy;
+    }
+    var map = {};
+    ZedMeals.defaultPlateItems(item, plateDishList(state.plate)).forEach(function (row) {
+      map[row.key] = { name: row.name, qty: row.qty };
+    });
+    return map;
+  }
+
+  function savePlateItemLink(dishKey, dishName, itemNumber, qty) {
+    var number = String(itemNumber || '').replace(/\D/g, '').replace(/^0+/, '');
+    var amount = Number(qty);
+    var jobs = [];
+    var items = (state.catalog && state.catalog.items) || {};
+    Object.keys(items).forEach(function (id) {
+      var item = items[id];
+      var map = materializeLinks(item);
+      var had = Object.prototype.hasOwnProperty.call(map, dishKey);
+      var itemNum = String(item.itemNumber || '').replace(/^0+/, '');
+      if (number && itemNum === number && amount > 0) map[dishKey] = { name: dishName, qty: amount };
+      else if (had) delete map[dishKey];
+      else return;
+      jobs.push(ZedStorage.setPlateLink(db, id, map).then(function () {
+        if (Object.keys(map).length) state.plateLinks[id] = map;
+        else delete state.plateLinks[id];
+      }));
+    });
+    return Promise.all(jobs);
+  }
+
+  function dishTable(summary, withLinks) {
     if (!summary.dishes.length) return '<p class="empty-state">This saved plate list has a Total Cook but no dish lines. Upload it again to split muffins and cookies from the trays.</p>';
     return '<table class="order-table"><thead><tr><th>Dish</th><th>Count</th><th>Packaging</th></tr></thead><tbody>' +
       summary.dishes.map(function (dish) {
-        return '<tr><td>' + esc(dish.name) + '</td><td>' + esc(dish.count) + '</td><td>' + packSelect(dish) + '</td></tr>';
+        return '<tr><td>' + esc(dish.name) + '</td><td>' + esc(dish.count) + '</td><td>' + packSelect(dish) + (withLinks ? plateItemEditor(dish) : '') + '</td></tr>';
       }).join('') + '</tbody></table>';
   }
 
@@ -491,7 +578,7 @@
       return '<tr><td>' + esc(line.name) + '<div class="item-brand">' + esc(source) + (line.onBekOrder ? '. Counted on the BEK order.' : '. Not a BEK order.') + '</div></td><td>' + esc(line.need) + ' ' + esc(line.unit) + '</td><td><input data-meal-hand="' + esc(handId) + '" data-meal-type="' + esc(line.id) + '" type="number" min="0" step="any" inputmode="decimal" aria-label="On hand ' + esc(line.name) + '" value="' + (line.onHand == null ? '' : esc(line.onHand)) + '" style="width:110px;font-size:16px;min-height:44px"></td><td>' + sizeField + '</td><td class="need-order" data-meal-order="' + esc(line.id) + '">' + line.cases + ' cs</td><td data-meal-pallet="' + esc(line.id) + '">' + status + '</td></tr>';
     }).join('');
     box.innerHTML = '<h2>Packaging</h2><p>Total Cook ' + esc(summary.totalCook) + ' for ' + esc(cook) + '. Meal trays ' + esc(summary.containers) + ' stay a pallet check. Cups and lids ' + esc(summary.cup) + ' go on the BEK order as plate list, not as a standing par.</p>' +
-      dishTable(summary) +
+      dishTable(summary, true) +
       '<table class="order-table"><thead><tr><th>Item</th><th>Need</th><th>On hand</th><th>Per case</th><th>Cases</th><th>Order</th></tr></thead><tbody>' + supplyRows + '</tbody></table>';
   }
 
@@ -733,7 +820,7 @@
     var cases = casesFor(row, loc);
     var needText = needLabel(need);
     var temp = item.temporary ? ' <span class="temp-badge">TEMPORARY</span>' : '';
-    var food = ZedOrder.isFoodItem(item) || (ZedOrder.isPantryLiquid(item) && ((recipeNeed(item) && Number(recipeNeed(item).quantity) > 0) || pendingPounds(item) > 0));
+    var food = ZedOrder.isFoodItem(item) || (ZedOrder.usesSuggestedRecipe(item) && ((recipeNeed(item) && Number(recipeNeed(item).quantity) > 0) || pendingPounds(item) > 0));
     var countChoices = ['each', 'case', 'lb', 'gal', 'oz'];
     var countNow = String(ZedOrder.resolvedCountUnit(item) || 'each').toLowerCase();
     if (countNow === 'pound' || countNow === 'pounds') countNow = 'lb';
@@ -1039,7 +1126,7 @@
       if (factorEl) row.eachFactor = factorEl.value === '' ? '' : Number(factorEl.value);
       if (row.matchSaved || row.hideMode === 'ignore' || !row.catalogId) return;
       var suggested = state.catalog.items[row.catalogId];
-      if (suggested && (ZedOrder.isPantryLiquid(suggested) || ZedOrder.isGlazeSauceOrCondiment(suggested) || /kosher salt|salt sea kosher/i.test(suggested.name || ''))) row.includeInOrder = true;
+      if (suggested && (ZedOrder.usesSuggestedRecipe(suggested) || ZedOrder.isGlazeSauceOrCondiment(suggested))) row.includeInOrder = true;
     });
     var button = document.getElementById('approveRecipe');
     if (button) {
@@ -1337,6 +1424,18 @@
     var input = event.target;
     if (input.getAttribute && input.getAttribute('data-pack-dish') != null) {
       onPackChoice(input);
+      return;
+    }
+    var linkKey = input.getAttribute && (input.getAttribute('data-plate-link-item') || input.getAttribute('data-plate-link-qty'));
+    if (linkKey) {
+      var itemInput = document.querySelector('[data-plate-link-item="' + linkKey + '"]');
+      var qtyInput = document.querySelector('[data-plate-link-qty="' + linkKey + '"]');
+      var linkName = (itemInput && itemInput.getAttribute('data-plate-link-name')) || '';
+      savePlateItemLink(linkKey, linkName, itemInput && itemInput.value, qtyInput && qtyInput.value).then(function () {
+        setPageStatus('Saved. ' + linkName + ' is on the plate-list order.');
+        render();
+        markSaved();
+      }).catch(showError);
       return;
     }
     if (input.getAttribute && input.getAttribute('data-case-size') != null) {

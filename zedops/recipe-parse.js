@@ -239,6 +239,30 @@
       });
     });
     var purchases = Object.keys(totals).map(function (key) { return totals[key]; });
+    var biteOnions = 0;
+    var biteSources = [];
+    recipes.forEach(function (recipe) {
+      if (!/egg bite/i.test(recipe.name || '')) return;
+      (recipe.ingredients || []).forEach(function (ingredient) {
+        if (!/caramelized onion/i.test(ingredient.name || '')) return;
+        biteOnions = round3(biteOnions + (Number(ingredient.pounds) || 0));
+        if (biteSources.indexOf(recipe.name) === -1) biteSources.push(recipe.name);
+      });
+    });
+    var onionRow = null;
+    purchases = purchases.filter(function (row) {
+      if (!/caramelized onion/i.test(row.name || '')) return true;
+      if (!onionRow) onionRow = row;
+      return false;
+    });
+    if (biteOnions > 0) {
+      if (!onionRow) {
+        onionRow = { key: nameKey('Sliced Caramelized Onions'), name: 'Sliced Caramelized Onions', pounds: 0, unit: 'lb', sources: [] };
+      }
+      onionRow.pounds = biteOnions;
+      onionRow.sources = biteSources.slice();
+      purchases.push(onionRow);
+    }
     purchases.sort(function (a, b) { return a.name < b.name ? -1 : 1; });
     return {
       cookDate: cookDateFrom(text),
