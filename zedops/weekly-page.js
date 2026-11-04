@@ -1035,7 +1035,7 @@
       if (factorEl) row.eachFactor = factorEl.value === '' ? '' : Number(factorEl.value);
       if (row.matchSaved || row.hideMode === 'ignore' || !row.catalogId) return;
       var suggested = state.catalog.items[row.catalogId];
-      if (suggested && ZedOrder.isPantryLiquid(suggested)) row.includeInOrder = true;
+      if (suggested && (ZedOrder.isPantryLiquid(suggested) || /kosher salt|salt sea kosher/i.test(suggested.name || ''))) row.includeInOrder = true;
     });
     var button = document.getElementById('approveRecipe');
     if (button) {

@@ -102,6 +102,7 @@ test('cases always round up and an exact case does not', () => {
   assert.equal(order.orderCases(salt, { quantity: 36, unit: 'lb' }, 0), 1);
   assert.equal(order.orderCases(salt, { quantity: 36.1, unit: 'lb' }, 0), 2);
   assert.equal(order.filterCatalog('Kosher Salt', [salt], { solidOnly: true })[0].itemNumber, '183640');
+  assert.equal(fs.readFileSync(path.join(__dirname, 'weekly-page.js'), 'utf8').includes('salt sea kosher'), true);
   const honey = { name: 'Honey Pure Blend', pack: '4 / 1 GAL', countUnit: 'gallon', tempZone: 'Refrigeration', itemNumber: '793069' };
   const honeyNeed = order.orderNeed(honey, { recipe: { quantity: 12.6, unit: 'lb' }, countUnit: 'gallon' });
   assert.equal(order.needText(honeyNeed), '12.6 lb ≈ 1.1 gal');
