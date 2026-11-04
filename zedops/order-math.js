@@ -187,6 +187,7 @@
     if (/onion red slab|slab slice/i.test(item.name || '')) return true;
     if (/\bbrisket\b/i.test(item.name || '') && !/hash/i.test(item.name || '')) return true;
     if (/blackened|red fish|redfish/i.test(item.name || '')) return true;
+    if (isBakingPantry(item)) return true;
     return /caramelized onion|onion caramelized/i.test(item.name || '');
   }
 
@@ -198,6 +199,8 @@
     // The long USDA brisket line is the 70 lb meat, not a spice that happened to match the item.
     if (/beef brisket|brisket whole/.test(name)) return 'bek__500370';
     if (/blackened redfish|blackening seasoning|blackened seasoning|chef paul prudhomme/.test(name)) return 'bek__774477';
+    if (/baking powder/.test(name)) return 'bek__696005';
+    if (/baking soda/.test(name)) return 'bek__696131';
     return '';
   }
 
@@ -322,6 +325,7 @@
   function roundQty(number) {
     if (!isFinite(number)) return '';
     if (Math.abs(number - Math.round(number)) < 1e-9) return String(Math.round(number));
+    if (Math.abs(number) < 0.1) return String(Math.round(number * 1000) / 1000);
     return String(Math.round(number * 100) / 100);
   }
 

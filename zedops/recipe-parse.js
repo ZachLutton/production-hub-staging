@@ -46,9 +46,12 @@
     var text = String(line).replace(/\s+$/g, '');
     var match = text.match(/^(.*?)\s+([\d,]+(?:\.\d+)?)\s+([\d,]+(?:\.\d+)?)\s+([\d.]+%)\s*$/);
     if (!match) return null;
+    var grams = num(match[2]);
     var pounds = num(match[3]);
     if (pounds == null) return null;
-    return { name: match[1].trim(), grams: num(match[2]), pounds: pounds, ratio: match[4] };
+    // The pounds column prints 0 when the weight is only a few grams.
+    if (!(pounds > 0) && grams > 0) pounds = grams / 453.59237;
+    return { name: match[1].trim(), grams: grams, pounds: pounds, ratio: match[4] };
   }
 
   // The cook date is the "Scaled Recipes for <weekday> <month> <day>, <year>" line.

@@ -1019,7 +1019,8 @@
       var row = { id: id, item: item, legacyKey: '', source: 'guide' };
       var need = needFor(row, loc);
       var ordered = orderFor(row, loc);
-      if (!(need && need.quantity > 0) && !(ordered.amount > 0)) return;
+      var used = ZedOrder.recipeLineFor(item, state.recipe);
+      if (!(need && need.quantity > 0) && !(ordered.amount > 0) && !(used && ZedOrder.isFoodItem(item))) return;
       lines.push('<tr><td class="item-num">' + esc(item.itemNumber || 'no BEK #') + '</td><td>' + esc(item.name) + '</td><td class="need-cell">' +
         needBlock(row, loc) + '</td><td>' + esc(handLabel(row, loc)) + '</td><td class="need-order">' + esc(orderLabel(ordered)) + '</td></tr>');
     });
