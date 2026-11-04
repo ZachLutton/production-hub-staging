@@ -208,6 +208,28 @@ test('the 11/11 cook list totals cups by size and maps each counts', () => {
   const page = fs.readFileSync(path.join(__dirname, 'weekly-page.js'), 'utf8');
   assert.equal(page.includes('cookListFor(row.item, loc)'), true);
   assert.equal(page.includes('parseCookPdf'), true);
+  const order = require('./order-math.js');
+  const bek = require('./bek.js');
+  const catalog = bek.buildCatalog(require('./seed.json')).items;
+  const packs = {
+    '104426': 1000,
+    '104162': 1000,
+    '111634': 2500,
+    '130860': 2500
+  };
+  Object.keys(packs).forEach(function (number) {
+    const item = catalog['bek__' + number];
+    assert.equal(order.piecesInCase(item), packs[number]);
+    assert.equal(order.resolvedCountUnit(item), 'case');
+  });
+  const souffle = catalog.bek__111634;
+  const souffleNeed = { quantity: 1215, unit: 'ea', source: 'cook list' };
+  assert.deepEqual(order.orderResult(souffle, souffleNeed, 2), { amount: 0, unit: 'cs' });
+  assert.equal(order.orderExplain(souffle, souffleNeed, 2), '1215 ea need − 2 cs × 2500 = 5000 on hand → 0 cs');
+  assert.deepEqual(order.orderResult(souffle, souffleNeed, 0), { amount: 1, unit: 'cs' });
+  const nineCup = catalog.bek__104162;
+  assert.deepEqual(order.orderResult(nineCup, { quantity: 150, unit: 'ea', source: 'cook list' }, 0), { amount: 1, unit: 'cs' });
+  assert.deepEqual(order.orderResult(catalog.bek__104426, { quantity: 150, unit: 'ea', source: 'plate list' }, 1), { amount: 0, unit: 'cs' });
 });
 
 test('Greek Chicken Bowl takes two souffle cups and two lids per plate', () => {

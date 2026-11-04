@@ -327,7 +327,7 @@
   function orderFor(row, loc) {
     var need = needFor(row, loc);
     if (!need) return { amount: 0, unit: 'cs' };
-    if (need.source === 'plate list') {
+    if (need.source === 'plate list' && !(row.item && ZedOrder.isCaseCountedPackaging(row.item))) {
       var type = ZedMeals.typeForItemNumber(row.item && row.item.itemNumber);
       if (type) {
         var size = Number(state.caseSizes[type.id]) > 0 ? Number(state.caseSizes[type.id]) : type.caseSize;

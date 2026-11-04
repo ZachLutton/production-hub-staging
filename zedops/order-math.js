@@ -134,6 +134,7 @@
     if (item && item.countUnitChosen && item.countUnit && !(canonUnit(item.countUnit) === 'oz' && isJarSpice(item))) {
       return item.countUnit;
     }
+    if (isCaseCountedPackaging(item)) return 'case';
     var number = String(item && item.itemNumber || '');
     if (number === '212500' || number === '393413') return 'each';
     if (number === '800401' || number === '774477') return 'lb';
@@ -411,7 +412,26 @@
 
   // How many cook-list pieces are in one case. An ounce pack is that many pieces.
   // A pound case uses the portion weight in the name. A pack with no piece count returns 0.
+  // "10 / 100 CT" is 1,000 pieces in a case. "20 / 50 CT" is 1,000. "10 / 250 CT" is 2,500.
+  function piecesInCase(item) {
+    var raw = String(item && item.pack || '');
+    if (!/\bct\b/i.test(raw)) return 0;
+    var pack = packAmount(raw);
+    if (!pack || !(pack.perCase > 0)) return 0;
+    return pack.perCase;
+  }
+
+  // Cook-list and plate-list cups and lids are counted on hand by the case.
+  function isCaseCountedPackaging(item) {
+    var number = String(item && item.itemNumber || '');
+    if (number === '104426' || number === '104162' || number === '111634' || number === '130860') return piecesInCase(item) > 0;
+    var name = String(item && item.name || '').toLowerCase();
+    if (!/cup|lid/.test(name) || /baking cup|glove|hair net/.test(name)) return false;
+    return /souffle|9 oz|9-12-20/.test(name) && piecesInCase(item) > 0;
+  }
+
   function piecesPerCase(item, eachFactor) {
+    if (isCaseCountedPackaging(item)) return piecesInCase(item);
     var pack = packAmount(item && item.pack);
     var edited = Number(eachFactor);
     var portion = edited > 0 ? edited : namePortionLb(item);
@@ -434,6 +454,7 @@
     if (!(portion > 0) && pack && pack.unit === 'oz' && pack.each > 0) portion = pack.each / 16;
     if (unit === 'lb' && portion > 0) return have / portion;
     if (unit === 'oz' && portion > 0) return have / (portion * 16);
+    if (isCaseCountedPackaging(item)) return have * piecesInCase(item);
     return have;
   }
 
@@ -519,6 +540,13 @@
   function orderExplain(item, need, onHand) {
     if (!need || !item) return '';
     var result = orderResult(item, need, onHand);
+    if (pieceOrder(need) && isCaseCountedPackaging(item)) {
+      var ppc = piecesInCase(item);
+      var haveCases = onHand == null || onHand === '' ? 0 : Number(onHand) || 0;
+      var havePieces = haveCases * ppc;
+      return roundApprox(need.quantity) + ' ea need − ' + explainQty(haveCases) + ' cs × ' + explainQty(ppc)
+        + ' = ' + explainQty(havePieces) + ' on hand → ' + result.amount + ' cs';
+    }
     var word = countWord(item);
     var pack = packAmount(item.pack);
     var countUnit = resolvedCountUnit(item);
@@ -1024,6 +1052,8 @@
     needInCountUnit: needInCountUnit,
     needText: needText,
     piecesPerCase: piecesPerCase,
+    piecesInCase: piecesInCase,
+    isCaseCountedPackaging: isCaseCountedPackaging,
     orderResult: orderResult,
     orderExplain: orderExplain,
     orderCases: orderCases,

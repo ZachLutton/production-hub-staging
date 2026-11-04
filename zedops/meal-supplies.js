@@ -199,7 +199,9 @@
     var size = Number(caseSize) > 0 ? Number(caseSize) : base.caseSize;
     var need = Number(needUnits) || 0;
     var have = onHand == null || onHand === '' ? 0 : Number(onHand) || 0;
-    var cases = orderMath().casesToOrder(need, have, size);
+    // Cups and lids are counted on hand by the case. Meal trays stay a piece count.
+    var havePieces = typeId === 'meal_container' ? have : have * size;
+    var cases = orderMath().casesToOrder(need, havePieces, size);
     return {
       id: base.id,
       name: base.name,
