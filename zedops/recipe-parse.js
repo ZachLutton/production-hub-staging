@@ -69,45 +69,77 @@
     return String(value || '').replace(/\s*Preparation Instructions[\s\S]*$/i, '').replace(/\s+/g, ' ').trim();
   }
 
+  function namedRow(line) {
+    var row = parseDataRow(line);
+    return row && row.name ? row : null;
+  }
+
+  function numbersOnlyRow(line) {
+    var row = parseDataRow(line);
+    return row && !row.name ? row : null;
+  }
+
+  // A name can sit on the line before the grams/pounds/ratio, and continue after it.
+  function opensWrap(lines, start) {
+    for (var j = start + 1; j < lines.length; j++) {
+      var raw = lines[j];
+      var line = String(raw).trim();
+      if (!line || /^\s*Ingredient\b/i.test(line)) continue;
+      if (/Preparation Instructions/i.test(line)) return false;
+      if (namedRow(raw)) return false;
+      if (numbersOnlyRow(raw)) return true;
+    }
+    return false;
+  }
+
   function parseIngredients(lines) {
     var ingredients = [];
-    var pending = [];
-    var current = null;
+    var i = 0;
     var skipping = false;
-    function finish() {
-      if (current && current.pounds != null) {
-        var name = cleanIngredientName([].concat(pending, current.name ? [current.name] : []).join(' '));
-        if (name) ingredients.push({ name: name, pounds: current.pounds, grams: current.grams, unit: 'lb' });
-      }
-      pending = [];
-      current = null;
-    }
-    lines.forEach(function (raw) {
+    while (i < lines.length) {
+      var raw = lines[i];
       var line = String(raw).trim();
-      if (!line || /^\s*Ingredient\b/i.test(line)) return;
-      if (/Preparation Instructions/i.test(line)) {
-        if (current && current.name) current.name = current.name.replace(/\s*Preparation Instructions.*/i, '').trim();
-        skipping = true;
-        return;
+      if (!line || /^\s*Ingredient\b/i.test(line)) { i++; continue; }
+      if (/Preparation Instructions/i.test(line)) { skipping = true; i++; continue; }
+      if (skipping) {
+        if (namedRow(raw) || opensWrap(lines, i)) skipping = false;
+        else { i++; continue; }
       }
-      var row = parseDataRow(raw);
-      if (row) {
-        skipping = false;
-        if (row.name) {
-          finish();
-          current = row;
-        } else if (current) {
-          current.pounds = row.pounds;
-          current.grams = row.grams;
-        } else current = row;
-        return;
+      function absorbTail(index, ingredient) {
+        while (index < lines.length) {
+          var tail = String(lines[index]).trim();
+          if (!tail || /^\s*Ingredient\b/i.test(lines[index])) { index++; continue; }
+          if (/Preparation Instructions/i.test(lines[index])) break;
+          if (namedRow(lines[index]) || opensWrap(lines, index) || numbersOnlyRow(lines[index])) break;
+          ingredient.name = cleanIngredientName((ingredient.name + ' ' + tail).trim());
+          index++;
+        }
+        return index;
       }
-      if (skipping) return;
-      if (current && current.pounds == null) pending.push(line);
-      else if (current && current.pounds != null) current.name = ((current.name || '') + ' ' + line).trim();
-      else pending.push(line);
-    });
-    finish();
+      var named = namedRow(raw);
+      if (named) {
+        var namedItem = { name: cleanIngredientName(named.name), pounds: named.pounds, grams: named.grams, unit: 'lb' };
+        ingredients.push(namedItem);
+        i = absorbTail(i + 1, namedItem);
+        continue;
+      }
+      if (opensWrap(lines, i)) {
+        var parts = [line];
+        i++;
+        while (i < lines.length && !numbersOnlyRow(lines[i]) && !namedRow(lines[i]) && !/Preparation Instructions/i.test(lines[i])) {
+          var mid = String(lines[i]).trim();
+          if (mid && !/^\s*Ingredient\b/i.test(lines[i])) parts.push(mid);
+          i++;
+        }
+        var row = numbersOnlyRow(lines[i]);
+        if (!row) { i++; continue; }
+        var wrapped = { name: cleanIngredientName(parts.join(' ')), pounds: row.pounds, grams: row.grams, unit: 'lb' };
+        ingredients.push(wrapped);
+        i = absorbTail(i + 1, wrapped);
+        continue;
+      }
+      i++;
+    }
     return ingredients;
   }
 

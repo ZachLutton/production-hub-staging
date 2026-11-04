@@ -44,6 +44,17 @@ test('scaled recipe uses raw weights and does not double count', () => {
   assert.ok(Math.abs(broccoliUses - 133.9) < 0.05);
   assert.ok(Math.abs(pounds('Broccoli Florets') - 133.9) < 0.05);
   assert.ok(Math.abs(pounds('4 oz Raw Chicken Breast') - 431.3) < 0.05);
+  const brisket = parsed.recipes.filter(function (row) { return row.name === 'Seasoned Brisket (COOKED)'; })[0];
+  const brisketMeat = brisket.ingredients.filter(function (item) { return /brisket, whole/.test(item.name); })[0];
+  assert.equal(brisketMeat.pounds, 70.8);
+  assert.equal(brisketMeat.name, 'Beef, brisket, whole, separable lean only, trimmed to 0" fat, all grades, cooked, braised');
+  assert.equal(brisket.ingredients.filter(function (item) { return item.name === 'Spices, pepper, black'; })[0].pounds, 0.1);
+  assert.equal(brisket.ingredients.filter(function (item) { return item.name === 'Kosher Salt'; })[0].pounds, 0.3);
+  assert.equal(pounds(brisketMeat.name), 70.8);
+  const tenderloin = parsed.broadline.filter(function (row) { return row.name === 'Diced Beef Tenderloin'; })[0];
+  assert.equal(tenderloin.ingredients[0].pounds, 90.4);
+  assert.equal(tenderloin.ingredients[0].name, 'Beef, loin, tenderloin steak, boneless, separable lean only, trimmed to 0" fat, choice, raw');
+  assert.equal(pounds("Chef Paul Prudhomme's Blackened Redfish Magic Seasoning Blends"), 0.8);
 });
 
 test('cases always round up and an exact case does not', () => {
