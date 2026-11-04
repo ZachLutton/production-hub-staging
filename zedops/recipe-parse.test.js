@@ -291,10 +291,15 @@ test('a standard weight applies until the item overrides it, and a wild order is
   const aboveHand = order.orderWarning({ weeklyCaseAverage: 1, countUnit: 'lb' }, 2, { quantity: 40, unit: 'lb' }, 2);
   assert.equal(aboveHand.flagged, true);
   const forced = order.orderNeed({ name: 'Tomato Crushed', pack: '6 / #10 CAN', orderRole: 'supply', tempZone: 'Dry' }, {
-    recipe: { quantity: 39.8, unit: 'lb' }, forceFood: true, countUnit: 'each'
+    recipe: { quantity: 39.8, unit: 'lb' }, forceFood: true, countUnit: 'each', standingPar: 4
   });
-  assert.equal(forced.source, 'recipe');
-  assert.equal(forced.quantity, 39.8);
+  assert.equal(forced.source, 'standing par');
+  assert.equal(forced.quantity, 4);
+  const backToFood = order.orderNeed({ name: 'Tomato Crushed', pack: '6 / #10 CAN', orderRole: 'food', tempZone: 'Dry' }, {
+    recipe: { quantity: 39.8, unit: 'lb' }, countUnit: 'each'
+  });
+  assert.equal(backToFood.source, 'recipe');
+  assert.equal(backToFood.quantity, 39.8);
   const page = fs.readFileSync(path.join(__dirname, 'weekly-page.js'), 'utf8');
   assert.equal(page.includes('function requireAdmin'), true);
   assert.equal(page.includes('Only an admin can change that'), true);
@@ -369,7 +374,30 @@ test('food follows the temp zone, even on a supply shelf, and a supply par saves
   assert.equal(order.isFoodItem(oregano), true);
   assert.equal(order.isFoodItem(Object.assign({}, cumin, { orderRole: 'supply' })), false);
   assert.equal(order.isFoodItem(vanilla), true);
-  assert.equal(order.isFoodItem(Object.assign({}, vanilla, { orderRole: 'supply' })), true);
+  assert.equal(order.isFoodItem(Object.assign({}, vanilla, { orderRole: 'supply' })), false);
+  assert.equal(order.isFoodItem(Object.assign({}, vanilla, { orderRole: 'food' })), true);
+  const vinegarChips = { name: 'Pop Chips - Salt and Vinegar', label: 'Front of House Supplies', pack: '24 / 0.8 OZ', countUnit: 'case' };
+  const bbqChips = { name: 'Pop Chips - BBQ', label: 'Front of House Supplies', pack: '24 / 0.8 OZ', countUnit: 'case' };
+  const vanillaShake = { name: 'Nurri Vanilla Protein Shake', label: 'Front of House Supplies', pack: '1/12pk', countUnit: 'case' };
+  assert.equal(order.isRetailResale(vinegarChips), true);
+  assert.equal(order.isFoodItem(vinegarChips), false);
+  assert.equal(order.isFoodItem(bbqChips), false);
+  assert.equal(order.isFoodItem(vanillaShake), false);
+  assert.equal(order.isFoodItem(Object.assign({}, vinegarChips, { orderRole: 'food' })), true);
+  const chipNeed = order.orderNeed(vinegarChips, { recipe: { quantity: 2, unit: 'lb' }, standingPar: 1, countUnit: 'case', forceFood: true });
+  assert.equal(chipNeed.source, 'standing par');
+  assert.equal(chipNeed.quantity, 1);
+  const switched = order.orderNeed(Object.assign({}, vinegarChips, { orderRole: 'supply' }), {
+    recipe: { quantity: 2, unit: 'lb' }, standingPar: 1, countUnit: 'case', forceFood: true
+  });
+  assert.equal(switched.source, 'standing par');
+  const vinegarItem = { name: 'Vinegar Balsamic', itemNumber: '686235', label: 'Spice Rack' };
+  const saltItem = { name: 'Salt Sea Kosher Coarse', itemNumber: '183640', label: 'Spice Rack' };
+  const butter = { name: 'Butter Unsalted European Style', itemNumber: '389120', label: 'Walk-in Cooler' };
+  assert.equal(order.filterCatalog('Vinegar', [vinegarChips, vinegarItem], { solidOnly: true })[0].itemNumber, '686235');
+  assert.equal(order.filterCatalog('Salt', [vinegarChips, saltItem, butter], { solidOnly: true })[0].itemNumber, '183640');
+  const flips = order.weakFoodReport([vinegarChips, bbqChips, vanillaShake, vinegarItem], ['Vinegar', 'Kosher Salt', 'Apple Cider Vinegar']);
+  assert.deepEqual(flips.map(function (row) { return row.name; }).sort(), ['Nurri Vanilla Protein Shake', 'Pop Chips - Salt and Vinegar']);
   assert.equal(order.isFoodItem(sticker), false);
   const cuminNeed = order.orderNeed(cumin, { recipe: { quantity: 2.5, unit: 'lb' }, countUnit: 'pound' });
   assert.equal(cuminNeed.source, 'recipe');
@@ -410,6 +438,8 @@ test('food follows the temp zone, even on a supply shelf, and a supply par saves
   const page = fs.readFileSync(path.join(__dirname, 'weekly-page.js'), 'utf8');
   assert.equal(page.includes("prompt('Standing par"), false);
   assert.equal(page.includes('data-par='), true);
+  assert.equal(page.includes('stays food'), false);
+  assert.equal(page.includes('data-order-role'), true);
   const db = store.createInventoryDb({ storage: { getItem: function () { return null; }, setItem: function () {} } });
   await storage.setPar(db, 'colonnade', pecan.id, { value: 2, unit: 'each' });
   assert.equal((await db.ref('staging_zedops_pars/colonnade/bek__122588/value').once('value')).val(), 2);

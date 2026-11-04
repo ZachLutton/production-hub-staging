@@ -167,20 +167,33 @@
           if (!item || item.hidden === true) return;
               var id = itemIdForInventory(item);
               var known = catalogItem(id);
-              var shown = known ? Object.assign({}, known) : {
-              id: id,
-              vendor: 'bek',
-              itemNumber: item.itemNumber || '',
-              name: item.name || '',
-              brand: item.brand || '',
-              pack: item.pack || '',
-              label: section,
-              countUnit: 'each',
-              kind: 'supply',
+              var shown = {
+                id: id,
+                vendor: 'bek',
+                itemNumber: item.itemNumber || '',
+                name: item.name || '',
+                brand: item.brand || '',
+                pack: item.pack || '',
+                label: section,
+                countUnit: 'each',
+                kind: 'supply',
                 guidePar: null
               };
+              if (known && known.name) {
+                shown = Object.assign({}, known);
+                if (!shown.label) shown.label = section;
+                shown.name = shown.name || item.name || '';
+                shown.pack = shown.pack || item.pack || '';
+                shown.brand = shown.brand || item.brand || '';
+              }
+              if (known && known.orderRole) shown.orderRole = known.orderRole;
+              if (known && Number(known.lbPerUnit) > 0) shown.lbPerUnit = Number(known.lbPerUnit);
               if (item.countUnit) {
                 shown.countUnit = item.countUnit;
+                shown.countUnitChosen = true;
+              }
+              if (known && known.countUnitChosen && known.countUnit) {
+                shown.countUnit = known.countUnit;
                 shown.countUnitChosen = true;
               }
               if (Number(item.eachPerCase) > 0) shown.eachPerCase = Number(item.eachPerCase);
@@ -293,16 +306,18 @@
   function needFor(row, loc) {
     loc = loc || currentStore();
     var onHub = loc && ZedLocations.listSourceOf(loc) === 'catalog';
-    var recipe = onHub ? recipeNeed(row.item) : null;
-    var pending = onHub ? pendingPounds(row.item) : 0;
+    var supplyChoice = row.item && row.item.orderRole === 'supply';
+    var recipe = onHub && !supplyChoice ? recipeNeed(row.item) : null;
+    var pending = onHub && !supplyChoice ? pendingPounds(row.item) : 0;
     if (pending > 0 && (!recipe || pending > (Number(recipe.quantity) || 0))) {
       recipe = { quantity: pending, unit: 'lb', eachFactor: null };
     }
-    var fromRecipe = !!(recipe && Number(recipe.quantity) > 0);
+    var retail = ZedOrder.isRetailResale(Object.assign({}, row.item, { label: row.item.label || row.section }));
+    var fromRecipe = !supplyChoice && !retail && !!(recipe && Number(recipe.quantity) > 0);
     return ZedOrder.orderNeed(row.item, {
-      cookList: cookListFor(row.item, loc),
-      plateList: plateListFor(row.item, loc),
-      recipe: recipe,
+      cookList: supplyChoice ? null : cookListFor(row.item, loc),
+      plateList: supplyChoice ? null : plateListFor(row.item, loc),
+      recipe: supplyChoice ? null : recipe,
       standingPar: (fromRecipe || ZedOrder.isFoodItem(row.item)) ? 0 : parOf(row, loc),
       countUnit: ZedOrder.resolvedCountUnit(row.item),
       forceFood: fromRecipe
@@ -1038,7 +1053,22 @@
       }
       groups[index[title]].rows.push(row);
     });
-    host.innerHTML = groups.map(function (group) {
+    var reviewItems = state.rows.map(function (row) {
+      return Object.assign({}, row.item, { label: (row.item && row.item.label) || row.section || '' });
+    });
+    var ingredientNames = [];
+    Object.keys(state.recipe || {}).forEach(function (key) {
+      var line = state.recipe[key];
+      if (line && line.name && key !== '_meta') ingredientNames.push(line.name);
+    });
+    var flips = state.role === 'admin' ? ZedOrder.weakFoodReport(reviewItems, ingredientNames) : [];
+    var review = flips.length
+      ? '<div class="order-warn"><strong>Review these. A short word in the name marked them food.</strong><ul>' +
+        flips.map(function (row) {
+          return '<li>' + esc(row.itemNumber || 'no BEK #') + ' ' + esc(row.name) + ' — ' + esc(row.reason) + '</li>';
+        }).join('') + '</ul></div>'
+      : '';
+    host.innerHTML = review + groups.map(function (group) {
       return '<div class="section"><div class="section-header"><div class="section-header-title">' + esc(group.title) +
         '</div></div><table class="order-table"><thead><tr><th>Item #</th><th>Name</th><th>Pack</th><th>Need</th><th>On hand</th><th>Order</th>' +
         (state.role === 'admin' ? '<th>Par</th>' : '') + '</tr></thead><tbody>' +
@@ -1053,8 +1083,7 @@
     var cases = casesFor(row, loc);
     var needText = needLabel(need);
     var temp = item.temporary ? ' <span class="temp-badge">TEMPORARY</span>' : '';
-    var onRecipe = recipeUsesItem(item);
-    var food = onRecipe || ZedOrder.isFoodItem(item);
+    var food = ZedOrder.isFoodItem(item);
     var countChoices = ['each', 'case', 'lb', 'gal', 'oz'];
     var countNow = String(ZedOrder.resolvedCountUnit(item) || 'each').toLowerCase();
     if (countNow === 'pound' || countNow === 'pounds') countNow = 'lb';
@@ -1067,10 +1096,8 @@
         }).join('') + '</select></label> '
       : '';
     var roleBtn = '';
-    if (state.role === 'admin' && !onRecipe) {
+    if (state.role === 'admin') {
       roleBtn = '<button type="button" data-order-role="' + esc(row.id) + '">' + (food ? 'Food' : 'Supply') + '</button>';
-    } else if (onRecipe) {
-      roleBtn = '<span>Food</span>';
     }
     var countedUnit = ZedOrder.resolvedCountUnit(item);
     var canLb = ZedOrder.canEachLb(item && item.pack);
@@ -1612,17 +1639,17 @@
     if (!roleBtn) return;
     if (!requireAdmin()) return;
     var id = roleBtn.getAttribute('data-order-role');
-    var item = state.catalog.items[id];
+    var row = null;
+    state.rows.forEach(function (candidate) { if (candidate.id === id) row = candidate; });
+    var item = row && row.item;
     if (!item) {
-      setPageStatus('That item is not in the catalog, so the food or supply choice cannot be saved.', true);
-      return;
-    }
-    if (recipeUsesItem(item)) {
-      setPageStatus(item.name + ' is on the scaled recipe, so it stays food.', true);
+      setPageStatus('That row is not on this store, so the food or supply choice cannot be saved.', true);
       return;
     }
     var next = ZedOrder.isFoodItem(item) ? 'supply' : 'food';
+    if (!state.catalog.items[id]) state.catalog.items[id] = { id: id };
     ZedStorage.setItemFields(db, id, { orderRole: next }).then(function () {
+      state.catalog.items[id].orderRole = next;
       item.orderRole = next;
       setPageStatus('Saved. ' + item.name + ' is ' + (next === 'food' ? 'food from the scaled recipe' : 'a supply with a standing par') + '.');
       render();

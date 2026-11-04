@@ -170,7 +170,7 @@
   function isPantryLiquid(item) {
     var name = String(item && item.name || '').toLowerCase();
     if (/bleach|sanitizer|cleaner|degreaser|detergent|soap|disinfectant|rinse aid|wash treatment/.test(name)) return false;
-    return /honey|syrup|oil|vinegar/.test(name);
+    return /\bhoney\b|\bsyrup\b|\boil\b|\bvinegar\b/.test(name);
   }
 
   // Glazes, sauces, and condiments are food even on a supply shelf. The shelf does not decide.
@@ -357,10 +357,10 @@
   function isBakingPantry(item) {
     var name = String(item && item.name || '').toLowerCase();
     if (/bleach|sanitizer|cleaner|degreaser|detergent|soap|disinfectant|rinse aid/.test(name)) return false;
-    if (/baking powder|baking soda/.test(name)) return true;
-    if (/\bextract\b|vanilla/.test(name)) return true;
-    if (/\boats?\b|oatmeal|cereal oats|flour|cornmeal/.test(name)) return true;
-    if (/marsala|\bwine\b|vinegar/.test(name)) return true;
+    if (/\bbaking powder\b|\bbaking soda\b/.test(name)) return true;
+    if (/\bextract\b|\bvanilla\b/.test(name)) return true;
+    if (/\boats?\b|\boatmeal\b|\bcereal oats\b|\bflour\b|\bcornmeal\b/.test(name)) return true;
+    if (/\bmarsala\b|\bwine\b|\bvinegar\b/.test(name)) return true;
     return false;
   }
 
@@ -376,15 +376,104 @@
     return false;
   }
 
+  // Chips, jerky, shakes, bars, nuts, and juices on Front of House are resale, not recipe food.
+  var RETAIL_WORD = { salt: 1, vinegar: 1, vanilla: 1, wine: 1, oil: 1, juice: 1, sugar: 1, onion: 1, pepper: 1, water: 1, cream: 1, seed: 1, seeds: 1, milk: 1, sauce: 1, extract: 1, flavor: 1 };
+
+  function retailKind(item) {
+    var section = fold(item && (item.label || item.section || ''));
+    if (section.indexOf('front of house') === -1) return '';
+    var name = fold(item && item.name);
+    if (/\bwood chips?\b/.test(name)) return '';
+    if (/\bchips?\b/.test(name)) return 'chips';
+    if (/\bjerky\b/.test(name)) return 'jerky';
+    if (/\bshakes?\b/.test(name)) return 'shake';
+    if (/\bbars?\b/.test(name)) return 'bar';
+    if (/\bnuts?\b/.test(name)) return 'nuts';
+    if (/\bjuices?\b/.test(name)) return 'juice';
+    return '';
+  }
+
+  function isRetailResale(item) {
+    return retailKind(item) !== '';
+  }
+
+  function queryTokens(value) {
+    return fold(value).split(' ').filter(function (token) { return token.length > 2; });
+  }
+
+  function wordHit(token, word) {
+    if (word === token) return true;
+    return token.length >= 4 && word.indexOf(token) === 0;
+  }
+
+  // A suggestion is weak when the only overlap is a generic word, or a word buried inside another word.
+  // "Salt" inside "unsalted", or "vinegar" inside "Pop Chips - Salt and Vinegar".
+  function weakMatchReason(query, item) {
+    if (!item) return '';
+    var kind = retailKind(item);
+    if (kind) return 'retail Front of House ' + kind;
+    var qTokens = queryTokens(query);
+    var nameTokens = fold(item.name).split(' ').filter(Boolean);
+    if (!qTokens.length || !nameTokens.length) return '';
+    var hits = qTokens.filter(function (token) {
+      return nameTokens.some(function (word) { return wordHit(token, word); });
+    });
+    var buried = qTokens.filter(function (token) {
+      if (token.length < 3) return false;
+      var name = nameTokens.join(' ');
+      if (name.indexOf(token) === -1) return false;
+      return !nameTokens.some(function (word) { return wordHit(token, word); });
+    });
+    if (!hits.length && buried.length) return 'the word ' + buried[0] + ' sits inside another word';
+    if (!hits.length) return '';
+    var genericHits = hits.filter(function (token) { return RETAIL_WORD[token]; });
+    if (genericHits.length !== hits.length) return '';
+    if (hits.indexOf(nameTokens[0]) !== -1) return '';
+    var missed = qTokens.filter(function (token) { return hits.indexOf(token) === -1 && !RETAIL_WORD[token]; });
+    var extras = nameTokens.filter(function (token) {
+      return token.length > 2 && hits.indexOf(token) === -1 && !RETAIL_WORD[token];
+    });
+    if (missed.length || extras.length) return 'only the word ' + genericHits.join(' and ') + ' matches';
+    return '';
+  }
+
+  function weakFoodReport(items, ingredientNames) {
+    var found = [];
+    var seen = {};
+    function add(item, reason) {
+      if (!item || !reason) return;
+      if (item.orderRole === 'food' || item.orderRole === 'supply') return;
+      var key = (item.itemNumber || '') + '|' + (item.name || '');
+      if (seen[key]) return;
+      seen[key] = true;
+      found.push({ itemNumber: item.itemNumber || '', name: item.name || '', reason: reason });
+    }
+    (items || []).forEach(function (item) {
+      if (!isRetailResale(item)) return;
+      if (!isBakingPantry(item)) return;
+      var words = fold(item && item.name).split(' ').filter(function (word) {
+        return word === 'vinegar' || word === 'vanilla' || word === 'wine' || word === 'marsala' || word === 'extract' || word === 'oats' || word === 'flour' || word === 'cornmeal';
+      });
+      add(item, 'The word ' + (words.join(' and ') || 'in the name') + ' marked this retail item as food. It stays a supply with a par.');
+    });
+    (ingredientNames || []).forEach(function (ingredient) {
+      var top = filterCatalog(ingredient, items, { solidOnly: true, allowWeak: true })[0];
+      var reason = weakMatchReason(ingredient, top);
+      if (reason) add(top, ingredient + ' would match because ' + reason + '.');
+    });
+    return found;
+  }
+
   // Food comes from the BEK temp zone, not the shelf the item sits on.
   // Refrigeration, frozen, and retail-ready (including dry retail-ready food) are food.
   // A plain Dry zone is a supply, except dry spices and seasonings.
-  // An admin override on the item wins over the zone and over the spice default.
+  // An admin Food or Supply choice wins over the zone, the spice default, and a recipe match.
   function isFoodItem(item) {
     if (!item || item.kind === 'vendor_check') return false;
     if (item.orderRole === 'food') return true;
-    if (isBakingPantry(item)) return true;
     if (item.orderRole === 'supply') return false;
+    if (isRetailResale(item)) return false;
+    if (isBakingPantry(item)) return true;
     if (item.kind === 'special' && /salmon|mahi|filet/i.test(item.name || '')) return true;
     if (isDrySeasoning(item)) return true;
     if (isGlazeSauceOrCondiment(item)) return true;
@@ -490,6 +579,12 @@
 
   function orderNeed(item, input) {
     input = input || {};
+    if (item && item.orderRole === 'supply') {
+      var chosenPar = Number(input.standingPar) || 0;
+      var chosenUnit = input.countUnit || item.countUnit || 'each';
+      if (!(chosenPar > 0)) return { quantity: 0, unit: chosenUnit, eachFactor: null, source: 'standing par' };
+      return { quantity: chosenPar, unit: chosenUnit, eachFactor: null, source: 'standing par' };
+    }
     if (input.cookList) {
       return {
         quantity: Number(input.cookList.quantity) || 0,
@@ -508,7 +603,7 @@
         reason: input.plateList.reason || ''
       };
     }
-    if (isFoodItem(item) || input.forceFood) {
+    if (isFoodItem(item) || (input.forceFood && !isRetailResale(item))) {
       var recipeQty = input.recipe ? Number(input.recipe.quantity) || 0 : 0;
       if (!(recipeQty > 0)) return { quantity: 0, unit: 'lb', eachFactor: null, source: 'recipe' };
       return withVolume(item, {
@@ -582,7 +677,11 @@
       if (spice > score) score = spice;
       // solidOnly keeps a real hit (item number, full phrase, or every word). A loose
       // letter match stays available in the search box and is never pre-selected.
-      if (score && !(opts.solidOnly && score < 30)) ranked.push({ item: item, score: score, name: item.name || '' });
+      // A weak name match (salt inside unsalted, vinegar inside a chip name) is not pre-selected.
+      if (score && !(opts.solidOnly && score < 30)) {
+        if (opts.solidOnly && !opts.allowWeak && weakMatchReason(query, item)) return;
+        ranked.push({ item: item, score: score, name: item.name || '' });
+      }
     });
     ranked.sort(function (a, b) {
       if (b.score !== a.score) return b.score - a.score;
@@ -711,6 +810,9 @@
     needText: needText,
     orderCases: orderCases,
     isFoodItem: isFoodItem,
+    isRetailResale: isRetailResale,
+    weakMatchReason: weakMatchReason,
+    weakFoodReport: weakFoodReport,
     isBakingPantry: isBakingPantry,
     orderNeed: orderNeed,
     filterCatalog: filterCatalog,
