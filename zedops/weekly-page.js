@@ -193,14 +193,30 @@
     var units = onHub && summary && !reason ? ZedMeals.unitsFor(type, summary) : 0;
     return { quantity: units, unit: 'each', reason: reason };
   }
+  function pendingPounds(item) {
+    if (!item || !state.pendingRecipe) return 0;
+    var qty = 0;
+    (state.pendingRecipe.purchases || []).forEach(function (row) {
+      if (row.hideMode === 'ignore' || row.catalogId !== item.id) return;
+      qty += Number(row.pounds) || 0;
+    });
+    return qty;
+  }
   function needFor(row, loc) {
     loc = loc || currentStore();
-    var recipe = loc && ZedLocations.listSourceOf(loc) === 'catalog' ? recipeNeed(row.item) : null;
+    var onHub = loc && ZedLocations.listSourceOf(loc) === 'catalog';
+    var recipe = onHub ? recipeNeed(row.item) : null;
+    var pending = onHub && ZedOrder.isPantryLiquid(row.item) ? pendingPounds(row.item) : 0;
+    if (pending > 0 && (!recipe || pending > (Number(recipe.quantity) || 0))) {
+      recipe = { quantity: pending, unit: 'lb', eachFactor: null };
+    }
+    var fromRecipe = recipe && Number(recipe.quantity) > 0 && ZedOrder.isPantryLiquid(row.item);
     return ZedOrder.orderNeed(row.item, {
       plateList: plateListFor(row.item, loc),
       recipe: recipe,
-      standingPar: ZedOrder.isFoodItem(row.item) ? 0 : parOf(row, loc),
-      countUnit: row.item.countUnit || 'each'
+      standingPar: (ZedOrder.isFoodItem(row.item) || fromRecipe) ? 0 : parOf(row, loc),
+      countUnit: ZedOrder.volumeCountUnit(row.item),
+      forceFood: !!fromRecipe
     });
   }
   function needLabel(need) {
@@ -717,14 +733,14 @@
     var cases = casesFor(row, loc);
     var needText = needLabel(need);
     var temp = item.temporary ? ' <span class="temp-badge">TEMPORARY</span>' : '';
-    var food = ZedOrder.isFoodItem(item);
+    var food = ZedOrder.isFoodItem(item) || (ZedOrder.isPantryLiquid(item) && ((recipeNeed(item) && Number(recipeNeed(item).quantity) > 0) || pendingPounds(item) > 0));
     var roleBtn = state.role === 'admin'
       ? '<button type="button" data-order-role="' + esc(row.id) + '">' + (food ? 'Food' : 'Supply') + '</button>' : '';
     var density = '';
     if (state.role === 'admin' && ZedOrder.isVolumeUnit(item.countUnit)) {
       var perLabel = ZedOrder.unitLabel(item.countUnit);
       var savedPer = Number(item.lbPerUnit) > 0 ? item.lbPerUnit : '';
-      density = '<div><label>lb per ' + esc(perLabel) + ' <input data-lb-per="' + esc(row.id) + '" type="number" min="0" step="any" inputmode="decimal" placeholder="' + esc(Math.round(ZedOrder.defaultLbPer(item.countUnit) * 1000) / 1000) + '" aria-label="Pounds per ' + esc(perLabel) + ' for ' + esc(item.name) + '" value="' + (savedPer === '' ? '' : esc(savedPer)) + '" style="width:80px;font-size:16px;min-height:44px"></label> <span data-lb-note="' + esc(row.id) + '"></span></div>';
+      density = '<div><label>lb per ' + esc(perLabel) + ' <input data-lb-per="' + esc(row.id) + '" type="number" min="0" step="any" inputmode="decimal" placeholder="' + esc(Math.round(ZedOrder.defaultLbPer(ZedOrder.volumeCountUnit(item), item) * 1000) / 1000) + '" aria-label="Pounds per ' + esc(perLabel) + ' for ' + esc(item.name) + '" value="' + (savedPer === '' ? '' : esc(savedPer)) + '" style="width:80px;font-size:16px;min-height:44px"></label> <span data-lb-note="' + esc(row.id) + '"></span></div>';
     }
     var parCell = '';
     if (!food && state.role === 'admin') {
@@ -733,7 +749,7 @@
     }
     return '<tr><td class="item-num">' + esc(item.itemNumber || 'no BEK #') + '</td><td><div class="item-name">' +
       esc(item.name) + temp + '</div><div class="item-brand">' + esc(item.brand || '') + '</div></td><td>' + esc(item.pack || '') +
-      '</td><td data-need-for="' + esc(row.id) + '">' + esc(needText) + '</td><td><input class="onhand-input" data-hand="' + esc(row.id) + '" type="number" min="0" step="any" value="' +
+      '</td><td data-need-for="' + esc(row.id) + '">' + esc(needText) + '</td><td><input class="onhand-input" data-hand="' + esc(row.id) + '" type="number" min="0" step="any" inputmode="decimal" value="' +
       (hand == null ? '' : esc(hand)) + '"></td><td class="need-order">' + (cases > 0 ? cases + ' cs' : '0') + '</td>' +
       (state.role === 'admin' ? '<td>' + parCell + density + roleBtn + '</td>' : '') + '</tr>';
   }
@@ -1006,6 +1022,9 @@
     (pending.purchases || []).forEach(function (row, index) {
       var factorEl = document.querySelector('[data-factor="' + index + '"]');
       if (factorEl) row.eachFactor = factorEl.value === '' ? '' : Number(factorEl.value);
+      if (row.matchSaved || row.hideMode === 'ignore' || !row.catalogId) return;
+      var suggested = state.catalog.items[row.catalogId];
+      if (suggested && ZedOrder.isPantryLiquid(suggested)) row.includeInOrder = true;
     });
     var button = document.getElementById('approveRecipe');
     if (button) {
@@ -1163,7 +1182,7 @@
         }
         renderSummary(loc);
         setPageStatus(densityFields.lbPerUnit == null
-          ? 'Saved. ' + densityItem.name + ' uses ' + (Math.round(ZedOrder.defaultLbPer(densityItem.countUnit) * 1000) / 1000) + ' lb per ' + perUnit + '.'
+          ? 'Saved. ' + densityItem.name + ' uses ' + (Math.round(ZedOrder.defaultLbPer(ZedOrder.volumeCountUnit(densityItem), densityItem) * 1000) / 1000) + ' lb per ' + perUnit + '.'
           : 'Saved. ' + densityItem.name + ' uses ' + densityFields.lbPerUnit + ' lb per ' + perUnit + '.');
         markSaved();
       }).catch(function (err) {

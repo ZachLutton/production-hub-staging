@@ -36,16 +36,43 @@
   }
 
   // Pounds in one count unit. An item override wins. Otherwise volume uses 8.6 lb/gal.
-  function defaultLbPer(unit) {
-    var per = UNITS_PER_GAL[canonUnit(unit)];
-    if (!per) return null;
-    return LB_PER_GAL / per;
+  // Honey, maple, oil, and milk/water are different weights per gallon.
+  // An admin lb-per-unit override replaces this.
+  function densityLbPerGal(item) {
+    var name = String(item && item.name || '').toLowerCase();
+    if (name.indexOf('honey') !== -1) return 12;
+    if (name.indexOf('syrup') !== -1 || name.indexOf('maple') !== -1) return 11;
+    if (name.indexOf('oil') !== -1) return 7.6;
+    return LB_PER_GAL;
   }
 
-  function lbPerOf(unit, override) {
+  function defaultLbPer(unit, item) {
+    var per = UNITS_PER_GAL[canonUnit(unit)];
+    if (!per) return null;
+    return densityLbPerGal(item) / per;
+  }
+
+  function lbPerOf(unit, override, item) {
     var custom = Number(override);
     if (custom > 0) return custom;
-    return defaultLbPer(unit);
+    return defaultLbPer(unit, item);
+  }
+
+  // A gallon or quart pack is counted in that volume, even if the stored count unit says each.
+  function volumeCountUnit(item) {
+    var pack = packAmount(item && item.pack);
+    var unit = item && item.countUnit;
+    if (pack && isVolumeUnit(pack.unit)) {
+      if (unit && isVolumeUnit(unit)) return unit;
+      return pack.unit;
+    }
+    return unit || (pack && pack.unit) || 'each';
+  }
+
+  function isPantryLiquid(item) {
+    var name = String(item && item.name || '').toLowerCase();
+    if (/bleach|sanitizer|cleaner|degreaser|detergent|soap|disinfectant|rinse aid|wash treatment/.test(name)) return false;
+    return /honey|syrup|oil|vinegar/.test(name);
   }
 
   // "11 / 1 LB" is 11 pounds in a case. "4 / 1 GAL" is 4 gallons. "6 / .5 GAL" is 3 gallons.
@@ -104,7 +131,7 @@
 
   // Recipe pounds (or eaches) expressed in the unit the store counts.
   // lbPerUnit is an optional pounds-per-count-unit override for a volume pack.
-  function needInCountUnit(quantity, quantityUnit, countUnit, eachFactor, lbPerUnit) {
+  function needInCountUnit(quantity, quantityUnit, countUnit, eachFactor, lbPerUnit, item) {
     var qty = Number(quantity) || 0;
     var from = canonUnit(quantityUnit);
     var to = canonUnit(countUnit);
@@ -114,7 +141,7 @@
     if (from === 'ea' && to === 'lb' && factor > 0) return qty * factor;
     if (to === 'case' && factor > 0) return qty / factor;
     if (from === 'lb' && isVolumeUnit(to)) {
-      var per = lbPerOf(to, lbPerUnit);
+      var per = lbPerOf(to, lbPerUnit, item);
       if (per > 0) return qty / per;
     }
     if (from === 'g') return needInCountUnit(qty / 453.59237, 'lb', countUnit, eachFactor, lbPerUnit);
@@ -127,7 +154,7 @@
     var unit = countUnit || (item && item.countUnit) || '';
     if (!result || canonUnit(result.unit) !== 'lb') return result;
     if (isVolumeUnit(unit)) {
-      result.convertedQuantity = needInCountUnit(result.quantity, result.unit, unit, result.eachFactor, item && item.lbPerUnit);
+      result.convertedQuantity = needInCountUnit(result.quantity, result.unit, unit, result.eachFactor, item && item.lbPerUnit, item);
       result.convertedUnit = unitLabel(unit);
       var pack = packAmount(item && item.pack);
       if (pack && canonUnit(pack.unit) === canonUnit(unit) && pack.each > 0 && pack.each !== 1) {
@@ -138,7 +165,7 @@
       return result;
     }
     if (canonUnit(unit) === 'oz') {
-      result.convertedQuantity = needInCountUnit(result.quantity, result.unit, unit, result.eachFactor, item && item.lbPerUnit);
+      result.convertedQuantity = needInCountUnit(result.quantity, result.unit, unit, result.eachFactor, item && item.lbPerUnit, item);
       result.convertedUnit = 'oz';
     }
     return result;
@@ -160,8 +187,8 @@
   function orderCases(item, need, onHand) {
     if (!need) return 0;
     var pack = packAmount(item && item.pack);
-    var countUnit = (item && item.countUnit) || (pack && pack.unit) || 'each';
-    var needQty = needInCountUnit(need.quantity, need.unit, countUnit, need.eachFactor, item && item.lbPerUnit);
+    var countUnit = volumeCountUnit(item);
+    var needQty = needInCountUnit(need.quantity, need.unit, countUnit, need.eachFactor, item && item.lbPerUnit, item);
     var perCase = perCaseInCountUnit(pack, countUnit);
     var have = onHand == null || onHand === '' ? 0 : Number(onHand) || 0;
     return casesToOrder(needQty, have, perCase || 1);
@@ -210,6 +237,9 @@
       [/oregano/, /oregano/],
       [/thyme/, /thyme/],
       [/blackened|redfish magic/, /blackened/],
+      [/maple/, /maple|syrup/],
+      [/sesame oil|oil sesame/, /oil sesame/],
+      [/lime juice/, /juice lime|lime juice/],
       [/sesame seed/, /sesame seed/],
       [/caper/, /caper/],
       [/chia/, /chia/],
@@ -241,7 +271,7 @@
         reason: input.plateList.reason || ''
       };
     }
-    if (isFoodItem(item)) {
+    if (isFoodItem(item) || input.forceFood) {
       var recipeQty = input.recipe ? Number(input.recipe.quantity) || 0 : 0;
       if (!(recipeQty > 0)) return { quantity: 0, unit: 'lb', eachFactor: null, source: 'recipe' };
       return withVolume(item, {
@@ -386,15 +416,17 @@
     var matches = {};
     var lines = {};
     (purchases || []).forEach(function (row) {
-      if (!row || !row.key || row.matchSaved !== true) return;
+      if (!row || !row.key || (row.matchSaved !== true && row.includeInOrder !== true)) return;
       var catalogId = row.hideMode === 'ignore' ? '' : (row.catalogId || '');
       var eachFactor = row.eachFactor === '' || row.eachFactor == null ? null : Number(row.eachFactor);
-      matches[row.key] = {
-        name: row.name || '',
-        catalogId: catalogId,
-        eachFactor: eachFactor,
-        hideMode: row.hideMode || ''
-      };
+      if (row.matchSaved === true) {
+        matches[row.key] = {
+          name: row.name || '',
+          catalogId: catalogId,
+          eachFactor: eachFactor,
+          hideMode: row.hideMode || ''
+        };
+      }
       if (row.hideMode === 'ignore' || !catalogId) return;
       lines[row.key] = {
         name: row.name || '',
@@ -421,6 +453,8 @@
     isVolumeUnit: isVolumeUnit,
     unitLabel: unitLabel,
     defaultLbPer: defaultLbPer,
+    volumeCountUnit: volumeCountUnit,
+    isPantryLiquid: isPantryLiquid,
     packAmount: packAmount,
     perCaseInCountUnit: perCaseInCountUnit,
     shortfall: shortfall,

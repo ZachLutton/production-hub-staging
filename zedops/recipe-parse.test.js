@@ -87,6 +87,31 @@ test('cases always round up and an exact case does not', () => {
   assert.equal(order.orderCases(heavier, { quantity: 40.1, unit: 'lb' }, 7), 0);
   const need = order.orderNeed(milk, { recipe: { quantity: 40.1, unit: 'lb' }, countUnit: 'gallon' });
   assert.equal(order.needText(need), '40.1 lb ≈ 4.7 gal');
+  const honey = { name: 'Honey Pure Blend', pack: '4 / 1 GAL', countUnit: 'gallon', tempZone: 'Refrigeration', itemNumber: '793069' };
+  const honeyNeed = order.orderNeed(honey, { recipe: { quantity: 12.6, unit: 'lb' }, countUnit: 'gallon' });
+  assert.equal(order.needText(honeyNeed), '12.6 lb ≈ 1.1 gal');
+  assert.equal(order.orderCases(honey, honeyNeed, 8.75), 0);
+  assert.equal(order.orderCases(honey, honeyNeed, 0.25), 1);
+  assert.equal(order.orderCases(Object.assign({}, honey, { countUnit: 'each' }), honeyNeed, 8.75), 0);
+  assert.equal(order.orderCases(Object.assign({}, honey, { lbPerUnit: 10 }), honeyNeed, 8.75), 0);
+  const maple = { name: 'Syrup Maple Dark', pack: '4 / 1 GAL', countUnit: 'gallon', tempZone: 'Dry', label: 'Spice Rack', itemNumber: '793062' };
+  assert.equal(order.isFoodItem(maple), false);
+  assert.equal(order.isPantryLiquid(maple), true);
+  const mapleNeed = order.orderNeed(maple, { recipe: { quantity: 3.1, unit: 'lb' }, countUnit: 'gallon', forceFood: true });
+  assert.equal(mapleNeed.source, 'recipe');
+  assert.equal(order.needText(mapleNeed), '3.1 lb ≈ 0.3 gal');
+  assert.equal(order.orderCases(maple, mapleNeed, 0), 1);
+  assert.equal(order.orderCases(maple, mapleNeed, 1), 0);
+  const oil = { name: 'Oil Olive Pomace', pack: '4 / 1 GAL', countUnit: 'gallon', tempZone: 'Dry' };
+  const oilNeed = order.orderNeed(oil, { recipe: { quantity: 10.2, unit: 'lb' }, countUnit: 'gallon', forceFood: true });
+  assert.equal(order.needText(oilNeed), '10.2 lb ≈ 1.3 gal');
+  const liquidPlan = order.planRecipeApproval([
+    { key: 'syrups_maple', name: 'Syrups, maple', pounds: 3.1, catalogId: 'bek__793062', matchSaved: false, includeInOrder: true },
+    { key: 'cumin_line', name: 'Cumin', pounds: 1, catalogId: 'bek__774055', matchSaved: false }
+  ], '2026-11-11');
+  assert.equal(liquidPlan.matches.syrups_maple, undefined);
+  assert.equal(liquidPlan.lines.syrups_maple.pounds, 3.1);
+  assert.equal(liquidPlan.lines.cumin_line, undefined);
   const tzatzikiBlock = recipe.parseScaledRecipes(text).recipes.filter(function (row) { return row.name === 'Tzatziki Sauce'; })[0];
   assert.equal(tzatzikiBlock.yieldPounds, 4.7);
   const tzatziki = bek.buildCatalog(require('./seed.json')).items.bek__483810;
@@ -194,6 +219,9 @@ test('food follows the temp zone, even on a supply shelf, and a supply par saves
   assert.equal(topSpice('Spices, thyme, dried').itemNumber, '774223');
   assert.equal(topSpice("Chef Paul Prudhomme's Blackened Redfish Magic Seasoning Blends").itemNumber, '774477');
   assert.equal(topSpice('Seeds, sesame seeds, whole, dried').itemNumber, '101922');
+  assert.equal(topSpice('Syrups, maple').itemNumber, '793062');
+  assert.equal(topSpice('Oil, sesame, salad or cooking').itemNumber, '779181');
+  assert.equal(topSpice('Lime Juice, Fresh').itemNumber, '029210');
   assert.equal(topSpice('Roland Capers').itemNumber, '685406');
   assert.equal(topSpice('Seeds, chia seeds, dried').itemNumber, '137394');
   assert.equal(topSpice('Spices, rosemary, dried').itemNumber, '774187');
