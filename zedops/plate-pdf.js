@@ -48,5 +48,38 @@
     });
   }
 
-  return { parsePlatePdf: parsePlatePdf };
+  function parseCookPdf(data, onProgress) {
+    var pdfjs = typeof globalThis !== 'undefined' ? globalThis.pdfjsLib : null;
+    function report(info) { if (typeof onProgress === 'function') onProgress(info); }
+    var cookApi = typeof globalThis !== 'undefined' ? globalThis.ZedCook : null;
+    if (typeof require === 'function' && typeof module !== 'undefined' && module.exports) {
+      try { cookApi = require('./cook-parse.js'); } catch (e) { /* browser */ }
+    }
+    if (!pdfjs || !pdfjs.getDocument) return Promise.reject(new Error('The PDF reader did not load. Check the connection and try again.'));
+    if (!cookApi) return Promise.reject(new Error('The cook list parser did not load.'));
+    report({ phase: 'open' });
+    return pdfjs.getDocument({ data: data }).promise.then(function (doc) {
+      var chain = Promise.resolve('');
+      for (var pageNumber = 1; pageNumber <= doc.numPages; pageNumber++) {
+        (function (n) {
+          chain = chain.then(function (text) {
+            report({ phase: 'page', page: n, pages: doc.numPages });
+            return doc.getPage(n).then(function (page) {
+              return page.getTextContent().then(function (content) {
+                return text + '\n' + layoutApi().layoutFromItems(content.items);
+              });
+            });
+          });
+        })(pageNumber);
+      }
+      return chain;
+    }).then(function (text) {
+      report({ phase: 'parse' });
+      var parsed = cookApi.parseCookList(text);
+      parsed.sourceText = text;
+      return parsed;
+    });
+  }
+
+  return { parsePlatePdf: parsePlatePdf, parseCookPdf: parseCookPdf };
 });

@@ -17,7 +17,8 @@
     ingredientMap: 'staging_zedops_ingredient_map',
     recipe: 'staging_zedops_recipe',
     plate: 'staging_zedops_plate',
-    standards: 'staging_zedops_standards'
+    standards: 'staging_zedops_standards',
+    cook: 'staging_zedops_cook'
   };
 
   var WHOLE_LIST = {};
@@ -50,6 +51,10 @@
     }
     if (parts[0] === PATHS.hidden && parts.length !== 3) throw new Error('Hidden items are saved one item at a time.');
     if (parts[0] === PATHS.standards && parts.length !== 2) throw new Error('Standard weights are saved one at a time.');
+    if (parts[0] === PATHS.cook) {
+      var cookOk = parts.length === 2 || (parts.length === 3 && parts[1] === 'map');
+      if (!cookOk) throw new Error('A cook list is saved one cook date or one component at a time.');
+    }
     if (parts[0] === PATHS.locations && parts.length !== 2) throw new Error('Stores are saved one store at a time.');
     if (parts[0] === PATHS.catalog && parts[1] === 'items' && parts.length !== 3) {
       throw new Error('Catalog items are saved one item at a time.');
@@ -159,6 +164,34 @@
     var count = Number(pieces);
     if (!(count > 0)) return Promise.reject(new Error('Enter pieces per cup greater than zero.'));
     return refOf(db, path).set({ piecesPerCup: count });
+  }
+
+  function setCookList(db, cookDate, value) {
+    var path = PATHS.cook + '/' + cookDate;
+    if (value == null) return refOf(db, path).remove();
+    var components = {};
+    (value.components || []).forEach(function (row) {
+      if (!row || !row.key || !(Number(row.quantity) > 0)) return;
+      components[row.key] = { name: String(row.name || ''), quantity: Number(row.quantity), unit: row.unit === 'lb' ? 'lb' : 'ea' };
+    });
+    if (!Object.keys(components).length) return Promise.reject(new Error('That cook list has no component lines.'));
+    return refOf(db, path).set({
+      cookDate: cookDate,
+      components: components,
+      fileName: String(value.fileName || ''),
+      approvedAt: String(value.approvedAt || ''),
+      sourceText: value.sourceText ? String(value.sourceText) : ''
+    });
+  }
+
+  function setCookMap(db, componentKey, value) {
+    var path = PATHS.cook + '/map/' + componentKey;
+    if (value == null) return refOf(db, path).remove();
+    return refOf(db, path).set({
+      itemNumber: String(value.itemNumber || ''),
+      catalogName: String(value.catalogName || ''),
+      cupSize: String(value.cupSize || '')
+    });
   }
 
   function setStandard(db, id, lb) {
@@ -320,6 +353,8 @@
     setPlateLink: setPlateLink,
     setPiecesPerCup: setPiecesPerCup,
     setStandard: setStandard,
+    setCookList: setCookList,
+    setCookMap: setCookMap,
     setCaseSize: setCaseSize,
     saveRecipeApproval: saveRecipeApproval,
     setLocation: setLocation,

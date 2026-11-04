@@ -172,6 +172,38 @@ test('a chew serving counted in pieces fills a 9 oz cup three at a time', async 
   assert.equal(page.includes('data-pieces-per'), true);
 });
 
+test('the 11/11 cook list totals cups by size and maps each counts', () => {
+  const cook = require('./cook-parse.js');
+  const text = fs.readFileSync(path.join(__dirname, 'fixtures', 'cook-list-2026-11-11.txt'), 'utf8');
+  const parsed = cook.parseCookList(text);
+  assert.equal(parsed.cookDate, '2026-11-11');
+  const totals = cook.supplyTotals(parsed.components, {});
+  assert.equal(totals.souffleCups, 1215);
+  assert.equal(totals.souffleLids, 1215);
+  assert.equal(totals.nineCups, 350);
+  assert.equal(totals.nineLids, 350);
+  const omelette = cook.piecesForItem({ itemNumber: '393795', name: 'Egg Omelette W/cheddar Chs' }, parsed.components, {});
+  assert.equal(omelette.quantity, 85);
+  const chicken = cook.piecesForItem({ itemNumber: '211262', name: 'Chicken Breast 4 Oz Blsl Fresh' }, parsed.components, {});
+  assert.equal(chicken.quantity, 1755);
+  const mahi = cook.piecesForItem({ itemNumber: '202105', name: 'Mahi Mahi Portion 4oz Ivp' }, parsed.components, {});
+  assert.equal(mahi.quantity, 135);
+  const cup = cook.piecesForItem({ itemNumber: '111634', name: 'Cup Plas Souffle 1.5 Oz Trans' }, parsed.components, {});
+  assert.equal(cup.quantity, 1215);
+  const lid = cook.piecesForItem({ itemNumber: '130860', name: 'Lid Plas Souffle 2 Oz' }, parsed.components, {});
+  assert.equal(lid.quantity, 1215);
+  const nine = cook.piecesForItem({ itemNumber: '104162', name: 'Cup Plas 9 Oz Squat Clear' }, parsed.components, {});
+  assert.equal(nine.quantity, 350);
+  const nineLid = cook.piecesForItem({ itemNumber: '104426' }, parsed.components, {});
+  assert.equal(nineLid.quantity, 350);
+  const salmon = cook.piecesForItem({ internalKey: 'local_salmon_4oz', itemNumber: '', name: '4 oz salmon filets' }, parsed.components, {});
+  assert.equal(salmon.quantity, 85);
+  assert.equal(cook.defaultItem('Lemon Wedge').itemNumber, '');
+  const page = fs.readFileSync(path.join(__dirname, 'weekly-page.js'), 'utf8');
+  assert.equal(page.includes('cookList: cookListFor'), true);
+  assert.equal(page.includes('parseCookPdf'), true);
+});
+
 test('Greek Chicken Bowl takes two souffle cups and two lids per plate', () => {
   const dishes = [{ key: 'greek_chicken_bowl', name: 'Greek Chicken Bowl', count: 100 }];
   const cup = { itemNumber: '111634', name: 'Cup Plas Souffle 1.5 Oz Trans' };

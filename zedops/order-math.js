@@ -321,6 +321,11 @@
     var pack = packAmount(item && item.pack);
     var countUnit = resolvedCountUnit(item);
     var have = onHand == null || onHand === '' ? 0 : Number(onHand) || 0;
+    if ((need.source === 'plate list' || need.source === 'cook list') && canonUnit(need.unit) === 'ea' && canonUnit(countUnit) === 'lb') {
+      var pieceLb = namePortionLb(item) || pieceWeightLb(item, need.eachFactor);
+      var caseLb = pack && pack.unit === 'lb' ? pack.perCase : (pack && pack.unit === 'oz' ? pack.perCase / 16 : 0);
+      if (pieceLb > 0 && caseLb > 0) return casesToOrder(Number(need.quantity) || 0, have / pieceLb, caseLb / pieceLb);
+    }
     if (need.source === 'plate list' && canonUnit(need.unit) === 'ea' && canonUnit(countUnit) === 'lb' && pack && pack.unit === 'oz' && pack.each > 0) {
       var pieceLb = pack.each / 16;
       return casesToOrder(Number(need.quantity) || 0, have / pieceLb, pack.perCase / pack.each);
@@ -463,6 +468,15 @@
 
   function orderNeed(item, input) {
     input = input || {};
+    if (input.cookList) {
+      return {
+        quantity: Number(input.cookList.quantity) || 0,
+        unit: (input.cookList && input.cookList.unit) || 'each',
+        eachFactor: null,
+        source: 'cook list',
+        reason: input.cookList.reason || ''
+      };
+    }
     if (input.plateList) {
       return {
         quantity: Number(input.plateList.quantity) || 0,

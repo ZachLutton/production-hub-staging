@@ -25,6 +25,10 @@
     piecesPerCup: {},
     plateLinks: {},
     standards: {},
+    cook: null,
+    pendingCook: null,
+    cookMap: {},
+    cookBusy: false,
     orderConfirmed: false,
     caseSizes: {},
     matches: {},
@@ -192,6 +196,21 @@
     if (!state.plate || !(Number(state.plate.totalCook) >= 0)) return null;
     return packagingSummary(plateDishList(state.plate), state.plate.totalCook);
   }
+  function cookComponents(cook) {
+    if (!cook || !cook.components) return [];
+    if (Array.isArray(cook.components)) return cook.components;
+    return Object.keys(cook.components).map(function (key) {
+      var row = cook.components[key] || {};
+      return { key: key, name: row.name || key, quantity: Number(row.quantity) || 0, unit: row.unit || 'ea' };
+    });
+  }
+  function cookListFor(item, loc) {
+    if (!item || !state.cook) return null;
+    var found = ZedCook.piecesForItem(item, cookComponents(state.cook), state.cookMap);
+    if (!found) return null;
+    var onHub = loc && ZedLocations.listSourceOf(loc) === 'catalog';
+    return { quantity: onHub ? found.quantity : 0, unit: 'each', reason: onHub ? found.reasons.join('; ') : '' };
+  }
   function plateListFor(item, loc) {
     if (!item) return null;
     var dishes = plateDishList(state.plate);
@@ -232,6 +251,7 @@
     }
     var fromRecipe = !!(recipe && Number(recipe.quantity) > 0);
     return ZedOrder.orderNeed(row.item, {
+      cookList: cookListFor(row.item, loc),
       plateList: plateListFor(row.item, loc),
       recipe: recipe,
       standingPar: (fromRecipe || ZedOrder.isFoodItem(row.item)) ? 0 : parOf(row, loc),
@@ -319,6 +339,12 @@
       }).then(function (standardSnap) {
         state.standards = (standardSnap && standardSnap.val()) || {};
         ZedOrder.useStandards(state.standards);
+        return db.ref(ZedStorage.PATHS.cook + '/' + week).once('value');
+      }).then(function (cookSnap) {
+        state.cook = (cookSnap && cookSnap.val()) || null;
+        return db.ref(ZedStorage.PATHS.cook + '/map').once('value');
+      }).then(function (cookMapSnap) {
+        state.cookMap = (cookMapSnap && cookMapSnap.val()) || {};
       }).catch(function (err) {
         state.plate = state.plate || null;
         showError(err);
@@ -439,6 +465,7 @@
       ZedOrder.useStandards(state.standards);
       renderRecipeTools();
       renderPlateReview();
+      renderCookReview();
       renderMealChecks(loc);
       renderSummary(loc);
       if (state.view === 'order') renderOrder();
@@ -732,6 +759,101 @@
     }
   }
 
+  function cookCupSummary(cook) {
+    var totals = ZedCook.supplyTotals(cookComponents(cook), state.cookMap);
+    return '1.5 oz cups ' + totals.souffleCups + ' and 2 oz lids ' + totals.souffleLids + '. 9 oz cups ' + totals.nineCups + ' and 9 oz lids ' + totals.nineLids + '.';
+  }
+  function renderCookReview() {
+    var panel = document.getElementById('cookPanel');
+    if (!panel) return;
+    var cook = state.pendingCook || state.cook;
+    if (!cook || !cookComponents(cook).length) {
+      panel.style.display = 'none';
+      panel.innerHTML = '';
+      return;
+    }
+    var rows = ZedCook.supplyTotals(cookComponents(cook), state.cookMap).rows.filter(function (row) {
+      return row.unit !== 'lb' && (row.cupSize || row.itemNumber || /cup$|muffin|chew|omelette|raw /i.test(row.name));
+    });
+    var allEa = cookComponents(cook).filter(function (row) { return row.unit === 'ea'; });
+    var body = allEa.map(function (row) {
+      var spec = ZedCook.specFor(row, state.cookMap);
+      var size = state.role === 'admin'
+        ? '<select data-cook-size="' + esc(row.key) + '" aria-label="Cup size for ' + esc(row.name) + '">' +
+          '<option value=""' + (!spec.cupSize ? ' selected' : '') + '>No cup</option>' +
+          '<option value="souffle_1_5"' + (spec.cupSize === 'souffle_1_5' ? ' selected' : '') + '>1.5 oz cup + 2 oz lid</option>' +
+          '<option value="cup_9oz"' + (spec.cupSize === 'cup_9oz' ? ' selected' : '') + '>9 oz cup + lid</option></select>'
+        : esc(spec.cupSize === 'cup_9oz' ? '9 oz cup + lid' : (spec.cupSize === 'souffle_1_5' ? '1.5 oz cup + 2 oz lid' : ''));
+      var itemField = state.role === 'admin'
+        ? '<input data-cook-item="' + esc(row.key) + '" value="' + esc(spec.itemNumber || '') + '" style="width:140px" aria-label="Catalog item for ' + esc(row.name) + '">'
+        : esc(spec.itemNumber || '');
+      return '<tr><td>' + esc(row.name) + '</td><td>' + esc(row.quantity) + ' ' + esc(row.unit) + '</td><td>' + size + '</td><td>' + itemField + ' ' + esc(spec.catalogName || '') + '</td></tr>';
+    }).join('');
+    var approve = state.pendingCook && state.role === 'admin'
+      ? '<button type="button" id="approveCook">Approve cook list</button> <button type="button" id="discardCook">Discard</button>'
+      : '';
+    panel.style.display = 'block';
+    panel.innerHTML = '<h2>Cook list ' + esc(cook.cookDate || '') + '</h2><p>' + cookCupSummary(cook) + '</p>' +
+      '<table class="order-table"><thead><tr><th>Component</th><th>Count</th><th>Cup</th><th>Catalog item</th></tr></thead><tbody>' +
+      body + '</tbody></table>' + approve;
+    var approveBtn = document.getElementById('approveCook');
+    var discardBtn = document.getElementById('discardCook');
+    if (approveBtn) approveBtn.onclick = approveCook;
+    if (discardBtn) discardBtn.onclick = function () { state.pendingCook = null; renderCookReview(); };
+  }
+  function approveCook() {
+    if (!requireAdmin()) return;
+    var pending = state.pendingCook;
+    if (!pending || !pending.cookDate) return;
+    pending.fileName = pending.fileName || '';
+    pending.approvedAt = new Date().toISOString();
+    ZedStorage.setCookList(db, pending.cookDate, pending).then(function () {
+      state.cook = {
+        cookDate: pending.cookDate,
+        components: pending.components,
+        fileName: pending.fileName,
+        approvedAt: pending.approvedAt,
+        sourceText: pending.sourceText || ''
+      };
+      state.pendingCook = null;
+      setPageStatus('Saved cook list for ' + pending.cookDate + '. ' + cookCupSummary(state.cook));
+      render();
+      markSaved();
+    }).catch(showError);
+  }
+  function onCookFile(file) {
+    if (!requireAdmin()) return;
+    if (!file) return;
+    state.cookBusy = true;
+    var status = document.getElementById('cookStatus');
+    function setStatus(text) { if (status) status.textContent = text; }
+    setStatus('Chosen: ' + file.name + '. Reading the file…');
+    var reader = new FileReader();
+    reader.onerror = function () {
+      state.cookBusy = false;
+      setStatus('Chosen: ' + file.name + '. Could not read that file. Try again.');
+    };
+    reader.onload = function () {
+      ZedPlatePdf.parseCookPdf(new Uint8Array(reader.result), function (info) {
+        if (info.phase === 'page') setStatus('Chosen: ' + file.name + '. Reading page ' + info.page + ' of ' + info.pages + '…');
+      }).then(function (parsed) {
+        state.cookBusy = false;
+        parsed.fileName = file.name;
+        if (!parsed.components || !parsed.components.length) {
+          setStatus('Chosen: ' + file.name + '. No component lines were found.');
+          return;
+        }
+        state.pendingCook = parsed;
+        setStatus('Chosen: ' + file.name + '. ' + parsed.components.length + ' components. ' + cookCupSummary(parsed));
+        renderCookReview();
+      }).catch(function (err) {
+        state.cookBusy = false;
+        setStatus('Chosen: ' + file.name + '. ' + ((err && err.message) || 'Could not parse that PDF.'));
+        showError(err);
+      });
+    };
+    reader.readAsArrayBuffer(file);
+  }
   function onPlateFile(file) {
     if (!file) return;
     state.plateBusy = true;
@@ -1502,6 +1624,37 @@
     var file = this.files && this.files[0];
     if (!file) return;
     onRecipeFile(file);
+  });
+  var cookFile = document.getElementById('cookFile');
+  if (cookFile) cookFile.addEventListener('change', function () {
+    var file = this.files && this.files[0];
+    if (!file) return;
+    onCookFile(file);
+  });
+  document.getElementById('cookPanel').addEventListener('change', function (event) {
+    if (!requireAdmin()) return;
+    var target = event.target;
+    var sizeKey = target.getAttribute && target.getAttribute('data-cook-size');
+    var itemKey = target.getAttribute && target.getAttribute('data-cook-item');
+    var key = sizeKey || itemKey;
+    if (!key) return;
+    var sizeEl = document.querySelector('[data-cook-size="' + key + '"]');
+    var itemEl = document.querySelector('[data-cook-item="' + key + '"]');
+    var cook = state.pendingCook || state.cook;
+    var component = cookComponents(cook).filter(function (row) { return row.key === key; })[0];
+    var current = ZedCook.specFor(component || { key: key, name: '' }, state.cookMap);
+    var next = {
+      itemNumber: itemEl ? itemEl.value.trim() : current.itemNumber,
+      catalogName: current.catalogName,
+      cupSize: sizeEl ? sizeEl.value : current.cupSize
+    };
+    ZedStorage.setCookMap(db, key, next).then(function () {
+      state.cookMap[key] = next;
+      setPageStatus('Saved cook list mapping for ' + (component ? component.name : key) + '.');
+      renderCookReview();
+      render();
+      markSaved();
+    }).catch(showError);
   });
   document.getElementById('plateFile').addEventListener('change', function () {
     var file = this.files && this.files[0];
