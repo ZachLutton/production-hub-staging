@@ -351,6 +351,12 @@
     if (!result || !(Number(result.amount) > 0)) return '0';
     return result.amount + (result.unit === 'ea' ? ' ea' : ' cs');
   }
+  function handLabel(row, loc) {
+    var hand = handOf(row, loc);
+    var unit = ZedOrder.unitLabel(ZedOrder.resolvedCountUnit(row.item));
+    if (hand == null || hand === '') return '—';
+    return hand + (unit ? ' ' + unit : '');
+  }
   function casesFor(row, loc) {
     var ordered = orderFor(row, loc);
     return ordered.unit === 'cs' ? ordered.amount : 0;
@@ -1019,7 +1025,7 @@
       var ordered = orderFor(row, loc);
       if (!(need && need.quantity > 0) && !(ordered.amount > 0)) return;
       lines.push('<tr><td class="item-num">' + esc(item.itemNumber || 'no BEK #') + '</td><td>' + esc(item.name) + '</td><td>' +
-        esc(needLabel(need)) + '</td><td class="need-order">' + esc(orderLabel(ordered)) + '</td></tr>');
+        esc(needLabel(need)) + '</td><td>' + esc(handLabel(row, loc)) + '</td><td class="need-order">' + esc(orderLabel(ordered)) + '</td></tr>');
     });
     var flags = [];
     state.rows.forEach(function (row) {
@@ -1030,7 +1036,7 @@
       ? '<div class="order-warn"><strong>Check these before you submit.</strong><ul>' + flags.join('') + '</ul></div>'
       : '';
     box.innerHTML = warning + '<h2>Order totals</h2><p><button type="button" id="submitOrder">Submit order</button></p>' + (lines.length
-      ? '<table class="order-table"><thead><tr><th>Item #</th><th>Name</th><th>Need</th><th>Order</th></tr></thead><tbody>' + lines.join('') + '</tbody></table>'
+      ? '<table class="order-table"><thead><tr><th>Item #</th><th>Name</th><th>Need</th><th>On hand</th><th>Order</th></tr></thead><tbody>' + lines.join('') + '</tbody></table>'
       : '<p class="empty-state">The approved recipes for ' + esc(cook) + ' do not add a food order.</p>');
   }
 
@@ -1159,7 +1165,7 @@
         var ordered = orderFor(row, loc);
         total += Number(ordered.amount) || 0;
         orderUnit = ordered.unit || orderUnit;
-        return '<td>' + esc(needLabel(need)) + '</td><td>' + (hand == null ? '—' : esc(hand)) + '</td>';
+        return '<td>' + esc(needLabel(need)) + '</td><td>' + esc(handLabel(row, loc)) + '</td>';
       }).join('');
       return '<tr><td class="item-num">' + esc(item.itemNumber || 'no BEK #') + '</td><td><div class="item-name">' + esc(item.name) +
         (item.temporary ? ' <span class="temp-badge">TEMPORARY</span>' : '') + '</div></td>' + cells +

@@ -310,6 +310,53 @@ test('cook list pieces use the pack, and peanut butter is 12 jars of 16 oz', () 
   assert.equal(order.orderResult(stored, peanutNeed, 0).amount, 1);
 });
 
+test('gallon, carton, and chip rows order in the count unit', () => {
+  const catalog = bek.buildCatalog(require('./seed.json'));
+  const milk = catalog.items.bek__171985;
+  const milkNeed = order.orderNeed(milk, { recipe: { quantity: 40.1, unit: 'lb' }, countUnit: 'gallon' });
+  assert.equal(order.needText(milkNeed), '40.1 lb ≈ 4.7 gal');
+  assert.equal(order.orderResult(milk, milkNeed, 0).amount, 2);
+  assert.equal(order.orderResult(milk, milkNeed, 4).amount, 1);
+  assert.equal(order.orderResult(milk, milkNeed, 5).amount, 0);
+  const whites = catalog.items.bek__393413;
+  assert.equal(order.resolvedCountUnit(whites), 'each');
+  const whiteNeed = order.orderNeed(whites, { recipe: { quantity: 25.8, unit: 'lb' }, countUnit: 'each' });
+  assert.equal(order.needText(whiteNeed), '25.8 lb ≈ 12.9 carton');
+  assert.equal(order.orderResult(whites, whiteNeed, 0).amount, 1);
+  assert.equal(order.orderResult(whites, whiteNeed, 12).amount, 1);
+  assert.equal(order.orderResult(whites, whiteNeed, 13).amount, 0);
+  const blend = catalog.items.bek__120564;
+  const blendNeed = { quantity: 79.3, unit: 'lb', source: 'recipe' };
+  assert.equal(order.orderResult(blend, blendNeed, 0).amount, 2);
+  assert.equal(order.orderResult(blend, blendNeed, 40).amount, 1);
+  assert.equal(order.orderResult(blend, blendNeed, 80).amount, 0);
+  const chips = catalog.items.bek__800401;
+  assert.equal(order.resolvedCountUnit(chips), 'lb');
+  const chipNeed = { quantity: 1, unit: 'lb', source: 'recipe' };
+  assert.equal(order.orderResult(chips, chipNeed, 12).amount, 0);
+  assert.equal(order.orderResult(chips, chipNeed, 0).amount, 1);
+  assert.equal(order.orderResult(Object.assign({}, chips, { countUnit: 'ounce' }), chipNeed, 12).amount, 0);
+  const tz = catalog.items.bek__483810;
+  const tzSmall = order.orderNeed(tz, { recipe: { quantity: 3, unit: 'lb' }, countUnit: 'gallon' });
+  assert.equal(order.needText(tzSmall).includes('0.7 × 0.5 gal'), true);
+  assert.equal(order.orderResult(tz, tzSmall, 0).amount, 1);
+  assert.equal(order.orderResult(tz, tzSmall, 0.5).amount, 0);
+  const lemon = catalog.items.bek__028201;
+  const lemonNeed = order.orderNeed(lemon, { recipe: { quantity: 4.1, unit: 'lb' }, countUnit: 'gallon' });
+  assert.equal(order.needText(lemonNeed).includes('1 × 0.5 gal'), true);
+  assert.equal(order.orderResult(lemon, lemonNeed, 0).amount, 1);
+  const almond = catalog.items.bek__798099;
+  assert.equal(order.resolvedCountUnit(almond), 'gal');
+  const almondNeed = order.orderNeed(almond, { recipe: { quantity: 20.5, unit: 'lb' }, countUnit: 'gal' });
+  assert.equal(order.needText(almondNeed).includes('oz'), false);
+  assert.equal(order.orderResult(almond, almondNeed, 0).amount, 1);
+  const bacon = catalog.items.bek__131513;
+  assert.equal(order.orderResult(bacon, { quantity: 12.4, unit: 'lb', source: 'recipe' }, 0).amount, 2);
+  const cream = catalog.items.bek__669027;
+  assert.equal(order.orderResult(cream, { quantity: 20.2, unit: 'lb', source: 'recipe' }, 0).amount, 2);
+  assert.equal(fs.readFileSync(path.join(__dirname, 'weekly-page.js'), 'utf8').includes('handLabel'), true);
+});
+
 test('a standard weight applies until the item overrides it, and a wild order is flagged', () => {
   const standards = order.defaultStandards();
   assert.equal(standards.can10, 6.5);

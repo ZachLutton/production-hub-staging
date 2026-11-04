@@ -100,6 +100,11 @@
     return unit || (pack && pack.unit) || 'each';
   }
 
+  function fluidCarton(pack) {
+    var parsed = packAmount(pack);
+    return !!(parsed && parsed.unit === 'oz' && (parsed.each === 64 || parsed.each === 128));
+  }
+
   function isKosherSalt(item) {
     var name = String(item && item.name || '').toLowerCase();
     return name.indexOf('kosher') !== -1 && name.indexOf('salt') !== -1;
@@ -114,7 +119,10 @@
   // unless an admin already chose a unit.
   function resolvedCountUnit(item) {
     if (item && item.countUnitChosen && item.countUnit) return item.countUnit;
-    if (String(item && item.itemNumber || '') === '212500') return 'each';
+    var number = String(item && item.itemNumber || '');
+    if (number === '212500' || number === '393413') return 'each';
+    if (number === '800401') return 'lb';
+    if (fluidCarton(item && item.pack)) return 'gal';
     if (isKosherSalt(item) || isBalsamicGlaze(item)) return 'each';
     if (canEachLb(item && item.pack)) return 'each';
     var packText = String(item && item.pack || '');
@@ -224,7 +232,8 @@
     if (!to || from === to) return pack.perCase;
     if (from === 'oz' && to === 'lb') return pack.perCase / 16;
     if (from === 'lb' && to === 'oz') return pack.perCase * 16;
-    if (from === 'oz' && isVolumeUnit(to) && pack.each === 128) from = 'floz';
+    // A 64 oz or 128 oz carton is fluid ounces. 6 / 64 OZ is 3 gallons, not 384 weight ounces.
+    if (from === 'oz' && isVolumeUnit(to)) from = 'floz';
     if (isVolumeUnit(from) && isVolumeUnit(to)) {
       var converted = pack.perCase / UNITS_PER_GAL[from] * UNITS_PER_GAL[to];
       if (converted > 0) return converted;
@@ -304,7 +313,7 @@
       var piecePack = packAmount(item && item.pack);
       if (boxLb > 0) {
         result.convertedQuantity = Number(result.quantity) / boxLb;
-        result.convertedUnit = piecePack && piecePack.canSize ? 'can' : (piecePack && piecePack.unit === 'oz' ? 'bottle' : 'box');
+        result.convertedUnit = piecePack && piecePack.canSize ? 'can' : (piecePack && piecePack.unit === 'oz' ? 'bottle' : (/egg white/i.test(String(item && item.name || '')) ? 'carton' : 'box'));
       }
     }
     return result;
@@ -399,6 +408,8 @@
     }
     var needQty = needInCountUnit(need.quantity, need.unit, countUnit, need.eachFactor, item && item.lbPerUnit, item);
     var perCase = perCaseInCountUnit(pack, countUnit);
+    // Hershey 800401 is a 12 lb case. The guide text 12 / 12 OZ would weigh 9 lb.
+    if (String(item && item.itemNumber || '') === '800401' && canonUnit(countUnit) === 'lb') perCase = 12;
     return casesToOrder(needQty, have, perCase || 1);
   }
 
