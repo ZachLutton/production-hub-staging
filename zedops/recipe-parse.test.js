@@ -538,6 +538,15 @@ test('food follows the temp zone, even on a supply shelf, and a supply par saves
   assert.equal(topSpice('Spices, oregano, dried').itemNumber, '774146');
   assert.equal(topSpice('Spices, thyme, dried').itemNumber, '774223');
   assert.equal(topSpice("Chef Paul Prudhomme's Blackened Redfish Magic Seasoning Blends").itemNumber, '774477');
+  assert.equal(topSpice('blackening seasoning').itemNumber, '774477');
+  assert.equal(topSpice('blackened seasoning').itemNumber, '774477');
+  const blackened = bek.buildCatalog(require('./seed.json')).items.bek__774477;
+  assert.equal(order.resolvedCountUnit(blackened), 'lb');
+  assert.equal(order.perCaseInCountUnit(order.packAmount(blackened.pack), 'lb'), 6);
+  assert.equal(order.orderCases(blackened, { quantity: 0.8, unit: 'lb', source: 'recipe' }, 0), 1);
+  assert.equal(order.recipeLineFor(blackened, {
+    seasoning: { name: "Chef Paul Prudhomme's Blackened Redfish Magic Seasoning Blends", pounds: 0.8, catalogId: '', unit: 'lb' }
+  }).pounds, 0.8);
   assert.equal(topSpice('Seeds, sesame seeds, whole, dried').itemNumber, '101922');
   assert.equal(topSpice('Syrups, maple').itemNumber, '793062');
   assert.equal(topSpice('Oil, sesame, salad or cooking').itemNumber, '779181');

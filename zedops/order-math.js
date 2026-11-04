@@ -121,7 +121,7 @@
     if (item && item.countUnitChosen && item.countUnit) return item.countUnit;
     var number = String(item && item.itemNumber || '');
     if (number === '212500' || number === '393413') return 'each';
-    if (number === '800401') return 'lb';
+    if (number === '800401' || number === '774477') return 'lb';
     if (fluidCarton(item && item.pack)) return 'gal';
     if (isKosherSalt(item) || isBalsamicGlaze(item)) return 'each';
     if (canEachLb(item && item.pack)) return 'each';
@@ -175,6 +175,7 @@
     if (isPantryLiquid(item) || isKosherSalt(item) || canEachLb(item && item.pack)) return true;
     if (/onion red slab|slab slice/i.test(item.name || '')) return true;
     if (/\bbrisket\b/i.test(item.name || '') && !/hash/i.test(item.name || '')) return true;
+    if (/blackened|red fish|redfish/i.test(item.name || '')) return true;
     return /caramelized onion|onion caramelized/i.test(item.name || '');
   }
 
@@ -185,6 +186,7 @@
     if (name === 'red onion') return 'bek__182907';
     // The long USDA brisket line is the 70 lb meat, not a spice that happened to match the item.
     if (/beef brisket|brisket whole/.test(name)) return 'bek__500370';
+    if (/blackened redfish|blackening seasoning|blackened seasoning|chef paul prudhomme/.test(name)) return 'bek__774477';
     return '';
   }
 
@@ -677,7 +679,7 @@
       [/black pepper|pepper black/, /pepper black/],
       [/oregano/, /oregano/],
       [/thyme/, /thyme/],
-      [/blackened|redfish magic/, /blackened/],
+      [/blackened|blackening|redfish magic|red fish magic/, /blackened|red fish|redfish/],
       [/maple/, /maple|syrup/],
       [/sesame oil|oil sesame/, /oil sesame/],
       [/lime juice/, /juice lime|lime juice/],
