@@ -38,7 +38,10 @@
   function parseCookList(text) {
     var raw = String(text || '').replace(/\f/g, '\n');
     var cookDate = '';
-    var cookMatch = raw.match(/Cook List for\s+[A-Za-z]+\s+([A-Za-z]+)\s+(\d{1,2}),\s+(\d{4})/i);
+    var cookMatch = raw.match(/Cook List for[\s\S]{0,120}?([A-Za-z]+)\s+(\d{1,2}),?\s*(\d{4})/i);
+    if (cookMatch && !MONTHS[cookMatch[1].toLowerCase()]) {
+      cookMatch = raw.match(/\b(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2}),?\s*(\d{4})/i);
+    }
     if (cookMatch) {
       var month = MONTHS[cookMatch[1].toLowerCase()];
       if (month) cookDate = cookMatch[3] + '-' + pad(month) + '-' + pad(cookMatch[2]);

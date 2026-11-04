@@ -75,9 +75,20 @@
     setPageStatus('Only an admin can change that. On-hand counts are the entry for this login.', true);
     return false;
   }
+  function explainSaveError(err) {
+    var code = String(err && err.code || '');
+    var message = String(err && err.message || '');
+    if (code === 'PERMISSION_DENIED' || /PERMISSION_DENIED|permission denied/i.test(message)) {
+      return 'Save blocked. Firebase project zedops-staging rejected this write. Publish database.rules.staging.json there (Realtime Database, Rules, paste the file, Publish). Do not open the live Production Hub project.';
+    }
+    return message || 'Could not save that change.';
+  }
   function showError(err) {
     console.error(err);
-    setPageStatus((err && err.message) || 'Could not save that change.', true);
+    var text = explainSaveError(err);
+    setPageStatus(text, true);
+    var el = document.getElementById('pageStatus');
+    if (el && el.scrollIntoView) el.scrollIntoView({ block: 'center' });
   }
   function itemIdForInventory(item) {
     if (item.itemNumber) return ZedCatalog.catalogId('bek', item.itemNumber);
@@ -807,7 +818,14 @@
   function approveCook() {
     if (!requireAdmin()) return;
     var pending = state.pendingCook;
-    if (!pending || !pending.cookDate) return;
+    if (!pending) {
+      setPageStatus('Nothing to approve. Upload the cook list again.', true);
+      return;
+    }
+    if (!pending.cookDate) {
+      setPageStatus('That cook list has no cook date, so nothing was saved.', true);
+      return;
+    }
     pending.fileName = pending.fileName || '';
     pending.approvedAt = new Date().toISOString();
     ZedStorage.setCookList(db, pending.cookDate, pending).then(function () {
