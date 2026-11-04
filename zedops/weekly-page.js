@@ -333,20 +333,27 @@
     if (need.reason) text += ' — ' + need.reason;
     return text;
   }
-  function casesFor(row, loc) {
+  function orderFor(row, loc) {
     var need = needFor(row, loc);
-    if (!need) return 0;
+    if (!need) return { amount: 0, unit: 'cs' };
     if (need.source === 'plate list') {
       var type = ZedMeals.typeForItemNumber(row.item && row.item.itemNumber);
       if (type) {
         var size = Number(state.caseSizes[type.id]) > 0 ? Number(state.caseSizes[type.id]) : type.caseSize;
         var fromPack = ZedOrder.packAmount(row.item && row.item.pack);
         if (!(size > 0) && fromPack) size = fromPack.perCase;
-        return ZedOrder.casesToOrder(need.quantity, handOf(row, loc) || 0, size || 1);
+        return { amount: ZedOrder.casesToOrder(need.quantity, handOf(row, loc) || 0, size || 1), unit: 'cs' };
       }
-      return ZedOrder.orderCases(row.item, need, handOf(row, loc));
     }
-    return ZedOrder.orderCases(row.item, need, handOf(row, loc));
+    return ZedOrder.orderResult(row.item, need, handOf(row, loc));
+  }
+  function orderLabel(result) {
+    if (!result || !(Number(result.amount) > 0)) return '0';
+    return result.amount + (result.unit === 'ea' ? ' ea' : ' cs');
+  }
+  function casesFor(row, loc) {
+    var ordered = orderFor(row, loc);
+    return ordered.unit === 'cs' ? ordered.amount : 0;
   }
 
   function loadSupport(loc) {
@@ -1009,10 +1016,10 @@
       if (!item || !ZedBek.isShown(item) || item.kind === 'vendor_check') return;
       var row = { id: id, item: item, legacyKey: '', source: 'guide' };
       var need = needFor(row, loc);
-      var cases = casesFor(row, loc);
-      if (!(need && need.quantity > 0) && !(cases > 0)) return;
+      var ordered = orderFor(row, loc);
+      if (!(need && need.quantity > 0) && !(ordered.amount > 0)) return;
       lines.push('<tr><td class="item-num">' + esc(item.itemNumber || 'no BEK #') + '</td><td>' + esc(item.name) + '</td><td>' +
-        esc(needLabel(need)) + '</td><td class="need-order">' + (cases > 0 ? cases + ' cs' : '0') + '</td></tr>');
+        esc(needLabel(need)) + '</td><td class="need-order">' + esc(orderLabel(ordered)) + '</td></tr>');
     });
     var flags = [];
     state.rows.forEach(function (row) {
@@ -1080,7 +1087,8 @@
     var item = row.item;
     var need = needFor(row, loc);
     var hand = handOf(row);
-    var cases = casesFor(row, loc);
+    var ordered = orderFor(row, loc);
+    var cases = ordered.unit === 'cs' ? ordered.amount : 0;
     var needText = needLabel(need);
     var temp = item.temporary ? ' <span class="temp-badge">TEMPORARY</span>' : '';
     var food = ZedOrder.isFoodItem(item);
@@ -1126,7 +1134,7 @@
     return '<tr' + (warn.flagged ? ' class="order-flag"' : '') + '><td class="item-num">' + esc(item.itemNumber || 'no BEK #') + '</td><td><div class="item-name">' +
       esc(item.name) + temp + '</div><div class="item-brand">' + esc(item.brand || '') + '</div>' + weightLine + '</td><td>' + esc(item.pack || '') +
       '</td><td data-need-for="' + esc(row.id) + '">' + esc(needText) + '</td><td><input class="onhand-input" data-hand="' + esc(row.id) + '" type="number" min="0" step="any" inputmode="decimal" aria-label="On hand ' + esc(item.name) + ' in ' + esc(countNow) + '" value="' +
-      (hand == null ? '' : esc(hand)) + '"></td><td class="need-order">' + (cases > 0 ? cases + ' cs' : '0') + warnLine + '</td>' +
+      (hand == null ? '' : esc(hand)) + '"></td><td class="need-order">' + esc(orderLabel(ordered)) + warnLine + '</td>' +
       controls + '</tr>';
   }
 
@@ -1143,20 +1151,22 @@
       var item = state.catalog.items[id];
       if (!item || !ZedBek.isShown(item) || item.kind === 'vendor_check') return '';
       var total = 0;
+      var orderUnit = 'cs';
       var cells = list.map(function (loc) {
         var row = { id: id, item: item, legacyKey: '', source: 'guide' };
         var need = needFor(row, loc);
         var hand = handOf(row, loc);
-        var cases = casesFor(row, loc);
-        total += cases;
+        var ordered = orderFor(row, loc);
+        total += Number(ordered.amount) || 0;
+        orderUnit = ordered.unit || orderUnit;
         return '<td>' + esc(needLabel(need)) + '</td><td>' + (hand == null ? '—' : esc(hand)) + '</td>';
       }).join('');
       return '<tr><td class="item-num">' + esc(item.itemNumber || 'no BEK #') + '</td><td><div class="item-name">' + esc(item.name) +
         (item.temporary ? ' <span class="temp-badge">TEMPORARY</span>' : '') + '</div></td>' + cells +
-        '<td class="need-order">' + (total > 0 ? total + ' cs' : '0') + '</td></tr>';
+        '<td class="need-order">' + esc(orderLabel({ amount: total, unit: orderUnit })) + '</td></tr>';
     }).join('');
     document.getElementById('orderTable').innerHTML = '<table class="order-table"><thead><tr><th>Item #</th><th>Name</th>' + head +
-      '<th>Total cases</th></tr></thead><tbody>' + body + '</tbody></table>';
+      '<th>Order</th></tr></thead><tbody>' + body + '</tbody></table>';
     state.orderRows = ids.map(function (id) { return state.catalog.items[id]; }).filter(Boolean);
   }
 
@@ -1513,8 +1523,7 @@
       var row = null;
       state.rows.forEach(function (candidate) { if (candidate.id === id) row = candidate; });
       if (cell && row) {
-        var cases = casesFor(row, currentStore());
-        cell.textContent = cases > 0 ? cases + ' cs' : '0';
+        cell.textContent = orderLabel(orderFor(row, currentStore()));
       }
       var mealInput = document.querySelector('[data-meal-hand="' + id + '"]');
       if (mealInput && mealInput !== input) mealInput.value = raw;
@@ -1583,8 +1592,7 @@
         var loc = currentStore();
         if (needCell) needCell.textContent = needLabel(needFor(densityRow, loc));
         if (orderCell) {
-          var cases = casesFor(densityRow, loc);
-          orderCell.textContent = cases > 0 ? cases + ' cs' : '0';
+          orderCell.textContent = orderLabel(orderFor(densityRow, loc));
         }
         renderSummary(loc);
         setPageStatus(densityFields.lbPerUnit == null
@@ -1624,8 +1632,7 @@
       var loc = currentStore();
       if (needCell) needCell.textContent = needLabel(needFor(row, loc));
       if (orderCell) {
-        var cases = casesFor(row, loc);
-        orderCell.textContent = cases > 0 ? cases + ' cs' : '0';
+        orderCell.textContent = orderLabel(orderFor(row, loc));
       }
       renderSummary(loc);
       markSaved();
@@ -2046,7 +2053,7 @@
       if (!item || !ZedBek.isShown(item) || item.kind === 'vendor_check') return;
       var parts = list.map(function (loc) {
         var row = { id: id, item: item, legacyKey: '', source: 'guide' };
-        return loc.name + ' ' + needLabel(needFor(row, loc)) + ', order ' + casesFor(row, loc);
+        return loc.name + ' ' + needLabel(needFor(row, loc)) + ', order ' + orderLabel(orderFor(row, loc));
       });
       lines.push((item.itemNumber || 'no BEK #') + ' ' + item.name + ' | ' + parts.join(' | '));
     });
@@ -2097,7 +2104,7 @@
     state.rows.filter(function (row) { return row.source === 'special'; }).forEach(function (row) {
       var hand = handOf(row);
       lines.push((row.item.temporary ? '[TEMPORARY] ' : '') + row.item.name + (row.item.itemNumber ? ' #' + row.item.itemNumber : ' (no BEK #)') +
-        ' | ' + needLabel(needFor(row)) + ' | order ' + casesFor(row) +
+        ' | ' + needLabel(needFor(row)) + ' | order ' + orderLabel(orderFor(row)) +
         ' | on hand ' + (hand == null ? 'not counted' : hand + ' ' + (row.item.countUnit || '')));
     });
     ZedPdf.downloadPdf('bek-special-order-' + state.weekKey + '.pdf', ZedPdf.buildPdf({ title: 'Special order — send direct to the BEK rep', lines: lines }));

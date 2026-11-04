@@ -114,6 +114,7 @@
   // unless an admin already chose a unit.
   function resolvedCountUnit(item) {
     if (item && item.countUnitChosen && item.countUnit) return item.countUnit;
+    if (String(item && item.itemNumber || '') === '212500') return 'each';
     if (isKosherSalt(item) || isBalsamicGlaze(item)) return 'each';
     if (canEachLb(item && item.pack)) return 'each';
     var packText = String(item && item.pack || '');
@@ -204,6 +205,11 @@
         unit: canonUnit(match[3]),
         raw: text
       };
+    }
+    // "12/16" is 12 jars of 16 oz. "12/2" is already 12 units of 2 lb, above.
+    var bareOz = text.trim().match(/^(\d+)\s*\/\s*(\d+)$/);
+    if (bareOz) {
+      return { perCase: Number(bareOz[1]) * Number(bareOz[2]), each: Number(bareOz[2]), unit: 'oz', raw: text };
     }
     var loose = text.match(/(\d*\.\d+|\d+)\s*lb\s*case\b/i);
     if (!loose) return null;
@@ -316,21 +322,65 @@
     return text;
   }
 
+  // How many cook-list pieces are in one case. An ounce pack is that many pieces.
+  // A pound case uses the portion weight in the name. A pack with no piece count returns 0.
+  function piecesPerCase(item, eachFactor) {
+    var pack = packAmount(item && item.pack);
+    var edited = Number(eachFactor);
+    var portion = edited > 0 ? edited : namePortionLb(item);
+    if (!(edited > 0) && pack && pack.unit === 'oz' && pack.each > 0) {
+      var count = pack.perCase / pack.each;
+      if (count > 0) return count;
+    }
+    if (portion > 0 && pack && pack.unit === 'lb' && pack.perCase > 0) return pack.perCase / portion;
+    if (edited > 0 && pack && pack.unit === 'oz' && pack.perCase > 0) return (pack.perCase / 16) / edited;
+    if (item && Number(item.eachPerCase) > 0) return Number(item.eachPerCase);
+    return 0;
+  }
+
+  function onHandAsPieces(item, onHand, eachFactor) {
+    var have = onHand == null || onHand === '' ? 0 : Number(onHand) || 0;
+    var unit = canonUnit(resolvedCountUnit(item));
+    var pack = packAmount(item && item.pack);
+    var edited = Number(eachFactor);
+    var portion = edited > 0 ? edited : namePortionLb(item);
+    if (!(portion > 0) && pack && pack.unit === 'oz' && pack.each > 0) portion = pack.each / 16;
+    if (unit === 'lb' && portion > 0) return have / portion;
+    if (unit === 'oz' && portion > 0) return have / (portion * 16);
+    return have;
+  }
+
+  function pieceOrder(need) {
+    return !!(need && (need.source === 'cook list' || need.source === 'plate list') && canonUnit(need.unit) === 'ea');
+  }
+
+  // Cook-list and plate-list pieces order by the case when the pack says how many pieces
+  // are in it. Otherwise the order stays in each, and the summary must not call that a case.
+  function orderResult(item, need, onHand) {
+    if (!need) return { amount: 0, unit: 'cs' };
+    if (pieceOrder(need)) {
+      var per = piecesPerCase(item, need.eachFactor);
+      if (!(per > 0)) {
+        var haveEach = canonUnit(resolvedCountUnit(item)) === 'ea'
+          ? (onHand == null || onHand === '' ? 0 : Number(onHand) || 0)
+          : 0;
+        return { amount: casesToOrder(Number(need.quantity) || 0, haveEach, 1), unit: 'ea' };
+      }
+      return {
+        amount: casesToOrder(Number(need.quantity) || 0, onHandAsPieces(item, onHand, need.eachFactor), per),
+        unit: 'cs'
+      };
+    }
+    return { amount: orderCases(item, need, onHand), unit: 'cs' };
+  }
+
   // Need and on hand are both in the count unit. Cases round up.
   function orderCases(item, need, onHand) {
     if (!need) return 0;
+    if (pieceOrder(need)) return orderResult(item, need, onHand).amount;
     var pack = packAmount(item && item.pack);
     var countUnit = resolvedCountUnit(item);
     var have = onHand == null || onHand === '' ? 0 : Number(onHand) || 0;
-    if ((need.source === 'plate list' || need.source === 'cook list') && canonUnit(need.unit) === 'ea' && canonUnit(countUnit) === 'lb') {
-      var pieceLb = namePortionLb(item) || pieceWeightLb(item, need.eachFactor);
-      var caseLb = pack && pack.unit === 'lb' ? pack.perCase : (pack && pack.unit === 'oz' ? pack.perCase / 16 : 0);
-      if (pieceLb > 0 && caseLb > 0) return casesToOrder(Number(need.quantity) || 0, have / pieceLb, caseLb / pieceLb);
-    }
-    if (need.source === 'plate list' && canonUnit(need.unit) === 'ea' && canonUnit(countUnit) === 'lb' && pack && pack.unit === 'oz' && pack.each > 0) {
-      var pieceLb = pack.each / 16;
-      return casesToOrder(Number(need.quantity) || 0, have / pieceLb, pack.perCase / pack.each);
-    }
     if (canonUnit(countUnit) === 'ea' && canonUnit(need.unit) === 'lb') {
       var boxLb = pieceWeightLb(item, need.eachFactor);
       if (boxLb > 0) {
@@ -808,6 +858,8 @@
     casesToOrder: casesToOrder,
     needInCountUnit: needInCountUnit,
     needText: needText,
+    piecesPerCase: piecesPerCase,
+    orderResult: orderResult,
     orderCases: orderCases,
     isFoodItem: isFoodItem,
     isRetailResale: isRetailResale,

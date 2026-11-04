@@ -66,7 +66,7 @@ test('the 11/4 plate list splits muffins and cookies off the meal trays', async 
   assert.equal(parOnly.source, 'standing par');
   assert.equal(parOnly.quantity, 4);
   const page = fs.readFileSync(path.join(__dirname, 'weekly-page.js'), 'utf8');
-  assert.equal(page.includes('plateList: plateListFor'), true);
+  assert.equal(page.includes('plateListFor(row.item, loc)'), true);
   assert.equal(page.includes("source === 'plate list'"), true);
   assert.equal(meals.orderLine('meal_container', 4747, 4747, 552).cases, 0);
   assert.equal(meals.orderLine('meal_container', 4747, 5000, 552).cases, 0);
@@ -206,7 +206,7 @@ test('the 11/11 cook list totals cups by size and maps each counts', () => {
   assert.equal(salmon.quantity, 85);
   assert.equal(cook.defaultItem('Lemon Wedge').itemNumber, '');
   const page = fs.readFileSync(path.join(__dirname, 'weekly-page.js'), 'utf8');
-  assert.equal(page.includes('cookList: cookListFor'), true);
+  assert.equal(page.includes('cookListFor(row.item, loc)'), true);
   assert.equal(page.includes('parseCookPdf'), true);
 });
 

@@ -190,7 +190,9 @@ test('cases always round up and an exact case does not', () => {
   assert.equal(order.packAmount('12/2').each, 2);
   assert.equal(order.packAmount('12/2').unit, 'lb');
   assert.equal(order.packAmount('24/.8'), null);
-  assert.equal(order.packAmount('12/16'), null);
+  assert.equal(order.packAmount('12/16').unit, 'oz');
+  assert.equal(order.packAmount('12/16').each, 16);
+  assert.equal(order.packAmount('12/16').perCase, 192);
   assert.equal(order.packAmount('8/13.22'), null);
   assert.equal(order.isFoodItem(onion), true);
   assert.equal(order.usesSuggestedRecipe(onion), true);
@@ -264,7 +266,48 @@ test('cases always round up and an exact case does not', () => {
   assert.equal(page.includes('data-lb-per'), true);
   assert.equal(page.includes('showCanEach'), true);
   assert.equal(page.includes('row-controls'), true);
-  assert.equal(page.includes('orderCases'), true);
+  assert.equal(page.includes('orderResult'), true);
+  assert.equal(page.includes('orderLabel'), true);
+});
+
+test('cook list pieces use the pack, and peanut butter is 12 jars of 16 oz', () => {
+  const catalog = bek.buildCatalog(require('./seed.json'));
+  const cook = require('./cook-parse.js');
+  const parsed = cook.parseCookList(fs.readFileSync(path.join(__dirname, 'fixtures/cook-list-2026-11-11.txt'), 'utf8'));
+  function ordered(id, onHand) {
+    const item = catalog.items[id];
+    const found = cook.piecesForItem(item, parsed.components, {});
+    const need = { quantity: found.quantity, unit: 'each', source: 'cook list' };
+    return order.orderResult(item, need, onHand || 0);
+  }
+  const salmon = ordered('bek__local_salmon_4oz', 0);
+  assert.equal(salmon.unit, 'cs');
+  assert.equal(salmon.amount, 3);
+  assert.equal(ordered('bek__local_salmon_4oz', 30).amount, 2);
+  assert.equal(ordered('bek__211262').amount, 22);
+  assert.equal(ordered('bek__202105').amount, 4);
+  assert.equal(ordered('bek__185095').amount, 5);
+  assert.equal(ordered('bek__555070').amount, 3);
+  assert.equal(ordered('bek__492773').amount, 1);
+  assert.equal(ordered('bek__522402').amount, 7);
+  const hash = ordered('bek__172359');
+  assert.equal(hash.unit, 'ea');
+  assert.equal(hash.amount, 132);
+  const thigh = ordered('bek__121792');
+  assert.equal(thigh.unit, 'ea');
+  assert.equal(thigh.amount, 110);
+  const peanut = catalog.items.bek__212500;
+  assert.equal(peanut.countUnit, 'each');
+  assert.equal(order.resolvedCountUnit(peanut), 'each');
+  assert.equal(order.packAmount(peanut.pack).each, 16);
+  assert.equal(order.piecesPerCase(peanut), 12);
+  const peanutNeed = { quantity: 3.3, unit: 'lb', source: 'recipe' };
+  assert.equal(order.orderResult(peanut, peanutNeed, 0).amount, 1);
+  assert.equal(order.orderResult(peanut, peanutNeed, 0).unit, 'cs');
+  assert.equal(order.orderResult(peanut, peanutNeed, 2).amount, 1);
+  assert.equal(order.orderResult(peanut, peanutNeed, 4).amount, 0);
+  const stored = Object.assign({}, peanut, { pack: '12/16', countUnit: 'each' });
+  assert.equal(order.orderResult(stored, peanutNeed, 0).amount, 1);
 });
 
 test('a standard weight applies until the item overrides it, and a wild order is flagged', () => {

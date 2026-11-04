@@ -2488,7 +2488,8 @@
       "name": "Peanut butter crunchy",
       "brand": "Smuckers",
       "supplier": "",
-      "pack": "12/16"
+      "pack": "12 / 16 OZ",
+      "countUnit": "each"
     }
   ]
 }
