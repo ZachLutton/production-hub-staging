@@ -21,6 +21,12 @@ test('a scaled recipe header names its Wednesday cook date', () => {
   const sample = recipe.parseScaledRecipes('Scaled Recipes for Wednesday Nov 11, 2026\n');
   assert.equal(sample.cookDate, '2026-11-11');
   assert.equal(recipe.parseScaledRecipes(text).cookDate, '2026-11-04');
+  const decoy = [
+    'Posted Monday Nov 03, 2026',
+    'Generated on Saturday Oct 31, 2026 03:10:41',
+    'Colonnade Scaled Recipes for Wednesday Nov 04, 2026'
+  ].join('\n');
+  assert.equal(recipe.parseScaledRecipes(decoy).cookDate, '2026-11-04');
 });
 
 test('scaled recipe uses raw weights and does not double count', () => {

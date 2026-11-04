@@ -105,6 +105,16 @@
     return 0;
   }
 
+  // Why a cup or lid row is zero. A matched plate list returns an empty reason.
+  function cupNeedReason(plate, summary) {
+    if (!plate) return 'No plate list is approved for this cook date, so this need is 0.';
+    if (!summary || !summary.dishes || !summary.dishes.length) {
+      return 'The plate list has no dish lines, so muffin and cookie names were not matched.';
+    }
+    if (!(summary.cup > 0)) return 'No dish on the plate list matched muffin, cookie, or chew, so this need is 0.';
+    return '';
+  }
+
   function orderLine(typeId, needUnits, onHand, caseSize) {
     var base = TYPES[typeId];
     if (!base) return null;
@@ -147,6 +157,7 @@
     typeOf: typeOf,
     typeForItemNumber: typeForItemNumber,
     unitsFor: unitsFor,
+    cupNeedReason: cupNeedReason,
     orderLine: orderLine,
     linesFor: linesFor
   };

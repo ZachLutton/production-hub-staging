@@ -70,7 +70,8 @@
         quantity: Number(input.plateList.quantity) || 0,
         unit: (input.plateList && input.plateList.unit) || 'each',
         eachFactor: null,
-        source: 'plate list'
+        source: 'plate list',
+        reason: input.plateList.reason || ''
       };
     }
     if (isFoodItem(item)) {

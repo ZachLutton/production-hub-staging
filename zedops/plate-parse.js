@@ -10,6 +10,10 @@
     return String(value).padStart(2, '0');
   }
 
+  function nameKey(value) {
+    return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 80);
+  }
+
   function parsePlateList(text) {
     var raw = String(text || '').replace(/\f/g, '\n');
     var cookDate = '';
@@ -20,17 +24,34 @@
     }
     var totalCook = null;
     var lines = raw.split(/\n/);
+    var dishes = [];
+    var seen = {};
     for (var i = 0; i < lines.length; i++) {
-      if (!/Total Cook/i.test(lines[i])) continue;
-      var same = lines[i].match(/Total Cook\s*:?\s*([\d,]+)/i);
-      var next = !same && lines[i + 1] ? String(lines[i + 1]).match(/([\d,]{3,})\s*$/) : null;
-      var token = same ? same[1] : (next ? next[1] : '');
-      if (!token) continue;
-      var number = Number(token.replace(/,/g, ''));
-      if (isFinite(number)) { totalCook = number; break; }
+      var line = String(lines[i] || '');
+      if (/Total Cook/i.test(line)) {
+        var same = line.match(/Total Cook\s*:?\s*([\d,]+)/i);
+        var next = !same && lines[i + 1] ? String(lines[i + 1]).match(/([\d,]{3,})\s*$/) : null;
+        var token = same ? same[1] : (next ? next[1] : '');
+        if (token && totalCook == null) {
+          var headerCount = Number(token.replace(/,/g, ''));
+          if (isFinite(headerCount)) totalCook = headerCount;
+        }
+        continue;
+      }
+      var trimmed = line.trim();
+      if (!trimmed || /Plate List for|Generated on|Small\s+Regular/i.test(trimmed)) continue;
+      var dish = trimmed.match(/^(.+?)\s+([\d,]+)\s*$/);
+      if (!dish) continue;
+      var name = dish[1].trim();
+      var count = Number(dish[2].replace(/,/g, ''));
+      if (!name || !isFinite(count)) continue;
+      var key = nameKey(name);
+      if (!key || seen[key]) continue;
+      seen[key] = true;
+      dishes.push({ key: key, name: name, count: count });
     }
-    return { cookDate: cookDate, totalCook: totalCook };
+    return { cookDate: cookDate, totalCook: totalCook, dishes: dishes };
   }
 
-  return { parsePlateList: parsePlateList };
+  return { parsePlateList: parsePlateList, nameKey: nameKey };
 });

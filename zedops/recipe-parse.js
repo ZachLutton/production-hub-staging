@@ -51,12 +51,18 @@
     return { name: match[1].trim(), grams: num(match[2]), pounds: pounds, ratio: match[4] };
   }
 
+  // The cook date is the "Scaled Recipes for <weekday> <month> <day>, <year>" line.
+  // "Generated on" and "Posted" are the print date and are ignored.
   function cookDateFrom(text) {
-    var match = String(text).match(/Scaled Recipes for\s+[A-Za-z]+\s+([A-Za-z]+)\s+(\d{1,2}),\s+(\d{4})/i);
-    if (!match) return '';
-    var month = MONTHS[match[1].toLowerCase()];
-    if (!month) return '';
-    return match[3] + '-' + String(month).padStart(2, '0') + '-' + String(match[2]).padStart(2, '0');
+    var raw = String(text || '');
+    var re = /Scaled Recipes for\s+[A-Za-z]+\s+([A-Za-z]+)\s+(\d{1,2}),\s+(\d{4})/ig;
+    var match;
+    while ((match = re.exec(raw))) {
+      var month = MONTHS[match[1].toLowerCase()];
+      if (!month) continue;
+      return match[3] + '-' + String(month).padStart(2, '0') + '-' + String(match[2]).padStart(2, '0');
+    }
+    return '';
   }
 
   function cleanIngredientName(value) {

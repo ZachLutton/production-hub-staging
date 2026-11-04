@@ -43,7 +43,10 @@
     if (parts[0] === PATHS.pars && parts.length !== 3) throw new Error('Pars are saved one item at a time.');
     if (parts[0] === PATHS.ingredientMap && parts.length !== 2) throw new Error('Ingredient matches are saved one name at a time.');
     if (parts[0] === PATHS.recipe && parts.length !== 3) throw new Error('Recipe lines are saved one ingredient at a time.');
-    if (parts[0] === PATHS.plate && parts.length !== 2) throw new Error('A plate list is saved one cook date at a time.');
+    if (parts[0] === PATHS.plate) {
+      var plateOk = parts.length === 2 || (parts.length === 3 && (parts[1] === 'pack' || parts[1] === 'case'));
+      if (!plateOk) throw new Error('A plate list is saved one cook date, one dish, or one case size at a time.');
+    }
     if (parts[0] === PATHS.hidden && parts.length !== 3) throw new Error('Hidden items are saved one item at a time.');
     if (parts[0] === PATHS.locations && parts.length !== 2) throw new Error('Stores are saved one store at a time.');
     if (parts[0] === PATHS.catalog && parts[1] === 'items' && parts.length !== 3) {
@@ -104,7 +107,25 @@
     if (value == null) return refOf(db, path).remove();
     var total = Number(value.totalCook);
     if (!isFinite(total) || total < 0) return Promise.reject(new Error('Total Cook must be zero or more.'));
-    return refOf(db, path).set({ cookDate: cookDate, totalCook: total });
+    var dishes = {};
+    (value.dishes || []).forEach(function (dish) {
+      if (!dish || !dish.key) return;
+      dishes[dish.key] = { name: String(dish.name || ''), count: Number(dish.count) || 0 };
+    });
+    return refOf(db, path).set({ cookDate: cookDate, totalCook: total, dishes: dishes });
+  }
+
+  function setPackChoice(db, dishKey, value) {
+    var path = PATHS.plate + '/pack/' + dishKey;
+    if (value == null) return refOf(db, path).remove();
+    return refOf(db, path).set({ name: String(value.name || ''), packId: value.packId === 'cup_9oz' ? 'cup_9oz' : 'meal_container' });
+  }
+
+  function setCaseSize(db, supplyId, caseSize) {
+    var path = PATHS.plate + '/case/' + supplyId;
+    var size = Number(caseSize);
+    if (!(size > 0)) return Promise.reject(new Error('Enter a case size greater than zero.'));
+    return refOf(db, path).set({ caseSize: size });
   }
 
   function setRecipeLine(db, weekKey, lineId, value) {
@@ -247,6 +268,8 @@
     setIngredientMatch: setIngredientMatch,
     setRecipeLine: setRecipeLine,
     setPlateTotal: setPlateTotal,
+    setPackChoice: setPackChoice,
+    setCaseSize: setCaseSize,
     saveRecipeApproval: saveRecipeApproval,
     setLocation: setLocation,
     applyWrites: applyWrites,

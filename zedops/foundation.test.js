@@ -235,8 +235,9 @@ test('the count week is the Tuesday it is due, in Chicago, and prices wait for t
   assert.equal(page.indexOf('id="recipeTools"') < page.indexOf('id="storeView"'), true);
   assert.equal(page.indexOf('id="orderSummary"') < page.indexOf('id="storeView"'), true);
   assert.equal(page.indexOf('id="storeView"') < page.indexOf('id="adminTools"'), true);
-  assert.equal(page.includes('Build 20261031e'), true);
-  assert.equal(page.includes('weekly-page.js?v=20261031e'), true);
+  assert.equal(page.includes('Build 20261104a'), true);
+  assert.equal(page.includes('weekly-page.js?v=20261104a'), true);
+  assert.equal(page.includes('button:disabled'), true);
   assert.equal(page.includes('id="plateFile"'), true);
   assert.equal(page.includes('id="mealChecks"'), true);
   assert.equal(logic.includes('function showView'), true);

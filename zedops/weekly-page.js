@@ -28,6 +28,7 @@
     showHiddenIngredients: false,
     showHiddenCatalog: false,
     pendingRecipe: null,
+    allowRecipeMismatch: false,
     pendingGuide: null,
     approvingRecipe: false
   };
@@ -179,13 +180,14 @@
     return packagingSummary(plateDishList(state.plate), state.plate.totalCook);
   }
   function plateListFor(item, loc) {
-    if (!item || !state.plate) return null;
+    if (!item) return null;
     var type = ZedMeals.typeForItemNumber(item.itemNumber);
     if (!type || !type.catalogNumber) return null;
-    var summary = plateSummaryNow();
-    if (!summary) return null;
-    var units = loc && ZedLocations.listSourceOf(loc) === 'catalog' ? ZedMeals.unitsFor(type, summary) : 0;
-    return { quantity: units, unit: 'each' };
+    var onHub = loc && ZedLocations.listSourceOf(loc) === 'catalog';
+    var summary = state.plate ? packagingSummary(plateDishList(state.plate), state.plate.totalCook) : null;
+    var reason = onHub ? ZedMeals.cupNeedReason(state.plate, summary) : '';
+    var units = onHub && summary && !reason ? ZedMeals.unitsFor(type, summary) : 0;
+    return { quantity: units, unit: 'each', reason: reason };
   }
   function needFor(row, loc) {
     loc = loc || currentStore();
@@ -199,7 +201,9 @@
   }
   function needLabel(need) {
     var qty = ZedBek.formatQty(need.quantity);
-    return qty + (need.unit ? ' ' + need.unit : '') + ' · ' + need.source;
+    var text = qty + (need.unit ? ' ' + need.unit : '') + ' · ' + need.source;
+    if (need.reason) text += ' — ' + need.reason;
+    return text;
   }
   function casesFor(row, loc) {
     var need = needFor(row, loc);
@@ -315,8 +319,14 @@
     var text = ZedBek.recipeCycleWarning(fileCook, state.weekKey);
     var el = document.getElementById('recipeCycleWarning');
     if (el) el.textContent = text;
+    var reason = document.getElementById('approveReason');
+    if (reason) reason.textContent = text;
     var button = document.getElementById('approveRecipe');
     if (button) button.disabled = !!text;
+    var anyway = document.getElementById('approveAnyway');
+    if (anyway) anyway.hidden = !(text && state.role === 'admin');
+    var confirmBox = document.getElementById('approveConfirm');
+    if (confirmBox && !text) confirmBox.hidden = true;
     if (text) setPageStatus(text, true);
     return text;
   }
@@ -793,8 +803,24 @@
           '<button type="button" data-apply-hide="' + index + '">Hide ingredient</button> <button type="button" data-cancel-hide="' + index + '">Cancel</button></div></td><td><input data-factor="' + index + '" type="number" min="0" step="any" inputmode="decimal" placeholder="lb per each" value="' + esc(row.eachFactor) + '" style="width:120px;font-size:16px;min-height:44px"></td><td>' +
           (row.hideMode ? '<button type="button" data-unhide-row="' + index + '">Unhide</button>' : '<button type="button" data-hide-row="' + index + '">Hide</button>') +
           '</td></tr>';
-      }).join('') + '</tbody></table><p class="diff-note">Choose No match when nothing fits. Hiding a weighed ingredient asks you to move the weight onto another BEK item, or to leave it off the order.</p><button type="button" id="approveRecipe">Approve recipe needs</button> <button type="button" id="discardRecipe">Discard</button>';
+      }).join('') + '</tbody></table><p class="diff-note">Choose No match when nothing fits. Hiding a weighed ingredient asks you to move the weight onto another BEK item, or to leave it off the order.</p><button type="button" id="approveRecipe">Approve recipe needs</button> <button type="button" id="discardRecipe">Discard</button> <button type="button" id="approveAnyway" hidden>Approve for the selected week anyway</button><p id="approveReason" class="recipe-warn"></p><div id="approveConfirm" hidden><p id="approveConfirmText"></p><button type="button" id="approveConfirmYes">Confirm approve</button> <button type="button" id="approveConfirmNo">Cancel</button></div>';
     document.getElementById('approveRecipe').onclick = approveRecipe;
+    document.getElementById('approveAnyway').onclick = function () {
+      var pending = state.pendingRecipe;
+      var fileCook = pending ? ZedOrder.recipeWeek(pending.cookDate) : '';
+      var box = document.getElementById('approveConfirm');
+      var copy = document.getElementById('approveConfirmText');
+      if (copy) copy.textContent = 'Save this file (' + (fileCook ? ZedBek.shortDate(fileCook) : 'no cook date') + ') onto the selected cook date ' + (state.weekKey ? ZedBek.shortDate(state.weekKey) : '') + '?';
+      if (box) box.hidden = false;
+    };
+    document.getElementById('approveConfirmYes').onclick = function () {
+      state.allowRecipeMismatch = true;
+      approveRecipe();
+    };
+    document.getElementById('approveConfirmNo').onclick = function () {
+      var box = document.getElementById('approveConfirm');
+      if (box) box.hidden = true;
+    };
     syncRecipeWarning();
     document.getElementById('discardRecipe').onclick = function () {
       state.pendingRecipe = null;
@@ -871,9 +897,25 @@
     });
   }
 
+  function approveBlockMessage(text) {
+    setPageStatus(text, true);
+    var reason = document.getElementById('approveReason');
+    if (reason) reason.textContent = text;
+  }
   function approveRecipe() {
+    if (state.approvingRecipe) {
+      approveBlockMessage('Already saving');
+      return;
+    }
+    if (!state.pendingRecipe) {
+      approveBlockMessage('Nothing to approve, upload the PDF again');
+      return;
+    }
     var pending = ZedOrder.claimApproval(state);
-    if (!pending) return;
+    if (!pending) {
+      approveBlockMessage(state.approvingRecipe ? 'Already saving' : 'Nothing to approve, upload the PDF again');
+      return;
+    }
     (pending.purchases || []).forEach(function (row, index) {
       var factorEl = document.querySelector('[data-factor="' + index + '"]');
       if (factorEl) row.eachFactor = factorEl.value === '' ? '' : Number(factorEl.value);
@@ -891,13 +933,14 @@
       return;
     }
     var mismatch = ZedBek.recipeCycleWarning(fileCook, state.weekKey);
-    if (mismatch) {
+    if (mismatch && !state.allowRecipeMismatch) {
       state.approvingRecipe = false;
       state.pendingRecipe = pending;
       setPageStatus(mismatch, true);
       renderRecipeReview();
       return;
     }
+    state.allowRecipeMismatch = false;
     var week = state.weekKey;
     var plan = ZedOrder.planRecipeApproval(pending.purchases, week);
     setPageStatus('Saving recipe needs for ' + ZedBek.shortDate(week) + '…');
