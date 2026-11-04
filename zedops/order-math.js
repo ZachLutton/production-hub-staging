@@ -105,6 +105,16 @@
     return !!(parsed && parsed.unit === 'oz' && (parsed.each === 64 || parsed.each === 128));
   }
 
+  // A multi-jar spice pack is counted by the jar. 6 / 32 OZ capers are 2 lb jars.
+  function isJarSpice(item) {
+    var pack = packAmount(item && item.pack);
+    if (!pack || pack.unit !== 'oz' || !(pack.each > 0)) return false;
+    if (!(pack.perCase / pack.each > 1.01)) return false;
+    var label = String(item && item.label || '');
+    if (/saute line|spice rack/i.test(label)) return true;
+    return /caper/i.test(String(item && item.name || ''));
+  }
+
   function isKosherSalt(item) {
     var name = String(item && item.name || '').toLowerCase();
     return name.indexOf('kosher') !== -1 && name.indexOf('salt') !== -1;
@@ -122,6 +132,7 @@
     var number = String(item && item.itemNumber || '');
     if (number === '212500' || number === '393413') return 'each';
     if (number === '800401' || number === '774477') return 'lb';
+    if (number === '685406' || isJarSpice(item)) return 'each';
     if (fluidCarton(item && item.pack)) return 'gal';
     if (isKosherSalt(item) || isBalsamicGlaze(item)) return 'each';
     if (canEachLb(item && item.pack)) return 'each';
@@ -478,7 +489,7 @@
 
   function countWord(item) {
     var number = String(item && item.itemNumber || '');
-    if (number === '212500') return 'jar';
+    if (number === '212500' || number === '685406') return 'jar';
     if (number === '393413') return 'carton';
     var unit = canonUnit(resolvedCountUnit(item));
     if (unit === 'gal') return 'gal';

@@ -552,6 +552,28 @@ test('food follows the temp zone, even on a supply shelf, and a supply par saves
   assert.equal(topSpice('Oil, sesame, salad or cooking').itemNumber, '779181');
   assert.equal(topSpice('Lime Juice, Fresh').itemNumber, '029210');
   assert.equal(topSpice('Roland Capers').itemNumber, '685406');
+  const capers = spices.bek__685406;
+  assert.equal(order.resolvedCountUnit(capers), 'each');
+  assert.equal(order.packAmount(capers.pack).each, 32);
+  assert.equal(order.orderCases(capers, { quantity: 0.3, unit: 'lb', source: 'recipe' }, 0), 1);
+  assert.equal(order.orderCases(capers, { quantity: 0.3, unit: 'lb', source: 'recipe' }, 4), 0);
+  assert.equal(order.orderCases(capers, { quantity: 0.3, unit: 'lb', source: 'recipe' }, 5), 0);
+  const text = fs.readFileSync(path.join(__dirname, 'fixtures', 'scaled-recipe-2026-11-04.txt'), 'utf8');
+  const parsedWeek = recipe.parseScaledRecipes(text);
+  parsedWeek.purchases.filter(function (row) { return row.pounds > 0 && row.pounds <= 2; }).forEach(function (row) {
+    const item = topSpice(row.name);
+    if (!item) return;
+    const shelf = String(item.label || '');
+    if (!/saute line|spice rack/i.test(shelf)) return;
+    const need = { quantity: row.pounds, unit: 'lb', source: 'recipe' };
+    const unit = order.canonUnit(order.resolvedCountUnit(item));
+    let covered = order.needInCountUnit(row.pounds, 'lb', unit, null, item.lbPerUnit, item);
+    if (unit === 'ea') {
+      const piece = order.packAmount(item.pack);
+      covered = Math.ceil(row.pounds / (piece.each / 16));
+    }
+    assert.equal(order.orderCases(item, need, covered), 0, item.itemNumber + ' ' + item.name + ' still orders with ' + covered + ' on hand');
+  });
   assert.equal(topSpice('Seeds, chia seeds, dried').itemNumber, '137394');
   assert.equal(topSpice('Spices, rosemary, dried').itemNumber, '774187');
   assert.equal(topSpice('Spices, cinnamon, ground').itemNumber, '774038');
