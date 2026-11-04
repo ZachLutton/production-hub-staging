@@ -141,6 +141,7 @@
     if (number === '685406' || number === '799205' || isJarSpice(item)) return 'each';
     if (fluidCarton(item && item.pack)) return 'gal';
     if (isKosherSalt(item) || isBalsamicGlaze(item)) return 'each';
+    if (isPortionPacket(item)) return 'case';
     if (canEachLb(item && item.pack)) return 'each';
     var packText = String(item && item.pack || '');
     if (namePortionLb(item) && /(\d*\.\d+|\d+)\s*lb\s*case\b/i.test(packText)) return 'each';
@@ -248,7 +249,16 @@
   }
 
   // Glazes, sauces, and condiments are food even on a supply shelf. The shelf does not decide.
+  // A portion packet is handed out per meal. It is a supply counted by the case, not a recipe sauce.
+  function isPortionPacket(item) {
+    var number = String(item && item.itemNumber || '');
+    if (number === '133525' || number === '139893') return true;
+    var name = String(item && item.name || '').toLowerCase();
+    return /\bpc\b/.test(name) && /packet/.test(name);
+  }
+
   function isGlazeSauceOrCondiment(item) {
+    if (isPortionPacket(item)) return false;
     var name = String(item && item.name || '').toLowerCase();
     if (/bleach|sanitizer|cleaner|degreaser|detergent|soap|disinfectant|rinse aid|wash treatment/.test(name)) return false;
     return /glaze|sauce|ketchup|mustard|mayonnaise|mayo|dressing|aioli|relish|salsa|condiment/.test(name);
@@ -466,6 +476,14 @@
   // are in it. Otherwise the order stays in each, and the summary must not call that a case.
   function orderResult(item, need, onHand) {
     if (!need) return { amount: 0, unit: 'cs' };
+    if (pieceOrder(need) && isPortionPacket(item)) {
+      var packets = piecesPerCase(item, need.eachFactor);
+      var heldCases = onHand == null || onHand === '' ? 0 : Number(onHand) || 0;
+      return {
+        amount: casesToOrder(Number(need.quantity) || 0, heldCases * packets, packets || 1),
+        unit: 'cs'
+      };
+    }
     if (pieceOrder(need)) {
       var per = piecesPerCase(item, need.eachFactor);
       if (!(per > 0)) {
@@ -712,6 +730,7 @@
     if (!item || item.kind === 'vendor_check') return false;
     if (item.orderRole === 'food') return true;
     if (item.orderRole === 'supply') return false;
+    if (isPortionPacket(item)) return false;
     if (isRetailResale(item)) return false;
     if (isBakingPantry(item)) return true;
     if (item.kind === 'special' && /salmon|mahi|filet/i.test(item.name || '')) return true;
@@ -781,7 +800,7 @@
   // A plate-list package that maps to a BEK item wins over a standing par.
   // Other supplies use the standing par set for that store. guidePar is not an input here.
   function weightSource(item) {
-    if (!item) return null;
+    if (!item || isPortionPacket(item)) return null;
     if (Number(item.lbPerUnit) > 0) return { lb: Number(item.lbPerUnit), source: 'override', label: 'this item' };
     var canLb = canEachLb(item.pack);
     if (canLb > 0) return { lb: canLb, source: 'standard', label: 'can' };
@@ -820,6 +839,28 @@
 
   function orderNeed(item, input) {
     input = input || {};
+    if (isPortionPacket(item) && !(item && item.orderRole === 'food')) {
+      if (input.cookList && Number(input.cookList.quantity) > 0) {
+        return {
+          quantity: Number(input.cookList.quantity) || 0,
+          unit: 'each',
+          eachFactor: null,
+          source: 'cook list',
+          reason: input.cookList.reason || ''
+        };
+      }
+      if (input.plateList && Number(input.plateList.quantity) > 0) {
+        return {
+          quantity: Number(input.plateList.quantity) || 0,
+          unit: 'each',
+          eachFactor: null,
+          source: 'plate list',
+          reason: input.plateList.reason || ''
+        };
+      }
+      var packetPar = Number(input.standingPar) || 0;
+      return { quantity: packetPar, unit: 'case', eachFactor: null, source: 'standing par' };
+    }
     if (item && item.orderRole === 'supply') {
       var chosenPar = Number(input.standingPar) || 0;
       var chosenUnit = input.countUnit || item.countUnit || 'each';
@@ -1045,6 +1086,7 @@
     forcedRecipeItemId: forcedRecipeItemId,
     recipeLineFor: recipeLineFor,
     isGlazeSauceOrCondiment: isGlazeSauceOrCondiment,
+    isPortionPacket: isPortionPacket,
     packAmount: packAmount,
     perCaseInCountUnit: perCaseInCountUnit,
     shortfall: shortfall,

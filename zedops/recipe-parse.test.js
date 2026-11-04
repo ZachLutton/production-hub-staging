@@ -831,3 +831,35 @@ test('a suggestion is not saved, and cheddar cheese is not offered as feta', () 
   assert.equal(hide.includes('A suggestion is not saved'), true);
   assert.equal(page.includes('Approve does not save suggestions'), true);
 });
+
+test('sriracha and cholula packets are supplies counted by the case', () => {
+  const order = require('./order-math.js');
+  const bek = require('./bek.js');
+  const catalog = bek.buildCatalog(require('./seed.json')).items;
+  const sriracha = catalog.bek__133525;
+  const cholula = catalog.bek__139893;
+  assert.equal(sriracha.pack, '500 / 0.25 OZ');
+  assert.equal(cholula.pack, '200 / 0.25 OZ');
+  assert.equal(order.isPortionPacket(sriracha), true);
+  assert.equal(order.isPortionPacket(cholula), true);
+  assert.equal(order.isFoodItem(sriracha), false);
+  assert.equal(order.isFoodItem(cholula), false);
+  assert.equal(order.isFoodItem(Object.assign({}, sriracha, { orderRole: 'food' })), true);
+  assert.equal(order.resolvedCountUnit(sriracha), 'case');
+  assert.equal(order.resolvedCountUnit(cholula), 'case');
+  assert.equal(order.piecesPerCase(sriracha), 500);
+  assert.equal(order.piecesPerCase(cholula), 200);
+  const par = order.orderNeed(sriracha, { standingPar: 1, countUnit: 'case' });
+  assert.equal(par.source, 'standing par');
+  assert.equal(par.quantity, 1);
+  assert.deepEqual(order.orderResult(sriracha, par, 0), { amount: 1, unit: 'cs' });
+  assert.deepEqual(order.orderResult(sriracha, par, 0.5), { amount: 1, unit: 'cs' });
+  assert.deepEqual(order.orderResult(cholula, order.orderNeed(cholula, { standingPar: 1, countUnit: 'case' }), 1), { amount: 0, unit: 'cs' });
+  const fromCook = order.orderNeed(sriracha, { cookList: { quantity: 600, unit: 'each' }, standingPar: 1 });
+  assert.equal(fromCook.source, 'cook list');
+  assert.deepEqual(order.orderResult(sriracha, fromCook, 1), { amount: 1, unit: 'cs' });
+  const page = fs.readFileSync(path.join(__dirname, 'weekly-page.js'), 'utf8');
+  const parFn = page.slice(page.indexOf('function parOf'), page.indexOf('function recipeNeed'));
+  assert.equal(parFn.includes('isPortionPacket'), true);
+  assert.equal(parFn.includes('guidePar'), false);
+});

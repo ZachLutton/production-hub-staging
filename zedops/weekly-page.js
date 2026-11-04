@@ -238,7 +238,9 @@
   }
   function parOf(row, loc) {
     var saved = parRecord(row, loc);
-    return saved ? (Number(saved.value) || 0) : 0;
+    if (saved) return Number(saved.value) || 0;
+    if (row.item && ZedOrder.isPortionPacket(row.item)) return 1;
+    return 0;
   }
   function recipeNeed(item) {
     var found = ZedOrder.recipeLineFor(item, state.recipe);
@@ -305,13 +307,14 @@
     }
     var retail = ZedOrder.isRetailResale(Object.assign({}, row.item, { label: row.item.label || row.section }));
     var fromRecipe = !supplyChoice && !retail && !!(recipe && Number(recipe.quantity) > 0);
+    var packet = ZedOrder.isPortionPacket(row.item);
     return ZedOrder.orderNeed(row.item, {
       cookList: supplyChoice ? null : cookListFor(row.item, loc),
       plateList: supplyChoice ? null : plateListFor(row.item, loc),
-      recipe: supplyChoice ? null : recipe,
-      standingPar: (fromRecipe || ZedOrder.isFoodItem(row.item)) ? 0 : parOf(row, loc),
+      recipe: supplyChoice || packet ? null : recipe,
+      standingPar: (packet || !(fromRecipe || ZedOrder.isFoodItem(row.item))) ? parOf(row, loc) : 0,
       countUnit: ZedOrder.resolvedCountUnit(row.item),
-      forceFood: fromRecipe
+      forceFood: fromRecipe && !packet
     });
   }
   function recipeUsesItem(item) {
