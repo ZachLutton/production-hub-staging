@@ -22,6 +22,7 @@
     plate: null,
     pendingPlate: null,
     packChoices: {},
+    piecesPerCup: {},
     plateLinks: {},
     caseSizes: {},
     matches: {},
@@ -294,6 +295,14 @@
         return db.ref(ZedStorage.PATHS.plate + '/link').once('value');
       }).then(function (linkSnap) {
         state.plateLinks = (linkSnap && linkSnap.val()) || {};
+        return db.ref(ZedStorage.PATHS.plate + '/pieces').once('value');
+      }).then(function (pieceSnap) {
+        var saved = (pieceSnap && pieceSnap.val()) || {};
+        var rates = {};
+        Object.keys(saved).forEach(function (component) {
+          if (saved[component] && Number(saved[component].piecesPerCup) > 0) rates[component] = Number(saved[component].piecesPerCup);
+        });
+        state.piecesPerCup = rates;
       }).catch(function (err) {
         state.plate = state.plate || null;
         showError(err);
@@ -452,7 +461,18 @@
   }
 
   function packagingSummary(dishes, totalCook) {
-    return ZedMeals.tally(dishes, state.packChoices, totalCook);
+    return ZedMeals.tally(dishes, state.packChoices, totalCook, state.piecesPerCup);
+  }
+
+  function piecesPerCupFields() {
+    var parts = ['cookie', 'chew', 'muffin'].map(function (component) {
+      var value = ZedMeals.piecesPerCup(component, state.piecesPerCup);
+      var label = component === 'cookie' ? 'Cookies' : (component === 'chew' ? 'Chews' : 'Muffins');
+      if (state.role !== 'admin') return esc(value) + ' ' + label.toLowerCase();
+      return '<label>' + label + ' <input data-pieces-per="' + component + '" type="number" min="1" step="1" aria-label="Pieces per cup for ' + label.toLowerCase() + '" value="' + esc(value) + '" style="width:70px;font-size:16px;min-height:44px"> per cup</label>';
+    });
+    if (state.role !== 'admin') return 'A 9 oz cup holds ' + parts.join(', ') + '.';
+    return '<div class="cup-yield">Pieces per 9 oz cup: ' + parts.join(' ') + '</div>';
   }
 
   function packSelect(dish) {
@@ -535,7 +555,8 @@
     if (!summary.dishes.length) return '<p class="empty-state">This saved plate list has a Total Cook but no dish lines. Upload it again to split muffins and cookies from the trays.</p>';
     return '<table class="order-table"><thead><tr><th>Dish</th><th>Count</th><th>Packaging</th></tr></thead><tbody>' +
       summary.dishes.map(function (dish) {
-        return '<tr><td>' + esc(dish.name) + '</td><td>' + esc(dish.count) + '</td><td>' + packSelect(dish) + (withLinks ? plateItemEditor(dish) : '') + '</td></tr>';
+        var cups = dish.cups > 0 ? '<div>' + esc(dish.cups) + ' cups · ' + esc(dish.perCup) + ' per cup</div>' : '';
+        return '<tr><td>' + esc(dish.name) + '</td><td>' + esc(dish.count) + '</td><td>' + packSelect(dish) + cups + (withLinks ? plateItemEditor(dish) : '') + '</td></tr>';
       }).join('') + '</tbody></table>';
   }
 
@@ -577,7 +598,7 @@
       var handId = line.catalogNumber ? ZedCatalog.catalogId('bek', line.catalogNumber) : line.id;
       return '<tr><td>' + esc(line.name) + '<div class="item-brand">' + esc(source) + (line.onBekOrder ? '. Counted on the BEK order.' : '. Not a BEK order.') + '</div></td><td>' + esc(line.need) + ' ' + esc(line.unit) + '</td><td><input data-meal-hand="' + esc(handId) + '" data-meal-type="' + esc(line.id) + '" type="number" min="0" step="any" inputmode="decimal" aria-label="On hand ' + esc(line.name) + '" value="' + (line.onHand == null ? '' : esc(line.onHand)) + '" style="width:110px;font-size:16px;min-height:44px"></td><td>' + sizeField + '</td><td class="need-order" data-meal-order="' + esc(line.id) + '">' + line.cases + ' cs</td><td data-meal-pallet="' + esc(line.id) + '">' + status + '</td></tr>';
     }).join('');
-    box.innerHTML = '<h2>Packaging</h2><p>Total Cook ' + esc(summary.totalCook) + ' for ' + esc(cook) + '. Meal trays ' + esc(summary.containers) + ' stay a pallet check. Cups and lids ' + esc(summary.cup) + ' go on the BEK order as plate list, not as a standing par.</p>' +
+    box.innerHTML = '<h2>Packaging</h2><p>Total Cook ' + esc(summary.totalCook) + ' for ' + esc(cook) + '. Meal trays ' + esc(summary.containers) + ' stay a pallet check. Cups and lids ' + esc(summary.cup) + ' go on the BEK order as plate list, not as a standing par. ' + piecesPerCupFields() + '</p>' +
       dishTable(summary, true) +
       '<table class="order-table"><thead><tr><th>Item</th><th>Need</th><th>On hand</th><th>Per case</th><th>Cases</th><th>Order</th></tr></thead><tbody>' + supplyRows + '</tbody></table>';
   }
@@ -595,7 +616,7 @@
     var summary = packagingSummary(pending.dishes || [], pending.totalCook);
     panel.style.display = 'block';
     panel.innerHTML = '<h2>Review the plate list</h2><p' + (warn ? ' class="recipe-warn"' : '') + '>' +
-      (warn || ('Total Cook ' + esc(pending.totalCook) + ' for ' + esc(ZedBek.shortDate(pending.cookDate)) + '. ' + esc((pending.dishes || []).length) + ' dishes. Trays ' + esc(summary.containers) + '. Cups and lids ' + esc(summary.cup) + ', one each per muffin, cookie, or chew.')) +
+      (warn || ('Total Cook ' + esc(pending.totalCook) + ' for ' + esc(ZedBek.shortDate(pending.cookDate)) + '. ' + esc((pending.dishes || []).length) + ' dishes. Trays ' + esc(summary.containers) + '. Cups and lids ' + esc(summary.cup) + '. ' + piecesPerCupFields())) +
       '</p>' + dishTable(summary) + '<button type="button" id="approvePlate"' + (warn || !(pending.dishes || []).length ? ' disabled' : '') + '>Approve plate list</button> <button type="button" id="discardPlate">Discard</button>';
     var approve = document.getElementById('approvePlate');
     var discard = document.getElementById('discardPlate');
@@ -1435,6 +1456,21 @@
       var linkName = (itemInput && itemInput.getAttribute('data-plate-link-name')) || '';
       savePlateItemLink(linkKey, linkName, itemInput && itemInput.value, qtyInput && qtyInput.value).then(function () {
         setPageStatus('Saved. ' + linkName + ' is on the plate-list order.');
+        render();
+        markSaved();
+      }).catch(showError);
+      return;
+    }
+    if (input.getAttribute && input.getAttribute('data-pieces-per') != null) {
+      var component = input.getAttribute('data-pieces-per');
+      var perCup = Number(input.value);
+      if (!(perCup > 0)) {
+        setPageStatus('Enter pieces per cup greater than zero.', true);
+        return;
+      }
+      ZedStorage.setPiecesPerCup(db, component, perCup).then(function () {
+        state.piecesPerCup[component] = perCup;
+        setPageStatus('Saved. A 9 oz cup holds ' + perCup + ' ' + component + (perCup === 1 ? '' : 's') + '.');
         render();
         markSaved();
       }).catch(showError);

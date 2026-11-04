@@ -49,6 +49,31 @@
     return typeof globalThis !== 'undefined' ? globalThis.ZedOrder : null;
   }
 
+  // A 9 oz cup holds 3 cookies or 3 chews. A muffin takes the whole cup.
+  var PIECES_PER_CUP = { cookie: 3, chew: 3, muffin: 1 };
+
+  function componentFor(name) {
+    var text = String(name || '');
+    if (/muffin/i.test(text)) return 'muffin';
+    if (/chew/i.test(text)) return 'chew';
+    if (/cookie/i.test(text)) return 'cookie';
+    return '';
+  }
+
+  function piecesPerCup(component, saved) {
+    var custom = saved && Number(saved[component]);
+    if (custom > 0) return custom;
+    return PIECES_PER_CUP[component] || 1;
+  }
+
+  function cupsForCount(count, per) {
+    var pieces = Number(count) || 0;
+    if (!(pieces > 0)) return 0;
+    var size = Number(per);
+    if (!(size > 0)) size = 1;
+    return Math.ceil(pieces / size - 1e-9);
+  }
+
   function packForDish(name, savedPackId) {
     if (savedPackId === 'meal_container' || savedPackId === 'cup_9oz') return savedPackId;
     if (/muffin|cookie|chew/i.test(String(name || ''))) return 'cup_9oz';
@@ -102,8 +127,9 @@
     return pieces;
   }
 
-  function tally(dishes, choices, totalCook) {
+  function tally(dishes, choices, totalCook, pieces) {
     var cup = 0;
+    var cupPieces = 0;
     var rows = [];
     (dishes || []).forEach(function (dish) {
       if (!dish) return;
@@ -111,14 +137,20 @@
       var saved = choices && dish.key ? choices[dish.key] : null;
       var savedId = saved && (saved.packId || saved);
       var packId = packForDish(dish.name, typeof savedId === 'string' ? savedId : '');
-      if (packId === 'cup_9oz') cup += count;
-      rows.push({ key: dish.key, name: dish.name, count: count, packId: packId });
+      var component = packId === 'cup_9oz' ? componentFor(dish.name) : '';
+      var perCup = component ? piecesPerCup(component, pieces) : 0;
+      var cups = component ? cupsForCount(count, perCup) : 0;
+      if (packId === 'cup_9oz') {
+        cup += cups;
+        cupPieces += count;
+      }
+      rows.push({ key: dish.key, name: dish.name, count: count, packId: packId, component: component, perCup: perCup, cups: cups });
     });
     var total = Number(totalCook);
     if (!(total >= 0)) {
       total = rows.reduce(function (sum, row) { return sum + row.count; }, 0);
     }
-    return { dishes: rows, totalCook: total, cup: cup, containers: Math.max(0, total - cup) };
+    return { dishes: rows, totalCook: total, cup: cup, cupPieces: cupPieces, containers: Math.max(0, total - cupPieces) };
   }
 
   function typeOf(id) {
@@ -194,6 +226,10 @@
   }
 
   return {
+    PIECES_PER_CUP: PIECES_PER_CUP,
+    componentFor: componentFor,
+    piecesPerCup: piecesPerCup,
+    cupsForCount: cupsForCount,
     packForDish: packForDish,
     defaultPlateItems: defaultPlateItems,
     plateItemRows: plateItemRows,

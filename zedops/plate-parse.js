@@ -21,8 +21,14 @@
     return false;
   }
 
+  // "300 (ea)" is a piece count. The unit is not part of the number.
+  function stripCountUnit(line) {
+    return String(line || '').replace(/\s*\(\s*ea\s*\)\s*$/i, '').replace(/\s+\bea\b\s*$/i, '');
+  }
+
   // One count, or Small + Regular + Large. The name stays in front of those columns.
   function columnCount(line) {
+    line = stripCountUnit(line);
     var match = String(line || '').trim().match(/^(.*?)\s+(\d[\d,]*(?:\s+\d[\d,]*)*)$/);
     if (!match) return null;
     var name = match[1].trim();
@@ -36,7 +42,7 @@
 
   // A count that pdf.js dropped onto its own line under the dish name.
   function numbersOnly(line) {
-    var trimmed = String(line || '').trim();
+    var trimmed = stripCountUnit(line).trim();
     if (!/^\d[\d,\s]*$/.test(trimmed)) return null;
     var count = 0;
     trimmed.split(/\s+/).forEach(function (token) {
@@ -86,7 +92,7 @@
       }
       if (skipLine(line)) continue;
       var alone = numbersOnly(line);
-      if (alone != null && !/[A-Za-z]/.test(line)) {
+      if (alone != null && !/[A-Za-z]/.test(stripCountUnit(line))) {
         if (pending) pending.count += alone;
         continue;
       }

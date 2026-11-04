@@ -44,7 +44,7 @@
     if (parts[0] === PATHS.ingredientMap && parts.length !== 2) throw new Error('Ingredient matches are saved one name at a time.');
     if (parts[0] === PATHS.recipe && parts.length !== 3) throw new Error('Recipe lines are saved one ingredient at a time.');
     if (parts[0] === PATHS.plate) {
-      var plateOk = parts.length === 2 || (parts.length === 3 && (parts[1] === 'pack' || parts[1] === 'case' || parts[1] === 'link'));
+      var plateOk = parts.length === 2 || (parts.length === 3 && (parts[1] === 'pack' || parts[1] === 'case' || parts[1] === 'link' || parts[1] === 'pieces'));
       if (!plateOk) throw new Error('A plate list is saved one cook date, one dish, or one case size at a time.');
     }
     if (parts[0] === PATHS.hidden && parts.length !== 3) throw new Error('Hidden items are saved one item at a time.');
@@ -147,6 +147,16 @@
     });
     if (!Object.keys(saved).length) return refOf(db, path).remove();
     return refOf(db, path).set(saved);
+  }
+
+  function setPiecesPerCup(db, component, pieces) {
+    if (!/^(cookie|chew|muffin)$/.test(String(component || ''))) {
+      return Promise.reject(new Error('Pieces per cup is set for cookies, chews, or muffins.'));
+    }
+    var path = PATHS.plate + '/pieces/' + component;
+    var count = Number(pieces);
+    if (!(count > 0)) return Promise.reject(new Error('Enter pieces per cup greater than zero.'));
+    return refOf(db, path).set({ piecesPerCup: count });
   }
 
   function setCaseSize(db, supplyId, caseSize) {
@@ -298,6 +308,7 @@
     setPlateTotal: setPlateTotal,
     setPackChoice: setPackChoice,
     setPlateLink: setPlateLink,
+    setPiecesPerCup: setPiecesPerCup,
     setCaseSize: setCaseSize,
     saveRecipeApproval: saveRecipeApproval,
     setLocation: setLocation,
