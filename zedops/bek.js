@@ -303,16 +303,40 @@
     return addDays(due, 8);
   }
 
-  // The cook date to open on. Counts stay open through the end of their Tuesday,
-  // so Saturday 2026-10-31 opens cook Wednesday 2026-11-11, not the 11/4 cycle whose counts closed on 10/27.
+  // Earliest cook date whose order day (cook minus 7 days) is today or later.
+  // Wednesday 2026-11-04 is order day for cook 2026-11-11, so the page stays there through that day.
   function openCookDate(ymd) {
-    var cook = cycleCookForDay(ymd);
+    var cook = ymd;
     var guard = 0;
-    while (cycleForCook(cook).countsDue < ymd && guard < 8) {
+    while (weekdayOf(cook) !== 3 && guard < 8) {
+      cook = addDays(cook, 1);
+      guard++;
+    }
+    guard = 0;
+    while (addDays(cook, -7) < ymd && guard < 8) {
       cook = addDays(cook, 7);
       guard++;
     }
     return cook;
+  }
+
+  function formatChicagoTime(iso) {
+    var date = new Date(iso);
+    if (!isFinite(date.getTime())) return '';
+    return new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Chicago',
+      hour: 'numeric',
+      minute: '2-digit'
+    }).format(date);
+  }
+
+  function savedUploadLine(fileName, detail, approvedAt) {
+    var bits = [];
+    if (fileName) bits.push(String(fileName));
+    if (detail) bits.push(String(detail));
+    var when = formatChicagoTime(approvedAt);
+    bits.push(when ? 'approved ' + when : 'approved');
+    return 'Saved: ' + bits.join(' · ');
   }
 
   // Any picked day snaps to a Wednesday cook date. A Wednesday is that cook date.
@@ -684,6 +708,8 @@
     formatCycle: formatCycle,
     cycleCookForDay: cycleCookForDay,
     openCookDate: openCookDate,
+    formatChicagoTime: formatChicagoTime,
+    savedUploadLine: savedUploadLine,
     selectCookDate: selectCookDate,
     cookKeyFromLegacyWeek: cookKeyFromLegacyWeek,
     recipeCycleWarning: recipeCycleWarning,

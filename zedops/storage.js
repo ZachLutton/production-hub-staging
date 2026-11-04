@@ -112,7 +112,13 @@
       if (!dish || !dish.key) return;
       dishes[dish.key] = { name: String(dish.name || ''), count: Number(dish.count) || 0 };
     });
-    return refOf(db, path).set({ cookDate: cookDate, totalCook: total, dishes: dishes });
+    return refOf(db, path).set({
+      cookDate: cookDate,
+      totalCook: total,
+      dishes: dishes,
+      fileName: String(value.fileName || ''),
+      approvedAt: String(value.approvedAt || '')
+    });
   }
 
   function setPackChoice(db, dishKey, value) {

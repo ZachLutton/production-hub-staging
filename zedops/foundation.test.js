@@ -208,6 +208,10 @@ test('the count week is the Tuesday it is due, in Chicago, and prices wait for t
   assert.equal(bek.openCookDate('2026-10-31'), '2026-11-11');
   assert.equal(bek.openCookDate('2026-11-01'), '2026-11-11');
   assert.equal(bek.openCookDate('2026-11-03'), '2026-11-11');
+  assert.equal(bek.openCookDate('2026-11-04'), '2026-11-11');
+  assert.equal(bek.openCookDate('2026-11-05'), '2026-11-18');
+  assert.equal(bek.recipeCycleWarning('2026-11-11', '2026-11-11'), '');
+  assert.equal(bek.savedUploadLine('scaled-recipes.pdf', '141 ingredients', '2026-11-04T13:40:00Z'), 'Saved: scaled-recipes.pdf · 141 ingredients · approved 7:40 AM');
   assert.equal(bek.weekdayOf(bek.openCookDate('2026-10-31')), 3);
   assert.equal(bek.selectCookDate('2026-11-11'), '2026-11-11');
   assert.equal(bek.selectCookDate('2026-11-03'), '2026-11-11');
@@ -235,8 +239,8 @@ test('the count week is the Tuesday it is due, in Chicago, and prices wait for t
   assert.equal(page.indexOf('id="recipeTools"') < page.indexOf('id="storeView"'), true);
   assert.equal(page.indexOf('id="orderSummary"') < page.indexOf('id="storeView"'), true);
   assert.equal(page.indexOf('id="storeView"') < page.indexOf('id="adminTools"'), true);
-  assert.equal(page.includes('Build 20261104a'), true);
-  assert.equal(page.includes('weekly-page.js?v=20261104a'), true);
+  assert.equal(page.includes('Build 20261104b'), true);
+  assert.equal(page.includes('weekly-page.js?v=20261104b'), true);
   assert.equal(page.includes('button:disabled'), true);
   assert.equal(page.includes('id="plateFile"'), true);
   assert.equal(page.includes('id="mealChecks"'), true);

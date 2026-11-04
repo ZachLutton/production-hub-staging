@@ -29,6 +29,10 @@
     showHiddenCatalog: false,
     pendingRecipe: null,
     allowRecipeMismatch: false,
+    recipeBusy: false,
+    plateBusy: false,
+    recipeFileName: '',
+    plateFileName: '',
     pendingGuide: null,
     approvingRecipe: false
   };
@@ -389,6 +393,7 @@
       if (state.view === 'order') renderOrder();
       else renderStore(loc);
       renderAdmin(loc);
+      renderSavedUploads();
     } catch (err) {
       showError(err);
     }
@@ -521,12 +526,24 @@
     }
     var button = document.getElementById('approvePlate');
     if (button) button.disabled = true;
-    ZedStorage.setPlateTotal(db, state.weekKey, { totalCook: pending.totalCook, dishes: pending.dishes || [] }).then(function () {
+    var approvedAt = new Date().toISOString();
+    ZedStorage.setPlateTotal(db, state.weekKey, {
+      totalCook: pending.totalCook,
+      dishes: pending.dishes || [],
+      fileName: state.plateFileName || '',
+      approvedAt: approvedAt
+    }).then(function () {
       var dishes = {};
       (pending.dishes || []).forEach(function (dish) {
         if (dish && dish.key) dishes[dish.key] = { name: dish.name, count: Number(dish.count) || 0 };
       });
-      state.plate = { cookDate: state.weekKey, totalCook: Number(pending.totalCook), dishes: dishes };
+      state.plate = {
+        cookDate: state.weekKey,
+        totalCook: Number(pending.totalCook),
+        dishes: dishes,
+        fileName: state.plateFileName || '',
+        approvedAt: approvedAt
+      };
       state.pendingPlate = null;
       setPageStatus('Plate list saved for ' + ZedBek.shortDate(state.weekKey) + '. Total Cook ' + state.plate.totalCook + '.');
       render();
@@ -537,18 +554,51 @@
     });
   }
 
+  function savedRecipeText() {
+    var bag = state.recipe || {};
+    var meta = bag._meta || {};
+    var ingredients = Object.keys(bag).filter(function (key) {
+      return key !== '_meta' && bag[key] && bag[key].name;
+    }).length;
+    if (!ingredients && !meta.fileName) return '';
+    return ZedBek.savedUploadLine(meta.fileName, ingredients + ' ingredients', meta.approvedAt);
+  }
+  function savedPlateText() {
+    var plate = state.plate;
+    if (!plate || !(Number(plate.totalCook) >= 0)) return '';
+    var dishes = plateDishList(plate);
+    var detail = 'Total Cook ' + plate.totalCook + (dishes.length ? ' · ' + dishes.length + ' dishes' : '');
+    return ZedBek.savedUploadLine(plate.fileName, detail, plate.approvedAt);
+  }
+  function renderSavedUploads() {
+    if (!state.recipeBusy && !state.pendingRecipe) {
+      var recipeStatus = document.getElementById('recipeStatus');
+      if (recipeStatus) recipeStatus.textContent = savedRecipeText();
+    }
+    if (!state.plateBusy && !state.pendingPlate) {
+      var plateStatus = document.getElementById('plateStatus');
+      if (plateStatus) plateStatus.textContent = savedPlateText();
+    }
+  }
+
   function onPlateFile(file) {
     if (!file) return;
+    state.plateBusy = true;
+    state.plateFileName = file.name;
     var status = document.getElementById('plateStatus');
     function setStatus(text) { if (status) status.textContent = text; }
     setStatus('Chosen: ' + file.name + '. Reading the file…');
     var reader = new FileReader();
-    reader.onerror = function () { setStatus('Chosen: ' + file.name + '. Could not read that file. Try again.'); };
+    reader.onerror = function () {
+      state.plateBusy = false;
+      setStatus('Chosen: ' + file.name + '. Could not read that file. Try again.');
+    };
     reader.onload = function () {
       setStatus('Chosen: ' + file.name + '. Parsing…');
       ZedPlatePdf.parsePlatePdf(new Uint8Array(reader.result), function (info) {
         if (info.phase === 'page') setStatus('Chosen: ' + file.name + '. Reading page ' + info.page + ' of ' + info.pages + '…');
       }).then(function (parsed) {
+        state.plateBusy = false;
         if (!parsed.cookDate || !(Number(parsed.totalCook) >= 0)) {
           setStatus('Chosen: ' + file.name + '. Could not find the cook date and Total Cook.');
           return;
@@ -559,6 +609,7 @@
         if (warn) setPageStatus(warn, true);
         renderPlateReview();
       }).catch(function (err) {
+        state.plateBusy = false;
         setStatus('Chosen: ' + file.name + '. ' + ((err && err.message) || 'Could not parse that PDF.'));
         showError(err);
       });
@@ -943,6 +994,13 @@
     state.allowRecipeMismatch = false;
     var week = state.weekKey;
     var plan = ZedOrder.planRecipeApproval(pending.purchases, week);
+    var ingredientCount = Object.keys(plan.lines || {}).length;
+    plan.lines._meta = {
+      fileName: state.recipeFileName || '',
+      approvedAt: new Date().toISOString(),
+      ingredientCount: ingredientCount,
+      approved: true
+    };
     setPageStatus('Saving recipe needs for ' + ZedBek.shortDate(week) + '…');
     renderRecipeReview();
     ZedStorage.saveRecipeApproval(db, plan).then(function () {
@@ -963,10 +1021,12 @@
 
   function onRecipeFile(file) {
     if (!file) return;
+    state.recipeBusy = true;
     state.recipeFileName = file.name;
     setRecipeStatus('Chosen: ' + file.name + '. Reading the file…');
     var reader = new FileReader();
     reader.onerror = function () {
+      state.recipeBusy = false;
       setRecipeStatus('Chosen: ' + file.name + '. Could not read that file. Try again.');
     };
     reader.onload = function () {
@@ -975,12 +1035,14 @@
         if (info.phase === 'page') setRecipeStatus('Chosen: ' + file.name + '. Reading page ' + info.page + ' of ' + info.pages + '…');
         else if (info.phase === 'parse') setRecipeStatus('Chosen: ' + file.name + '. Adding up raw ingredients…');
       }).then(function (parsed) {
+        state.recipeBusy = false;
         state.pendingRecipe = parsed;
         var panel = document.getElementById('recipePanel');
         if (panel) panel.removeAttribute('data-built');
         setRecipeStatus('Done. ' + file.name + ' — ' + parsed.purchases.length + ' raw ingredients. Review the matches below.');
         renderRecipeReview();
       }).catch(function (err) {
+        state.recipeBusy = false;
         setRecipeStatus('Chosen: ' + file.name + '. ' + ((err && err.message) || 'Could not parse that PDF.'));
         showError(err);
       });
