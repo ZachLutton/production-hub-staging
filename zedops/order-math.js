@@ -22,6 +22,25 @@
   var UNIT_LABEL = { lb: 'lb', gal: 'gal', qt: 'qt', pt: 'pt', floz: 'fl oz', l: 'L', ml: 'ml', oz: 'oz', ea: 'each', can: 'can' };
   // Net weight of one can. A #10 can is 6.5 lb. The others are the usual foodservice nets.
   var CAN_LB = { '10': 6.5, '5': 3.5, '3': 2.06, '2.5': 1.75, '2': 1.25, '303': 1, '300': 0.875 };
+  var DEFAULT_STANDARDS = {
+    can10: 6.5, can5: 3.5, can3: 2.06, can2_5: 1.75, can2: 1.25, can303: 1, can300: 0.875,
+    gal: 8.6, qt: 2.15, honeyGal: 12, mapleGal: 11, oilGal: 7.6
+  };
+  var STANDARD_LABELS = {
+    can10: '#10 CAN', can5: '#5 CAN', can3: '#3 CAN', can2_5: '#2.5 CAN', can2: '#2 CAN', can303: '#303 CAN', can300: '#300 CAN',
+    gal: 'Gallon', qt: 'Quart', honeyGal: 'Honey per gallon', mapleGal: 'Maple per gallon', oilGal: 'Oil per gallon'
+  };
+  var activeStandards = null;
+
+  function useStandards(map) {
+    activeStandards = map && typeof map === 'object' ? map : null;
+  }
+
+  function standardValue(id) {
+    var saved = activeStandards && Number(activeStandards[id]);
+    if (saved > 0) return saved;
+    return DEFAULT_STANDARDS[id];
+  }
 
   function canonUnit(value) {
     var key = String(value || '').toLowerCase().replace(/[^a-z]/g, '');
@@ -42,14 +61,23 @@
   // An admin lb-per-unit override replaces this.
   function densityLbPerGal(item) {
     var name = String(item && item.name || '').toLowerCase();
-    if (name.indexOf('honey') !== -1) return 12;
-    if (name.indexOf('syrup') !== -1 || name.indexOf('maple') !== -1) return 11;
-    if (name.indexOf('oil') !== -1) return 7.6;
-    return LB_PER_GAL;
+    if (name.indexOf('honey') !== -1) return standardValue('honeyGal');
+    if (name.indexOf('syrup') !== -1 || name.indexOf('maple') !== -1) return standardValue('mapleGal');
+    if (name.indexOf('oil') !== -1) return standardValue('oilGal');
+    return standardValue('gal');
   }
 
   function defaultLbPer(unit, item) {
-    var per = UNITS_PER_GAL[canonUnit(unit)];
+    var key = canonUnit(unit);
+    if (key === 'gal') return densityLbPerGal(item);
+    if (key === 'qt') {
+      var name = String(item && item.name || '').toLowerCase();
+      if (name.indexOf('honey') !== -1 || name.indexOf('syrup') !== -1 || name.indexOf('maple') !== -1 || name.indexOf('oil') !== -1) {
+        return densityLbPerGal(item) / 4;
+      }
+      return standardValue('qt');
+    }
+    var per = UNITS_PER_GAL[key];
     if (!per) return null;
     return densityLbPerGal(item) / per;
   }
@@ -103,7 +131,7 @@
     var text = String(pack || '');
     var match = text.match(/#\s*(\d+(?:\.\d+)?)\s*can\b/i);
     if (!match) return null;
-    var weight = CAN_LB[match[1]];
+    var weight = standardValue('can' + match[1].replace('.', '_'));
     return weight > 0 ? weight : null;
   }
 
@@ -162,7 +190,7 @@
     var can = text.match(/(\d*\.\d+|\d+)\s*\/\s*#\s*(\d+(?:\.\d+)?)\s*can\b/i);
     if (can) {
       var cans = Number(can[1]);
-      var eachLb = CAN_LB[can[2]] || 0;
+      var eachLb = canEachLb(text) || 0;
       if (eachLb > 0) {
         return { perCase: cans * eachLb, each: eachLb, unit: 'lb', cans: cans, canSize: can[2], raw: text };
       }
@@ -395,6 +423,44 @@
   // Food is ordered from the approved recipe only. A missing recipe is zero, not the BEK guide par.
   // A plate-list package that maps to a BEK item wins over a standing par.
   // Other supplies use the standing par set for that store. guidePar is not an input here.
+  function weightSource(item) {
+    if (!item) return null;
+    if (Number(item.lbPerUnit) > 0) return { lb: Number(item.lbPerUnit), source: 'override', label: 'this item' };
+    var canLb = canEachLb(item.pack);
+    if (canLb > 0) return { lb: canLb, source: 'standard', label: 'can' };
+    var named = namePortionLb(item);
+    if (named > 0) return { lb: named, source: 'standard', label: 'oz in the name' };
+    var pack = packAmount(item.pack);
+    if (pack && pack.unit === 'oz' && pack.each > 0) return { lb: pack.each / 16, source: 'standard', label: 'pack ounces' };
+    var unit = resolvedCountUnit(item);
+    if (isVolumeUnit(unit)) {
+      var per = defaultLbPer(unit, item);
+      if (per > 0) return { lb: per, source: 'standard', label: unitLabel(unit) };
+    }
+    return null;
+  }
+
+  // A case count that is far from the usual order, or a need far above what is on hand.
+  function orderWarning(item, cases, need, onHand) {
+    var reasons = [];
+    var ordered = Number(cases) || 0;
+    var avg = Number(item && item.weeklyCaseAverage);
+    if (ordered > 0 && avg > 0 && ordered > avg * 3 + 1e-9) {
+      reasons.push(ordered + ' cs is more than 3× the usual ' + avg + ' cs');
+    } else if (ordered > 10 && !(avg > 0)) {
+      reasons.push(ordered + ' cs and this item has no recent order history');
+    }
+    var counted = canonUnit(resolvedCountUnit(item));
+    var needQty = null;
+    if (need && need.convertedQuantity != null && counted === 'ea') needQty = Number(need.convertedQuantity);
+    else if (need && canonUnit(need.unit) === counted) needQty = Number(need.quantity);
+    var have = onHand == null || onHand === '' ? null : Number(onHand);
+    if (needQty > 0 && have > 0 && needQty > have * 4 && ordered > 0) {
+      reasons.push('Need is more than 4× what is on hand');
+    }
+    return { flagged: reasons.length > 0, reasons: reasons };
+  }
+
   function orderNeed(item, input) {
     input = input || {};
     if (input.plateList) {
@@ -592,6 +658,12 @@
     resolvedCountUnit: resolvedCountUnit,
     defaultPieceLb: defaultPieceLb,
     canEachLb: canEachLb,
+    defaultStandards: function () { return Object.assign({}, DEFAULT_STANDARDS); },
+    standardLabels: function () { return Object.assign({}, STANDARD_LABELS); },
+    useStandards: useStandards,
+    standardValue: standardValue,
+    weightSource: weightSource,
+    orderWarning: orderWarning,
     isPantryLiquid: isPantryLiquid,
     usesSuggestedRecipe: usesSuggestedRecipe,
     isGlazeSauceOrCondiment: isGlazeSauceOrCondiment,

@@ -93,6 +93,9 @@
       if (number === '393795' && /omelet/i.test(dish.name || '')) {
         rows.push({ key: dish.key, name: dish.name || '', count: Number(dish.count) || 0, qty: 1 });
       }
+      if (/greek chicken bowl/i.test(dish.name || '') && (number === '111634' || number === '130860')) {
+        rows.push({ key: dish.key, name: dish.name || '', count: Number(dish.count) || 0, qty: 2 });
+      }
     });
     return rows;
   }

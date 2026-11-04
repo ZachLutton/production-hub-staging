@@ -172,6 +172,20 @@ test('a chew serving counted in pieces fills a 9 oz cup three at a time', async 
   assert.equal(page.includes('data-pieces-per'), true);
 });
 
+test('Greek Chicken Bowl takes two souffle cups and two lids per plate', () => {
+  const dishes = [{ key: 'greek_chicken_bowl', name: 'Greek Chicken Bowl', count: 100 }];
+  const cup = { itemNumber: '111634', name: 'Cup Plas Souffle 1.5 Oz Trans' };
+  const lid = { itemNumber: '130860', name: 'Lid Plas Souffle 2 Oz' };
+  assert.equal(meals.plateItemPieces(cup, dishes, null), 200);
+  assert.equal(meals.plateItemPieces(lid, dishes, null), 200);
+  assert.equal(meals.defaultPlateItems(cup, dishes)[0].qty, 2);
+  assert.equal(meals.defaultPlateItems(lid, dishes)[0].qty, 2);
+  const page = fs.readFileSync(path.join(__dirname, 'weekly-page.js'), 'utf8');
+  assert.equal(page.includes('data-plate-link-index'), true);
+  assert.equal(page.includes('submitOrder'), true);
+  assert.equal(page.includes('orderWarning'), true);
+});
+
 test('the 11/4 omelette dishes order one cheddar omelette each', async () => {
   const parsed = plate.parsePlateList(text);
   const omelette = { id: 'bek__393795', name: 'Egg Omelette W/cheddar Chs', pack: '72 / 3.5 OZ', countUnit: 'lb', itemNumber: '393795', tempZone: 'Frozen' };

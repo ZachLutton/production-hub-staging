@@ -255,6 +255,46 @@ test('cases always round up and an exact case does not', () => {
   assert.equal(page.includes('orderCases'), true);
 });
 
+test('a standard weight applies until the item overrides it, and a wild order is flagged', () => {
+  const standards = order.defaultStandards();
+  assert.equal(standards.can10, 6.5);
+  assert.equal(standards.gal, 8.6);
+  assert.equal(standards.qt, 2.15);
+  order.useStandards({ can10: 7 });
+  const can = { name: 'Sauce Marinara Rtu', pack: '6 / #10 CAN', countUnit: 'each', tempZone: 'Dry' };
+  assert.equal(order.canEachLb(can.pack), 7);
+  assert.equal(order.weightSource(can).source, 'standard');
+  assert.equal(order.weightSource(Object.assign({}, can, { lbPerUnit: 6 })).source, 'override');
+  assert.equal(order.weightSource({ name: '4 oz salmon filets', pack: '10 lb case', countUnit: 'each' }).label, 'oz in the name');
+  assert.equal(order.weightSource({ name: 'Turkey Sausage Patty Cooked', pack: '128 / 1.25 OZ', countUnit: 'lb' }).label, 'pack ounces');
+  order.useStandards(null);
+  assert.equal(order.canEachLb(can.pack), 6.5);
+  const high = order.orderWarning({ weeklyCaseAverage: 2 }, 12, { quantity: 1, unit: 'lb' }, 0);
+  assert.equal(high.flagged, true);
+  assert.equal(high.reasons[0].includes('3×'), true);
+  const noHistory = order.orderWarning({ weeklyCaseAverage: 0 }, 11, { quantity: 1, unit: 'lb' }, 0);
+  assert.equal(noHistory.flagged, true);
+  const quiet = order.orderWarning({ name: 'Sauce Marinara Rtu', pack: '6 / #10 CAN', countUnit: 'each', weeklyCaseAverage: 3 }, 2, { quantity: 94, unit: 'lb', convertedQuantity: 14.5 }, 7);
+  assert.equal(quiet.flagged, false);
+  const aboveHand = order.orderWarning({ weeklyCaseAverage: 1, countUnit: 'lb' }, 2, { quantity: 40, unit: 'lb' }, 2);
+  assert.equal(aboveHand.flagged, true);
+  const forced = order.orderNeed({ name: 'Tomato Crushed', pack: '6 / #10 CAN', orderRole: 'supply', tempZone: 'Dry' }, {
+    recipe: { quantity: 39.8, unit: 'lb' }, forceFood: true, countUnit: 'each'
+  });
+  assert.equal(forced.source, 'recipe');
+  assert.equal(forced.quantity, 39.8);
+  const page = fs.readFileSync(path.join(__dirname, 'weekly-page.js'), 'utf8');
+  assert.equal(page.includes('function requireAdmin'), true);
+  assert.equal(page.includes('Only an admin can change that'), true);
+  const rules = fs.readFileSync(path.join(__dirname, '..', 'database.rules.staging.json'), 'utf8');
+  assert.equal(rules.includes('"staging_zedops_counts"'), true);
+  const parsed = JSON.parse(rules);
+  assert.equal(parsed.rules.staging_zedops_counts['.write'].includes('team@'), true);
+  assert.equal(parsed.rules.staging_zedops_catalog['.write'].includes('team@'), false);
+  assert.equal(parsed.rules.staging_zedops_standards['.write'].includes('admin@'), true);
+  assert.equal(parsed.rules.staging_zedops_pars['.write'].includes('team@'), false);
+});
+
 test('item search is fuzzy and the match count separates saved picks from blanks', () => {
   const items = [
     { id: 'bek__654028', itemNumber: '654028', name: 'Rice Jasmine', brand: 'Producers Rice Mill' },
@@ -514,7 +554,7 @@ test('a single approve writes once, and a listener cannot approve again', async 
   assert.equal((await realRef('staging_zedops_ingredient_map/cheddar_monterey_jack_cheese').once('value')).val(), null);
   const page = fs.readFileSync(path.join(__dirname, 'weekly-page.js'), 'utf8');
   assert.equal(page.includes('alert('), false);
-  assert.equal(page.includes('confirm('), false);
+  assert.equal(page.includes('window.confirm('), true);
   const approve = page.slice(page.indexOf('function approveRecipe'), page.indexOf('function onRecipeFile'));
   assert.equal((approve.match(/saveRecipeApproval/g) || []).length, 1);
   assert.equal(approve.includes('setRecipeLine'), false);

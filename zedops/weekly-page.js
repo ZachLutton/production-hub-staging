@@ -24,6 +24,8 @@
     packChoices: {},
     piecesPerCup: {},
     plateLinks: {},
+    standards: {},
+    orderConfirmed: false,
     caseSizes: {},
     matches: {},
     catalogHidden: {},
@@ -63,6 +65,11 @@
     if (!el) return;
     el.textContent = text || '';
     el.className = isError ? 'error' : '';
+  }
+  function requireAdmin() {
+    if (state.role === 'admin') return true;
+    setPageStatus('Only an admin can change that. On-hand counts are the entry for this login.', true);
+    return false;
   }
   function showError(err) {
     console.error(err);
@@ -219,18 +226,23 @@
     loc = loc || currentStore();
     var onHub = loc && ZedLocations.listSourceOf(loc) === 'catalog';
     var recipe = onHub ? recipeNeed(row.item) : null;
-    var pending = onHub && ZedOrder.usesSuggestedRecipe(row.item) ? pendingPounds(row.item) : 0;
+    var pending = onHub ? pendingPounds(row.item) : 0;
     if (pending > 0 && (!recipe || pending > (Number(recipe.quantity) || 0))) {
       recipe = { quantity: pending, unit: 'lb', eachFactor: null };
     }
-    var fromRecipe = recipe && Number(recipe.quantity) > 0 && ZedOrder.usesSuggestedRecipe(row.item);
+    var fromRecipe = !!(recipe && Number(recipe.quantity) > 0);
     return ZedOrder.orderNeed(row.item, {
       plateList: plateListFor(row.item, loc),
       recipe: recipe,
-      standingPar: (ZedOrder.isFoodItem(row.item) || fromRecipe) ? 0 : parOf(row, loc),
+      standingPar: (fromRecipe || ZedOrder.isFoodItem(row.item)) ? 0 : parOf(row, loc),
       countUnit: ZedOrder.resolvedCountUnit(row.item),
-      forceFood: !!fromRecipe
+      forceFood: fromRecipe
     });
+  }
+  function recipeUsesItem(item) {
+    var recipe = recipeNeed(item);
+    if (recipe && Number(recipe.quantity) > 0) return true;
+    return pendingPounds(item) > 0;
   }
   function needLabel(need) {
     var text = ZedOrder.needText(need) + ' · ' + need.source;
@@ -303,6 +315,10 @@
           if (saved[component] && Number(saved[component].piecesPerCup) > 0) rates[component] = Number(saved[component].piecesPerCup);
         });
         state.piecesPerCup = rates;
+        return db.ref(ZedStorage.PATHS.standards).once('value');
+      }).then(function (standardSnap) {
+        state.standards = (standardSnap && standardSnap.val()) || {};
+        ZedOrder.useStandards(state.standards);
       }).catch(function (err) {
         state.plate = state.plate || null;
         showError(err);
@@ -420,6 +436,7 @@
       due.textContent = (cycle ? cycle + '. ' : '') + 'Food need comes from the approved scaled recipe. Supplies use the standing par for that store. BEK guide pars are not used for the order.';
     }
     try {
+      ZedOrder.useStandards(state.standards);
       renderRecipeTools();
       renderPlateReview();
       renderMealChecks(loc);
@@ -505,13 +522,12 @@
         return esc(link.qty) + ' × BEK ' + esc(link.itemNumber) + ' ' + esc(link.name);
       }).join('<br>') + '</div>';
     }
-    var first = links[0] || {};
-    var rest = links.slice(1).map(function (link) {
-      return '<div>' + esc(link.qty) + ' × BEK ' + esc(link.itemNumber) + ' ' + esc(link.name) + '</div>';
-    }).join('');
-    return '<div>' + rest +
-      '<label>Item # <input data-plate-link-item="' + esc(dish.key) + '" data-plate-link-name="' + esc(dish.name) + '" value="' + esc(first.itemNumber || '') + '" style="width:90px" aria-label="Plate item for ' + esc(dish.name) + '"></label> ' +
-      '<label>per plate <input data-plate-link-qty="' + esc(dish.key) + '" type="number" min="0" step="any" value="' + (first.qty == null ? '' : esc(first.qty)) + '" style="width:70px" aria-label="Per plate for ' + esc(dish.name) + '"></label></div>';
+    var rows = links.concat([{ itemNumber: '', qty: '', name: '' }]);
+    return '<div class="plate-link-edit">' + rows.map(function (link, index) {
+      return '<div><label>Item # <input data-plate-link-item="' + esc(dish.key) + '" data-plate-link-index="' + index + '" data-plate-link-name="' + esc(dish.name) + '" value="' + esc(link.itemNumber || '') + '" style="width:90px" aria-label="Plate item for ' + esc(dish.name) + '"></label> ' +
+        '<label>per plate <input data-plate-link-qty="' + esc(dish.key) + '" data-plate-link-index="' + index + '" type="number" min="0" step="any" value="' + (link.qty === '' || link.qty == null ? '' : esc(link.qty)) + '" style="width:70px" aria-label="Per plate for ' + esc(dish.name) + '"></label> ' +
+        esc(link.name || '') + '</div>';
+    }).join('') + '</div>';
   }
 
   function materializeLinks(item) {
@@ -530,9 +546,16 @@
     return map;
   }
 
-  function savePlateItemLink(dishKey, dishName, itemNumber, qty) {
-    var number = String(itemNumber || '').replace(/\D/g, '').replace(/^0+/, '');
-    var amount = Number(qty);
+  function savePlateItemLink(dishKey, dishName) {
+    if (!requireAdmin()) return Promise.resolve();
+    var wanted = {};
+    document.querySelectorAll('[data-plate-link-item="' + dishKey + '"]').forEach(function (input) {
+      var index = input.getAttribute('data-plate-link-index');
+      var qtyEl = document.querySelector('[data-plate-link-qty="' + dishKey + '"][data-plate-link-index="' + index + '"]');
+      var number = String(input.value || '').replace(/\D/g, '').replace(/^0+/, '');
+      var amount = Number(qtyEl && qtyEl.value);
+      if (number && amount > 0) wanted[number] = amount;
+    });
     var jobs = [];
     var items = (state.catalog && state.catalog.items) || {};
     Object.keys(items).forEach(function (id) {
@@ -540,7 +563,7 @@
       var map = materializeLinks(item);
       var had = Object.prototype.hasOwnProperty.call(map, dishKey);
       var itemNum = String(item.itemNumber || '').replace(/^0+/, '');
-      if (number && itemNum === number && amount > 0) map[dishKey] = { name: dishName, qty: amount };
+      if (wanted[itemNum] > 0) map[dishKey] = { name: dishName, qty: wanted[itemNum] };
       else if (had) delete map[dishKey];
       else return;
       jobs.push(ZedStorage.setPlateLink(db, id, map).then(function () {
@@ -795,7 +818,15 @@
       lines.push('<tr><td class="item-num">' + esc(item.itemNumber || 'no BEK #') + '</td><td>' + esc(item.name) + '</td><td>' +
         esc(needLabel(need)) + '</td><td class="need-order">' + (cases > 0 ? cases + ' cs' : '0') + '</td></tr>');
     });
-    box.innerHTML = '<h2>Order totals</h2>' + (lines.length
+    var flags = [];
+    state.rows.forEach(function (row) {
+      var flag = ZedOrder.orderWarning(row.item, casesFor(row, loc), needFor(row, loc), handOf(row, loc));
+      if (flag.flagged) flags.push('<li>' + esc(row.item.itemNumber || '') + ' ' + esc(row.item.name) + ' — ' + esc(flag.reasons.join(' ')) + '</li>');
+    });
+    var warning = flags.length
+      ? '<div class="order-warn"><strong>Check these before you submit.</strong><ul>' + flags.join('') + '</ul></div>'
+      : '';
+    box.innerHTML = warning + '<h2>Order totals</h2><p><button type="button" id="submitOrder">Submit order</button></p>' + (lines.length
       ? '<table class="order-table"><thead><tr><th>Item #</th><th>Name</th><th>Need</th><th>Order</th></tr></thead><tbody>' + lines.join('') + '</tbody></table>'
       : '<p class="empty-state">The approved recipes for ' + esc(cook) + ' do not add a food order.</p>');
   }
@@ -841,7 +872,8 @@
     var cases = casesFor(row, loc);
     var needText = needLabel(need);
     var temp = item.temporary ? ' <span class="temp-badge">TEMPORARY</span>' : '';
-    var food = ZedOrder.isFoodItem(item) || (ZedOrder.usesSuggestedRecipe(item) && ((recipeNeed(item) && Number(recipeNeed(item).quantity) > 0) || pendingPounds(item) > 0));
+    var onRecipe = recipeUsesItem(item);
+    var food = onRecipe || ZedOrder.isFoodItem(item);
     var countChoices = ['each', 'case', 'lb', 'gal', 'oz'];
     var countNow = String(ZedOrder.resolvedCountUnit(item) || 'each').toLowerCase();
     if (countNow === 'pound' || countNow === 'pounds') countNow = 'lb';
@@ -853,8 +885,12 @@
           return '<option value="' + choice + '"' + (choice === countNow ? ' selected' : '') + '>' + choice + '</option>';
         }).join('') + '</select></label> '
       : '';
-    var roleBtn = state.role === 'admin'
-      ? '<button type="button" data-order-role="' + esc(row.id) + '">' + (food ? 'Food' : 'Supply') + '</button>' : '';
+    var roleBtn = '';
+    if (state.role === 'admin' && !onRecipe) {
+      roleBtn = '<button type="button" data-order-role="' + esc(row.id) + '">' + (food ? 'Food' : 'Supply') + '</button>';
+    } else if (onRecipe) {
+      roleBtn = '<span>Food</span>';
+    }
     var countedUnit = ZedOrder.resolvedCountUnit(item);
     var canLb = ZedOrder.canEachLb(item && item.pack);
     var showCanEach = food && ZedOrder.canonUnit(countedUnit) === 'ea' && canLb > 0;
@@ -864,7 +900,8 @@
       var perLabel = showCanEach ? 'each' : ZedOrder.unitLabel(countedUnit);
       var savedPer = Number(item.lbPerUnit) > 0 ? item.lbPerUnit : '';
       var perDefault = showCanEach ? canLb : ZedOrder.defaultLbPer(countedUnit, item);
-      density = '<label>lb per ' + esc(perLabel) + ' <input data-lb-per="' + esc(row.id) + '" type="number" min="0" step="any" inputmode="decimal" placeholder="' + esc(perDefault == null ? '' : Math.round(perDefault * 1000) / 1000) + '" aria-label="Pounds per ' + esc(perLabel) + ' for ' + esc(item.name) + '" value="' + (savedPer === '' ? '' : esc(savedPer)) + '"></label><span class="field-note" data-lb-note="' + esc(row.id) + '"></span>';
+      var src = ZedOrder.weightSource(item);
+      density = '<label>lb per ' + esc(perLabel) + ' <input data-lb-per="' + esc(row.id) + '" type="number" min="0" step="any" inputmode="decimal" placeholder="' + esc(perDefault == null ? '' : Math.round(perDefault * 1000) / 1000) + '" aria-label="Pounds per ' + esc(perLabel) + ' for ' + esc(item.name) + '" value="' + (savedPer === '' ? '' : esc(savedPer)) + '"></label> <span class="weight-source">' + (src ? esc(src.source) : '') + '</span><span class="field-note" data-lb-note="' + esc(row.id) + '"></span>';
     }
     var parCell = '';
     if (!food && state.role === 'admin') {
@@ -874,10 +911,14 @@
     var controls = state.role === 'admin'
       ? '<td class="admin-controls"><div class="row-controls' + (showDensity ? ' has-density' : '') + '"><div class="ctrl-par">' + parCell + '</div><div class="ctrl-count">' + countSelect + '</div><div class="ctrl-role">' + roleBtn + '</div><div class="ctrl-density">' + density + '</div></div></td>'
       : '';
-    return '<tr><td class="item-num">' + esc(item.itemNumber || 'no BEK #') + '</td><td><div class="item-name">' +
-      esc(item.name) + temp + '</div><div class="item-brand">' + esc(item.brand || '') + '</div></td><td>' + esc(item.pack || '') +
+    var src = ZedOrder.weightSource(item);
+    var weightLine = src ? '<div class="item-brand">' + esc(Math.round(src.lb * 1000) / 1000) + ' lb · ' + esc(src.source) + '</div>' : '';
+    var warn = ZedOrder.orderWarning(item, cases, need, hand);
+    var warnLine = warn.flagged ? '<div class="order-warn">' + esc(warn.reasons.join(' ')) + '</div>' : '';
+    return '<tr' + (warn.flagged ? ' class="order-flag"' : '') + '><td class="item-num">' + esc(item.itemNumber || 'no BEK #') + '</td><td><div class="item-name">' +
+      esc(item.name) + temp + '</div><div class="item-brand">' + esc(item.brand || '') + '</div>' + weightLine + '</td><td>' + esc(item.pack || '') +
       '</td><td data-need-for="' + esc(row.id) + '">' + esc(needText) + '</td><td><input class="onhand-input" data-hand="' + esc(row.id) + '" type="number" min="0" step="any" inputmode="decimal" aria-label="On hand ' + esc(item.name) + ' in ' + esc(countNow) + '" value="' +
-      (hand == null ? '' : esc(hand)) + '"></td><td class="need-order">' + (cases > 0 ? cases + ' cs' : '0') + '</td>' +
+      (hand == null ? '' : esc(hand)) + '"></td><td class="need-order">' + (cases > 0 ? cases + ' cs' : '0') + warnLine + '</td>' +
       controls + '</tr>';
   }
 
@@ -915,6 +956,17 @@
     var box = document.getElementById('adminTools');
     box.style.display = state.role === 'admin' ? 'block' : 'none';
     if (state.role !== 'admin') return;
+    var standardsBox = document.getElementById('standardsPanel');
+    if (standardsBox) {
+      var labels = ZedOrder.standardLabels();
+      var defaults = ZedOrder.defaultStandards();
+      standardsBox.innerHTML = '<h2>Standard weights</h2><p>Every matching item uses these. A pounds-per-unit entry on the item replaces the standard. N oz in a name is that many ounces divided by 16. An N / X OZ pack uses X/16 lb per piece.</p>' +
+        Object.keys(defaults).map(function (id) {
+          var value = state.standards && Number(state.standards[id]) > 0 ? Number(state.standards[id]) : defaults[id];
+          return '<label style="display:inline-block;margin:0 12px 8px 0">' + esc(labels[id] || id) +
+            ' <input data-standard="' + esc(id) + '" type="number" min="0" step="any" value="' + esc(value) + '" style="width:80px" aria-label="' + esc(labels[id] || id) + '"></label>';
+        }).join('');
+    }
     renderRecipeReview();
     var storePanel = document.getElementById('storePanel');
     storePanel.innerHTML = '<h2>Stores</h2><p>The production hub counts the full BEK catalog. Any other store counts that store\'s supplies from monthly inventory, not the meals.</p>' +
@@ -926,6 +978,7 @@
       }).join('') + '<button type="button" id="addStore">Add a store</button>';
     var add = document.getElementById('addStore');
     if (add) add.onclick = function () {
+      if (!requireAdmin()) return;
       var name = prompt('Store name');
       if (!name) return;
       var result = ZedLocations.addLocation(state.locationDoc, { name: name, listSource: 'inventory' });
@@ -1096,6 +1149,7 @@
     });
   }
   function saveMatch(index, options) {
+    if (!requireAdmin()) return Promise.resolve();
     var opts = options || {};
     var row = state.pendingRecipe && state.pendingRecipe.purchases[index];
     if (!row) return Promise.resolve();
@@ -1235,6 +1289,7 @@
   document.getElementById('itemTable').addEventListener('input', function (event) {
     var input = event.target;
     if (!input.dataset || !input.dataset.hand) return;
+    state.orderConfirmed = false;
     var id = input.dataset.hand;
     var raw = input.value.trim();
     ZedStorage.setOnHand(db, state.locationId, state.weekKey, id, raw === '' ? null : raw).then(function () {
@@ -1276,6 +1331,7 @@
   document.getElementById('itemTable').addEventListener('change', function (event) {
     var input = event.target;
     if (input.getAttribute && input.getAttribute('data-count-unit') != null) {
+      if (!requireAdmin()) return;
       var unitId = input.getAttribute('data-count-unit');
       var unitItem = state.catalog.items[unitId];
       var unitChoice = input.value;
@@ -1290,6 +1346,7 @@
       return;
     }
     if (input.getAttribute && input.getAttribute('data-lb-per') != null) {
+      if (!requireAdmin()) return;
       var densityId = input.getAttribute('data-lb-per');
       var densityRow = null;
       state.rows.forEach(function (candidate) { if (candidate.id === densityId) densityRow = candidate; });
@@ -1332,7 +1389,9 @@
       });
       return;
     }
+    if (input.getAttribute && input.getAttribute('data-hand') != null) state.orderConfirmed = false;
     if (!input.getAttribute || input.getAttribute('data-par') == null) return;
+    if (!requireAdmin()) return;
     var id = input.getAttribute('data-par');
     var row = null;
     state.rows.forEach(function (candidate) { if (candidate.id === id) row = candidate; });
@@ -1370,10 +1429,15 @@
   document.getElementById('itemTable').addEventListener('click', function (event) {
     var roleBtn = event.target.closest('[data-order-role]');
     if (!roleBtn) return;
+    if (!requireAdmin()) return;
     var id = roleBtn.getAttribute('data-order-role');
     var item = state.catalog.items[id];
     if (!item) {
       setPageStatus('That item is not in the catalog, so the food or supply choice cannot be saved.', true);
+      return;
+    }
+    if (recipeUsesItem(item)) {
+      setPageStatus(item.name + ' is on the scaled recipe, so it stays food.', true);
       return;
     }
     var next = ZedOrder.isFoodItem(item) ? 'supply' : 'food';
@@ -1386,6 +1450,7 @@
   document.getElementById('storePanel').addEventListener('change', function (event) {
     var box = event.target;
     if (box.dataset && box.dataset.store) {
+      if (!requireAdmin()) return;
       var next = ZedLocations.withRole(state.locationDoc, box.dataset.store, box.dataset.role, box.checked);
       var loc = next.locations[box.dataset.store];
       if (box.dataset.role === 'isProductionHub') loc.listSource = box.checked ? 'catalog' : loc.listSource;
@@ -1393,6 +1458,7 @@
       ZedStorage.setLocation(db, loc).then(function () { fillStores(); reload(); }).catch(showError);
     }
     if (box.dataset && box.dataset.source) {
+      if (!requireAdmin()) return;
       var id = box.dataset.source;
       var store = state.locationDoc[id];
       if (!store) return;
@@ -1416,6 +1482,20 @@
     state.weekKey = picked;
     reload();
   });
+  document.getElementById('adminTools').addEventListener('change', function (event) {
+    var standard = event.target && event.target.getAttribute && event.target.getAttribute('data-standard');
+    if (standard == null) return;
+    if (!requireAdmin()) return;
+    var weight = Number(event.target.value);
+    ZedStorage.setStandard(db, standard, event.target.value).then(function () {
+      if (weight > 0) state.standards[standard] = weight;
+      else delete state.standards[standard];
+      ZedOrder.useStandards(state.standards);
+      setPageStatus('Saved. The standard weight is updated.');
+      render();
+      markSaved();
+    }).catch(showError);
+  });
   document.getElementById('showStore').addEventListener('click', function () { showView('store'); });
   document.getElementById('showOrder').addEventListener('click', function () { showView('order'); });
   document.getElementById('recipeFile').addEventListener('change', function () {
@@ -1429,6 +1509,7 @@
     onPlateFile(file);
   });
   function onPackChoice(select) {
+    if (!requireAdmin()) return;
     var key = select.getAttribute('data-pack-dish');
     var name = select.getAttribute('data-pack-name') || '';
     var packId = select.value === 'cup_9oz' ? 'cup_9oz' : 'meal_container';
@@ -1456,7 +1537,8 @@
       var itemInput = document.querySelector('[data-plate-link-item="' + linkKey + '"]');
       var qtyInput = document.querySelector('[data-plate-link-qty="' + linkKey + '"]');
       var linkName = (itemInput && itemInput.getAttribute('data-plate-link-name')) || '';
-      savePlateItemLink(linkKey, linkName, itemInput && itemInput.value, qtyInput && qtyInput.value).then(function () {
+      if (!requireAdmin()) return;
+      savePlateItemLink(linkKey, linkName).then(function () {
         setPageStatus('Saved. ' + linkName + ' is on the plate-list order.');
         render();
         markSaved();
@@ -1464,6 +1546,7 @@
       return;
     }
     if (input.getAttribute && input.getAttribute('data-pieces-per') != null) {
+      if (!requireAdmin()) return;
       var component = input.getAttribute('data-pieces-per');
       var perCup = Number(input.value);
       if (!(perCup > 0)) {
@@ -1479,6 +1562,7 @@
       return;
     }
     if (input.getAttribute && input.getAttribute('data-case-size') != null) {
+      if (!requireAdmin()) return;
       var supplyId = input.getAttribute('data-case-size');
       var size = Number(input.value);
       if (!(size > 0)) {
@@ -1527,6 +1611,7 @@
     }).catch(showError);
   });
   document.getElementById('recipePanel').addEventListener('click', function (event) {
+    if (!requireAdmin()) return;
     var open = event.target.closest('[data-open]');
     if (open) {
       var index = open.getAttribute('data-open');
@@ -1639,6 +1724,7 @@
     }
   });
   document.getElementById('recipePanel').addEventListener('change', function (event) {
+    if (!requireAdmin()) return;
     if (event.target.id === 'showHiddenIngredients') {
       state.showHiddenIngredients = event.target.checked;
       document.querySelectorAll('tr.ingredient-hidden').forEach(function (tr) {
@@ -1661,6 +1747,7 @@
     }
     var factor = event.target.getAttribute && event.target.getAttribute('data-factor');
     if (factor == null) return;
+    if (!requireAdmin()) return;
     var factorRow = state.pendingRecipe && state.pendingRecipe.purchases[factor];
     if (!factorRow) return;
     factorRow.eachFactor = search.value === '' ? '' : Number(search.value);
@@ -1693,6 +1780,7 @@
           ', price up ' + diff.priceUp.length + ', price down ' + diff.priceDown.length + ', substitutions ' + diff.substitutions.length + '.</p>' +
           '<button type="button" id="approveGuide">Approve guide</button> <button type="button" id="discardGuide">Discard</button>';
         document.getElementById('approveGuide').onclick = function () {
+          if (!requireAdmin()) return;
           ZedStorage.applyWrites(db, ZedBek.planUpload(state.catalog, diff)).then(function () {
             state.pendingGuide = null;
             panel.style.display = 'none';
@@ -1722,7 +1810,27 @@
     });
     return lines;
   }
+  function confirmOrder() {
+    var flags = [];
+    var loc = currentStore();
+    state.rows.forEach(function (row) {
+      var flag = ZedOrder.orderWarning(row.item, casesFor(row, loc), needFor(row, loc), handOf(row, loc));
+      if (flag.flagged) flags.push((row.item.itemNumber || '') + ' ' + row.item.name + ' — ' + flag.reasons.join(' '));
+    });
+    if (!flags.length || state.orderConfirmed) return true;
+    var ok = window.confirm('These orders look high:\n\n' + flags.join('\n') + '\n\nSubmit them anyway?');
+    if (ok) state.orderConfirmed = true;
+    return ok;
+  }
+  document.getElementById('orderSummary').addEventListener('click', function (event) {
+    var button = event.target.closest && event.target.closest('#submitOrder');
+    if (!button) return;
+    if (!confirmOrder()) return;
+    ZedPdf.downloadPdf('bek-order-' + state.weekKey + '.pdf', ZedPdf.buildPdf({ title: 'Weekly BEK order', lines: bekOrderLines() }));
+    setPageStatus('Order submitted. The BEK PDF downloaded.');
+  });
   document.getElementById('pdfOrder').addEventListener('click', function () {
+    if (!confirmOrder()) return;
     ZedPdf.downloadPdf('bek-order-' + state.weekKey + '.pdf', ZedPdf.buildPdf({ title: 'Weekly BEK order', lines: bekOrderLines() }));
   });
   document.getElementById('pdfSpecial').addEventListener('click', function () {

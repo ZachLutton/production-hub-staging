@@ -16,7 +16,8 @@
     priceApprovals: 'staging_zedops_price_approvals',
     ingredientMap: 'staging_zedops_ingredient_map',
     recipe: 'staging_zedops_recipe',
-    plate: 'staging_zedops_plate'
+    plate: 'staging_zedops_plate',
+    standards: 'staging_zedops_standards'
   };
 
   var WHOLE_LIST = {};
@@ -48,6 +49,7 @@
       if (!plateOk) throw new Error('A plate list is saved one cook date, one dish, or one case size at a time.');
     }
     if (parts[0] === PATHS.hidden && parts.length !== 3) throw new Error('Hidden items are saved one item at a time.');
+    if (parts[0] === PATHS.standards && parts.length !== 2) throw new Error('Standard weights are saved one at a time.');
     if (parts[0] === PATHS.locations && parts.length !== 2) throw new Error('Stores are saved one store at a time.');
     if (parts[0] === PATHS.catalog && parts[1] === 'items' && parts.length !== 3) {
       throw new Error('Catalog items are saved one item at a time.');
@@ -157,6 +159,14 @@
     var count = Number(pieces);
     if (!(count > 0)) return Promise.reject(new Error('Enter pieces per cup greater than zero.'));
     return refOf(db, path).set({ piecesPerCup: count });
+  }
+
+  function setStandard(db, id, lb) {
+    if (!/^[a-z][a-z0-9_]{0,40}$/.test(String(id || ''))) return Promise.reject(new Error('That standard is not recognized.'));
+    var path = PATHS.standards + '/' + id;
+    var weight = Number(lb);
+    if (!(weight > 0)) return refOf(db, path).remove();
+    return refOf(db, path).set(weight);
   }
 
   function setCaseSize(db, supplyId, caseSize) {
@@ -309,6 +319,7 @@
     setPackChoice: setPackChoice,
     setPlateLink: setPlateLink,
     setPiecesPerCup: setPiecesPerCup,
+    setStandard: setStandard,
     setCaseSize: setCaseSize,
     saveRecipeApproval: saveRecipeApproval,
     setLocation: setLocation,
