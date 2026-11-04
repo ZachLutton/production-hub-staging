@@ -174,6 +174,7 @@
     if (!item) return false;
     if (isPantryLiquid(item) || isKosherSalt(item) || canEachLb(item && item.pack)) return true;
     if (/onion red slab|slab slice/i.test(item.name || '')) return true;
+    if (/\bbrisket\b/i.test(item.name || '') && !/hash/i.test(item.name || '')) return true;
     return /caramelized onion|onion caramelized/i.test(item.name || '');
   }
 
@@ -182,7 +183,19 @@
   function forcedRecipeItemId(line) {
     var name = fold(line && line.name);
     if (name === 'red onion') return 'bek__182907';
+    // The long USDA brisket line is the 70 lb meat, not a spice that happened to match the item.
+    if (/beef brisket|brisket whole/.test(name)) return 'bek__500370';
     return '';
+  }
+
+  function recipeOwner(line) {
+    var forced = forcedRecipeItemId(line);
+    if (forced) return forced;
+    var pounds = Number(line && line.pounds) || 0;
+    var name = fold(line && line.name);
+    // A sub-pound line that is not the brisket was a bad match (the 0.2 lb garnish).
+    if (line && line.catalogId === 'bek__500370' && !/brisket/.test(name) && pounds < 1) return '';
+    return (line && line.catalogId) || '';
   }
 
   function recipeLineFor(item, lines) {
@@ -194,7 +207,7 @@
       if (key === '_meta') return;
       var line = lines[key];
       if (!line) return;
-      var owner = forcedRecipeItemId(line) || line.catalogId || '';
+      var owner = recipeOwner(line);
       if (!item || owner !== item.id) return;
       pounds += Number(line.pounds) || 0;
       unit = line.unit || unit;
@@ -233,6 +246,15 @@
       if (eachLb > 0) {
         return { perCase: cans * eachLb, each: eachLb, unit: 'lb', cans: cans, canSize: can[2], raw: text };
       }
+    }
+    // "1 / 9-11 LB" is one piece, and the piece weighs 9 to 11 lb. Use the middle, 10 lb.
+    var range = text.match(/(\d*\.\d+|\d+)\s*\/\s*(\d*\.\d+|\d+)\s*-\s*(\d*\.\d+|\d+)\s*([A-Za-z]+)/);
+    if (range) {
+      var low = Number(range[2]);
+      var high = Number(range[3]);
+      var mid = (low + high) / 2;
+      var count = Number(range[1]);
+      return { perCase: count * mid, each: mid, unit: canonUnit(range[4]), raw: text };
     }
     var match = text.match(/(\d*\.\d+|\d+)\s*\/\s*(\d*\.\d+|\d+)\s*([A-Za-z]+(?:\s+[A-Za-z]+)?)/);
     if (match) {
@@ -684,6 +706,7 @@
       [/vanilla extract|extract vanilla|vanilla/, /vanilla/],
       [/quick oat|oats quick|oatmeal|rolled oat/, /oat/],
       [/marsala|wine marsala/, /marsala/],
+      [/beef brisket|brisket whole/, /brisket/],
       [/^red onion$/, /onion red slab|slab slice/],
       [/diced red onion|red onion diced/, /onion red diced|red diced/]
     ];

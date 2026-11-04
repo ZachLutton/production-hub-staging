@@ -51,6 +51,17 @@ test('scaled recipe uses raw weights and does not double count', () => {
   assert.equal(brisket.ingredients.filter(function (item) { return item.name === 'Spices, pepper, black'; })[0].pounds, 0.1);
   assert.equal(brisket.ingredients.filter(function (item) { return item.name === 'Kosher Salt'; })[0].pounds, 0.3);
   assert.equal(pounds(brisketMeat.name), 70.8);
+  const brisketItem = bek.buildCatalog(require('./seed.json')).items.bek__500370;
+  assert.equal(order.filterCatalog(brisketMeat.name, Object.values(bek.buildCatalog(require('./seed.json')).items), { solidOnly: true })[0].itemNumber, '500370');
+  assert.equal(order.packAmount('1 / 9-11 LB').perCase, 10);
+  assert.equal(order.packAmount('1 / 9-11 LB').each, 10);
+  assert.equal(order.orderCases(brisketItem, { quantity: 70.8, unit: 'lb', source: 'recipe' }, 0), 8);
+  const brisketLines = {
+    garnish: { name: 'Kosher Salt', pounds: 0.2, catalogId: 'bek__500370', unit: 'lb' },
+    meat: { name: brisketMeat.name, pounds: 70.8, catalogId: 'bek__774055', unit: 'lb' }
+  };
+  assert.equal(order.recipeLineFor(brisketItem, brisketLines).pounds, 70.8);
+  assert.equal(order.recipeLineFor({ id: 'bek__774055', name: 'Oregano Leaves' }, brisketLines), null);
   const tenderloin = parsed.broadline.filter(function (row) { return row.name === 'Diced Beef Tenderloin'; })[0];
   assert.equal(tenderloin.ingredients[0].pounds, 90.4);
   assert.equal(tenderloin.ingredients[0].name, 'Beef, loin, tenderloin steak, boneless, separable lean only, trimmed to 0" fat, choice, raw');
