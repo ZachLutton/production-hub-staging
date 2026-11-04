@@ -124,6 +124,12 @@
     if (!result || canonUnit(result.unit) !== 'lb' || !isVolumeUnit(unit)) return result;
     result.convertedQuantity = needInCountUnit(result.quantity, result.unit, unit, result.eachFactor, item && item.lbPerUnit);
     result.convertedUnit = unitLabel(unit);
+    var pack = packAmount(item && item.pack);
+    if (pack && canonUnit(pack.unit) === canonUnit(unit) && pack.each > 0 && pack.each !== 1) {
+      result.pieceQuantity = result.convertedQuantity / pack.each;
+      result.pieceSize = pack.each;
+      result.pieceUnit = unitLabel(unit);
+    }
     return result;
   }
 
@@ -132,6 +138,9 @@
     var text = roundQty(need.quantity) + (need.unit ? ' ' + unitLabel(need.unit) : '');
     if (need.convertedQuantity != null && need.convertedUnit) {
       text += ' ≈ ' + roundApprox(need.convertedQuantity) + ' ' + need.convertedUnit;
+    }
+    if (need.pieceQuantity != null && need.pieceUnit) {
+      text += ' · ' + roundApprox(need.pieceQuantity) + ' × ' + roundApprox(need.pieceSize) + ' ' + need.pieceUnit;
     }
     return text;
   }
