@@ -13,6 +13,7 @@
     l: 'l', ltr: 'l', liter: 'l', liters: 'l', litre: 'l', litres: 'l',
     ml: 'ml', milliliter: 'ml', milliliters: 'ml',
     oz: 'oz', ounce: 'oz', ounces: 'oz',
+    g: 'g', gram: 'g', grams: 'g',
     ea: 'ea', each: 'ea', ct: 'ea'
   };
   // How many of that unit are in one gallon. Milk and water are about 8.6 lb per gallon.
@@ -116,19 +117,29 @@
       var per = lbPerOf(to, lbPerUnit);
       if (per > 0) return qty / per;
     }
+    if (from === 'g') return needInCountUnit(qty / 453.59237, 'lb', countUnit, eachFactor, lbPerUnit);
+    if (from === 'lb' && to === 'oz') return qty * 16;
+    if (from === 'oz' && to === 'lb') return qty / 16;
     return qty;
   }
 
   function withVolume(item, result, countUnit) {
     var unit = countUnit || (item && item.countUnit) || '';
-    if (!result || canonUnit(result.unit) !== 'lb' || !isVolumeUnit(unit)) return result;
-    result.convertedQuantity = needInCountUnit(result.quantity, result.unit, unit, result.eachFactor, item && item.lbPerUnit);
-    result.convertedUnit = unitLabel(unit);
-    var pack = packAmount(item && item.pack);
-    if (pack && canonUnit(pack.unit) === canonUnit(unit) && pack.each > 0 && pack.each !== 1) {
-      result.pieceQuantity = result.convertedQuantity / pack.each;
-      result.pieceSize = pack.each;
-      result.pieceUnit = unitLabel(unit);
+    if (!result || canonUnit(result.unit) !== 'lb') return result;
+    if (isVolumeUnit(unit)) {
+      result.convertedQuantity = needInCountUnit(result.quantity, result.unit, unit, result.eachFactor, item && item.lbPerUnit);
+      result.convertedUnit = unitLabel(unit);
+      var pack = packAmount(item && item.pack);
+      if (pack && canonUnit(pack.unit) === canonUnit(unit) && pack.each > 0 && pack.each !== 1) {
+        result.pieceQuantity = result.convertedQuantity / pack.each;
+        result.pieceSize = pack.each;
+        result.pieceUnit = unitLabel(unit);
+      }
+      return result;
+    }
+    if (canonUnit(unit) === 'oz') {
+      result.convertedQuantity = needInCountUnit(result.quantity, result.unit, unit, result.eachFactor, item && item.lbPerUnit);
+      result.convertedUnit = 'oz';
     }
     return result;
   }
@@ -156,19 +167,64 @@
     return casesToOrder(needQty, have, perCase || 1);
   }
 
+  // Dry spices and seasonings are food even though the temp zone says Dry.
+  // The Saute Line shelf is that set. A name match covers the same kind of item on another shelf.
+  function isDrySeasoning(item) {
+    var label = String(item.label || '');
+    if (/saute line/i.test(label)) return true;
+    var zone = String(item.tempZone || '').toLowerCase();
+    if (zone.indexOf('dry') === -1) return false;
+    var name = String(item.name || '');
+    if (/cumin|chili powder|paprika|oregano|thyme|blackened|sesame seed|caper|chia|dill|chive|rosemary|garlic powder|onion powder|cinnamon|parsley flake/i.test(name)) return true;
+    if (/pepper black|pepper red crushed/i.test(name)) return true;
+    return false;
+  }
+
   // Food comes from the BEK temp zone, not the shelf the item sits on.
   // Refrigeration, frozen, and retail-ready (including dry retail-ready food) are food.
-  // A plain Dry zone is a supply. An admin override on the item wins over the zone.
+  // A plain Dry zone is a supply, except dry spices and seasonings.
+  // An admin override on the item wins over the zone and over the spice default.
   function isFoodItem(item) {
     if (!item || item.kind === 'vendor_check') return false;
     if (item.orderRole === 'food') return true;
     if (item.orderRole === 'supply') return false;
     if (item.kind === 'special' && /salmon|mahi|filet/i.test(item.name || '')) return true;
+    if (isDrySeasoning(item)) return true;
     var zone = String(item.tempZone || '').toLowerCase();
     if (zone.indexOf('retail ready') !== -1) return true;
     if (zone.indexOf('refriger') !== -1) return true;
     if (zone.indexOf('frozen') !== -1 || zone.indexOf('freezer') !== -1) return true;
     return false;
+  }
+
+  // A distinctive spice word is enough to offer that catalog item. "Pepper" alone is not.
+  function spiceScore(query, item) {
+    var q = fold(query);
+    var name = fold(item && item.name);
+    var rules = [
+      [/cumin/, /cumin/],
+      [/chili powder/, /chili powder/],
+      [/paprika/, /paprika/],
+      [/crushed red|red pepper flake|pepper red crushed/, /pepper red crushed/],
+      [/black pepper|pepper black/, /pepper black/],
+      [/oregano/, /oregano/],
+      [/thyme/, /thyme/],
+      [/blackened|redfish magic/, /blackened/],
+      [/sesame seed/, /sesame seed/],
+      [/caper/, /caper/],
+      [/chia/, /chia/],
+      [/dill/, /dill/],
+      [/chive/, /chive/],
+      [/rosemary/, /rosemary/],
+      [/garlic powder/, /garlic powder/],
+      [/onion powder/, /onion powder/],
+      [/cinnamon/, /cinnamon/],
+      [/parsley flake|parsley dried|dried parsley/, /parsley flake/]
+    ];
+    for (var i = 0; i < rules.length; i++) {
+      if (rules[i][0].test(q) && rules[i][1].test(name)) return 40;
+    }
+    return 0;
   }
 
   // Food is ordered from the approved recipe only. A missing recipe is zero, not the BEK guide par.
@@ -255,6 +311,8 @@
         if (tokens.length && hit === tokens.length) score = 30;
         else if (fuzzy(compact, flat)) score = 10;
       }
+      var spice = spiceScore(query, item);
+      if (spice > score) score = spice;
       // solidOnly keeps a real hit (item number, full phrase, or every word). A loose
       // letter match stays available in the search box and is never pre-selected.
       if (score && !(opts.solidOnly && score < 30)) ranked.push({ item: item, score: score, name: item.name || '' });
