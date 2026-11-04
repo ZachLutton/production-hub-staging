@@ -69,6 +69,33 @@
     return unit || (pack && pack.unit) || 'each';
   }
 
+  function isKosherSalt(item) {
+    var name = String(item && item.name || '').toLowerCase();
+    return name.indexOf('kosher') !== -1 && name.indexOf('salt') !== -1;
+  }
+
+  // each, case, lb, or gal. Kosher salt is one box unless an admin already chose a unit.
+  function resolvedCountUnit(item) {
+    if (item && item.countUnitChosen && item.countUnit) return item.countUnit;
+    if (isKosherSalt(item)) return 'each';
+    return volumeCountUnit(item);
+  }
+
+  function pieceWeightLb(item) {
+    if (item && Number(item.lbPerUnit) > 0 && canonUnit(resolvedCountUnit(item)) === 'ea') return Number(item.lbPerUnit);
+    var pack = packAmount(item && item.pack);
+    if (!pack || !(pack.each > 0)) return null;
+    if (pack.unit === 'lb') return pack.each;
+    if (pack.unit === 'oz') return pack.each / 16;
+    return null;
+  }
+
+  function boxesPerCase(pack) {
+    if (!pack || !(pack.each > 0)) return 1;
+    var count = pack.perCase / pack.each;
+    return count > 0 ? count : 1;
+  }
+
   function isPantryLiquid(item) {
     var name = String(item && item.name || '').toLowerCase();
     if (/bleach|sanitizer|cleaner|degreaser|detergent|soap|disinfectant|rinse aid|wash treatment/.test(name)) return false;
@@ -167,6 +194,14 @@
     if (canonUnit(unit) === 'oz') {
       result.convertedQuantity = needInCountUnit(result.quantity, result.unit, unit, result.eachFactor, item && item.lbPerUnit, item);
       result.convertedUnit = 'oz';
+      return result;
+    }
+    if (canonUnit(unit) === 'ea') {
+      var boxLb = pieceWeightLb(item);
+      if (boxLb > 0) {
+        result.convertedQuantity = Number(result.quantity) / boxLb;
+        result.convertedUnit = 'box';
+      }
     }
     return result;
   }
@@ -187,10 +222,18 @@
   function orderCases(item, need, onHand) {
     if (!need) return 0;
     var pack = packAmount(item && item.pack);
-    var countUnit = volumeCountUnit(item);
+    var countUnit = resolvedCountUnit(item);
+    var have = onHand == null || onHand === '' ? 0 : Number(onHand) || 0;
+    if (canonUnit(countUnit) === 'ea' && canonUnit(need.unit) === 'lb') {
+      var boxLb = pieceWeightLb(item);
+      if (boxLb > 0) return casesToOrder(Number(need.quantity) / boxLb, have, boxesPerCase(pack));
+    }
+    if (canonUnit(countUnit) === 'case' && canonUnit(need.unit) === 'lb' && pack && (pack.unit === 'lb' || pack.unit === 'oz')) {
+      var caseLb = pack.unit === 'lb' ? pack.perCase : pack.perCase / 16;
+      if (caseLb > 0) return casesToOrder(Number(need.quantity) / caseLb, have, 1);
+    }
     var needQty = needInCountUnit(need.quantity, need.unit, countUnit, need.eachFactor, item && item.lbPerUnit, item);
     var perCase = perCaseInCountUnit(pack, countUnit);
-    var have = onHand == null || onHand === '' ? 0 : Number(onHand) || 0;
     return casesToOrder(needQty, have, perCase || 1);
   }
 
@@ -204,6 +247,7 @@
     var name = String(item.name || '');
     if (/cumin|chili powder|paprika|oregano|thyme|blackened|sesame seed|caper|chia|dill|chive|rosemary|garlic powder|onion powder|cinnamon|parsley flake/i.test(name)) return true;
     if (/pepper black|pepper red crushed/i.test(name)) return true;
+    if (/kosher salt|salt sea kosher/i.test(name)) return true;
     return false;
   }
 
@@ -249,7 +293,8 @@
       [/garlic powder/, /garlic powder/],
       [/onion powder/, /onion powder/],
       [/cinnamon/, /cinnamon/],
-      [/parsley flake|parsley dried|dried parsley/, /parsley flake/]
+      [/parsley flake|parsley dried|dried parsley/, /parsley flake/],
+      [/kosher salt|salt sea kosher/, /kosher salt|salt sea kosher/]
     ];
     for (var i = 0; i < rules.length; i++) {
       if (rules[i][0].test(q) && rules[i][1].test(name)) return 40;
@@ -454,6 +499,7 @@
     unitLabel: unitLabel,
     defaultLbPer: defaultLbPer,
     volumeCountUnit: volumeCountUnit,
+    resolvedCountUnit: resolvedCountUnit,
     isPantryLiquid: isPantryLiquid,
     packAmount: packAmount,
     perCaseInCountUnit: perCaseInCountUnit,

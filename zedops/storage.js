@@ -89,7 +89,10 @@
   }
 
   function setCountUnit(db, itemId, unit) {
-    return refOf(db, PATHS.catalog + '/items/' + itemId).update({ countUnit: String(unit || '').trim() });
+    return refOf(db, PATHS.catalog + '/items/' + itemId).update({
+      countUnit: String(unit || '').trim(),
+      countUnitChosen: true
+    });
   }
 
   function setItemFields(db, itemId, fields) {

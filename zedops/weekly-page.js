@@ -215,7 +215,7 @@
       plateList: plateListFor(row.item, loc),
       recipe: recipe,
       standingPar: (ZedOrder.isFoodItem(row.item) || fromRecipe) ? 0 : parOf(row, loc),
-      countUnit: ZedOrder.volumeCountUnit(row.item),
+      countUnit: ZedOrder.resolvedCountUnit(row.item),
       forceFood: !!fromRecipe
     });
   }
@@ -734,6 +734,17 @@
     var needText = needLabel(need);
     var temp = item.temporary ? ' <span class="temp-badge">TEMPORARY</span>' : '';
     var food = ZedOrder.isFoodItem(item) || (ZedOrder.isPantryLiquid(item) && ((recipeNeed(item) && Number(recipeNeed(item).quantity) > 0) || pendingPounds(item) > 0));
+    var countChoices = ['each', 'case', 'lb', 'gal', 'oz'];
+    var countNow = String(ZedOrder.resolvedCountUnit(item) || 'each').toLowerCase();
+    if (countNow === 'pound' || countNow === 'pounds') countNow = 'lb';
+    if (countNow === 'gallon' || countNow === 'gallons') countNow = 'gal';
+    if (countNow === 'ounce' || countNow === 'ounces') countNow = 'oz';
+    var countSelect = state.role === 'admin'
+      ? '<label>Count <select data-count-unit="' + esc(row.id) + '" aria-label="Count unit for ' + esc(item.name) + '">' +
+        countChoices.map(function (choice) {
+          return '<option value="' + choice + '"' + (choice === countNow ? ' selected' : '') + '>' + choice + '</option>';
+        }).join('') + '</select></label> '
+      : '';
     var roleBtn = state.role === 'admin'
       ? '<button type="button" data-order-role="' + esc(row.id) + '">' + (food ? 'Food' : 'Supply') + '</button>' : '';
     var density = '';
@@ -749,9 +760,9 @@
     }
     return '<tr><td class="item-num">' + esc(item.itemNumber || 'no BEK #') + '</td><td><div class="item-name">' +
       esc(item.name) + temp + '</div><div class="item-brand">' + esc(item.brand || '') + '</div></td><td>' + esc(item.pack || '') +
-      '</td><td data-need-for="' + esc(row.id) + '">' + esc(needText) + '</td><td><input class="onhand-input" data-hand="' + esc(row.id) + '" type="number" min="0" step="any" inputmode="decimal" value="' +
+      '</td><td data-need-for="' + esc(row.id) + '">' + esc(needText) + '</td><td><input class="onhand-input" data-hand="' + esc(row.id) + '" type="number" min="0" step="any" inputmode="decimal" aria-label="On hand ' + esc(item.name) + ' in ' + esc(countNow) + '" value="' +
       (hand == null ? '' : esc(hand)) + '"></td><td class="need-order">' + (cases > 0 ? cases + ' cs' : '0') + '</td>' +
-      (state.role === 'admin' ? '<td>' + parCell + density + roleBtn + '</td>' : '') + '</tr>';
+      (state.role === 'admin' ? '<td>' + parCell + countSelect + density + roleBtn + '</td>' : '') + '</tr>';
   }
 
   function renderOrder() {
@@ -1148,6 +1159,20 @@
   });
   document.getElementById('itemTable').addEventListener('change', function (event) {
     var input = event.target;
+    if (input.getAttribute && input.getAttribute('data-count-unit') != null) {
+      var unitId = input.getAttribute('data-count-unit');
+      var unitItem = state.catalog.items[unitId];
+      var unitChoice = input.value;
+      if (!unitItem) return;
+      ZedStorage.setCountUnit(db, unitId, unitChoice).then(function () {
+        unitItem.countUnit = unitChoice;
+        unitItem.countUnitChosen = true;
+        setPageStatus('Saved. ' + unitItem.name + ' is counted by ' + unitChoice + '.');
+        render();
+        markSaved();
+      }).catch(showError);
+      return;
+    }
     if (input.getAttribute && input.getAttribute('data-lb-per') != null) {
       var densityId = input.getAttribute('data-lb-per');
       var densityRow = null;
