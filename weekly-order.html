@@ -8,10 +8,10 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <script src="firebase-config.js?v=20261104am"></script>
-    <script src="inventory-store.js?v=20261104am"></script>
-    <script src="staging-boot.js?v=20261104am"></script>
-    <script src="hub-auth.js?v=20261104am"></script>
+    <script src="firebase-config.js?v=20261104an"></script>
+    <script src="inventory-store.js?v=20261104an"></script>
+    <script src="staging-boot.js?v=20261104an"></script>
+    <script src="hub-auth.js?v=20261104an"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; padding: 10px; }
@@ -65,8 +65,10 @@
         .weight-source { font-size: 12px; font-weight: 700; color: #2d5016; }
         .temp-badge { background: #b85400; color: white; border-radius: 4px; font-size: 11px; padding: 2px 6px; }
         .unmatched { background: #fff4e0; }
-        .file-pick { display: inline-block; background: #2d5016; color: white; font-weight: 700; padding: 12px 16px; border-radius: 6px; margin-right: 8px; }
-        #recipeFile { font-size: 16px; max-width: 100%; }
+        .file-pick { display: inline-block; background: #2d5016; color: white; font-weight: 700; padding: 12px 16px; border-radius: 6px; margin-right: 8px; cursor: pointer; }
+        .file-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+        .file-row input[type="file"] { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; }
+        .upload-saved { margin: 0; font-weight: 700; color: #2d5016; }
         #recipeStatus { margin-top: 8px; font-weight: 700; min-height: 1.4em; }
         .match-tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 10px 0; }
         .match-tools input { font-size: 16px; padding: 10px; min-height: 44px; flex: 1; min-width: 180px; }
@@ -103,7 +105,7 @@
             <div style="text-align:left;margin-bottom:10px;"><span style="display:inline-block;background:#F9A825;color:#333;font-size:13px;font-weight:700;padding:8px 14px;border-radius:6px;">STAGING. One weekly order for every store. The live hub is not changed.</span></div>
             <div style="text-align:left;margin-bottom:10px;"><a class="back-btn" href="dashboard.html">← Back to Dashboard</a></div>
             <h1>Weekly Order <span style="background:#F9A825;color:#333;font-size:12px;padding:2px 8px;border-radius:4px;">STAGING</span></h1>
-            <div id="buildStamp" class="build-stamp">Build 20261104am</div>
+            <div id="buildStamp" class="build-stamp">Build 20261104an</div>
             <div class="header-controls">
                 <label for="locationSelect">Store:</label>
                 <select id="locationSelect"></select>
@@ -127,26 +129,32 @@
             <div class="panel">
                 <h2>Scaled recipe list</h2>
                 <p>Upload the weekly scaled-recipe PDF. You will see the raw purchase totals first. Cooked weights are not used. Ingredient matches save as you confirm them. The recipe totals are not applied until you approve.</p>
+                <div class="file-row">
                 <label class="file-pick" for="recipeFile">Choose PDF</label>
                 <input type="file" id="recipeFile" accept="application/pdf,.pdf">
-                <p id="recipeStatus" role="status" aria-live="polite"></p>
+                <p id="recipeStatus" class="upload-saved" role="status" aria-live="polite"></p>
+                </div>
             </div>
             <div class="panel" id="recipeEmpty"></div>
             <div class="panel" id="recipePanel" style="display:none;"></div>
             <div class="panel">
                 <h2>Plate list</h2>
                 <p>Upload the plate list PDF. Total Cook is one container per meal. Containers are bought by the pallet, not from BEK.</p>
+                <div class="file-row">
                 <label class="file-pick" for="plateFile">Choose plate list</label>
                 <input type="file" id="plateFile" accept="application/pdf,.pdf">
-                <p id="plateStatus" role="status" aria-live="polite"></p>
+                <p id="plateStatus" class="upload-saved" role="status" aria-live="polite"></p>
+                </div>
             </div>
             <div class="panel" id="platePanel" style="display:none;"></div>
             <div class="panel">
                 <h2>Cook list</h2>
                 <p>Optional. Upload the Colonnade cook list for exact (ea) counts. Cup and portion lines take a soufflé cup and lid. Muffins and chews take a 9 oz cup and lid.</p>
+                <div class="file-row">
                 <label class="file-pick" for="cookFile">Choose cook list</label>
                 <input type="file" id="cookFile" accept="application/pdf,.pdf">
-                <p id="cookStatus" role="status" aria-live="polite"></p>
+                <p id="cookStatus" class="upload-saved" role="status" aria-live="polite"></p>
+                </div>
             </div>
             <div class="panel" id="cookPanel" style="display:none;"></div>
         </div>
@@ -158,35 +166,38 @@
             <div class="panel">
                 <h2>BEK guide</h2>
                 <p>Upload a new order guide when items move or prices change. Review the difference, then approve.</p>
+                <div class="file-row">
+                <label class="file-pick" for="guideFile">Choose guide</label>
                 <input type="file" id="guideFile" accept=".xlsx">
+                </div>
             </div>
             <div class="panel" id="guidePanel" style="display:none;"></div>
             <div class="panel" id="standardsPanel"></div>
             <div class="panel" id="storePanel"></div>
         </div>
-        <footer class="build-stamp">Build 20261104am</footer>
+        <footer class="build-stamp">Build 20261104an</footer>
     </div>
-    <script src="zedops/catalog.js?v=20261104am"></script>
-    <script src="zedops/schema.js?v=20261104am"></script>
-    <script src="zedops/locations.js?v=20261104am"></script>
-    <script src="zedops/storage.js?v=20261104am"></script>
-    <script src="zedops/weekly-hidden.js?v=20261104am"></script>
-    <script src="zedops/xlsx.js?v=20261104am"></script>
-    <script src="zedops/pdf.js?v=20261104am"></script>
-    <script src="zedops/bek.js?v=20261104am"></script>
-    <script src="zedops/recipe-parse.js?v=20261104am"></script>
-    <script src="zedops/recipe-pdf.js?v=20261104am"></script>
-    <script src="zedops/order-math.js?v=20261104am"></script>
-    <script src="zedops/meal-supplies.js?v=20261104am"></script>
-    <script src="zedops/plate-parse.js?v=20261104am"></script>
-    <script src="zedops/cook-parse.js?v=20261104am"></script>
-    <script src="zedops/plate-pdf.js?v=20261104am"></script>
-    <script src="zedops/garnish.js?v=20261104am"></script>
+    <script src="zedops/catalog.js?v=20261104an"></script>
+    <script src="zedops/schema.js?v=20261104an"></script>
+    <script src="zedops/locations.js?v=20261104an"></script>
+    <script src="zedops/storage.js?v=20261104an"></script>
+    <script src="zedops/weekly-hidden.js?v=20261104an"></script>
+    <script src="zedops/xlsx.js?v=20261104an"></script>
+    <script src="zedops/pdf.js?v=20261104an"></script>
+    <script src="zedops/bek.js?v=20261104an"></script>
+    <script src="zedops/recipe-parse.js?v=20261104an"></script>
+    <script src="zedops/recipe-pdf.js?v=20261104an"></script>
+    <script src="zedops/order-math.js?v=20261104an"></script>
+    <script src="zedops/meal-supplies.js?v=20261104an"></script>
+    <script src="zedops/plate-parse.js?v=20261104an"></script>
+    <script src="zedops/cook-parse.js?v=20261104an"></script>
+    <script src="zedops/plate-pdf.js?v=20261104an"></script>
+    <script src="zedops/garnish.js?v=20261104an"></script>
     <script>
         if (window.pdfjsLib) {
             pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
         }
     </script>
-    <script src="zedops/weekly-page.js?v=20261104am"></script>
+    <script src="zedops/weekly-page.js?v=20261104an"></script>
 </body>
 </html>

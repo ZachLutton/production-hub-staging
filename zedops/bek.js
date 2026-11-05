@@ -306,21 +306,30 @@
     return addDays(due, 8);
   }
 
-  // Earliest cook date whose order day (cook minus 7 days) is today or later.
-  // Wednesday 2026-11-04 is order day for cook 2026-11-11, so the page stays there through that day.
+  // Calendar fallback when no week has been worked yet.
+  // The cook date is eight days after this week's count Tuesday.
+  // Thursday Nov 5, 2026 is still the Nov 11 cook (counts were due Nov 3).
+  // It does not move to Nov 18 until the next count Tuesday, Nov 10.
   function openCookDate(ymd) {
-    var cook = ymd;
-    var guard = 0;
-    while (weekdayOf(cook) !== 3 && guard < 8) {
-      cook = addDays(cook, 1);
-      guard++;
-    }
-    guard = 0;
-    while (addDays(cook, -7) < ymd && guard < 8) {
-      cook = addDays(cook, 7);
-      guard++;
-    }
-    return cook;
+    var tuesday = addDays(ymd, 2 - weekdayOf(ymd));
+    return addDays(tuesday, 8);
+  }
+
+  // The week on screen. A saved cook week that has not been submitted wins over the calendar,
+  // so a refresh cannot skip 11/11 just because the order day has passed.
+  function workingCookDate(today, saved) {
+    saved = saved || {};
+    var placed = {};
+    (saved.placed || []).forEach(function (day) { placed[String(day)] = true; });
+    var weeks = [];
+    (saved.weeks || []).forEach(function (day) {
+      var cook = cookKeyFromLegacyWeek(day);
+      if (weekdayOf(cook) !== 3 || placed[cook]) return;
+      if (weeks.indexOf(cook) === -1) weeks.push(cook);
+    });
+    weeks.sort();
+    if (weeks.length) return weeks[weeks.length - 1];
+    return openCookDate(today);
   }
 
   function formatChicagoTime(iso) {
@@ -333,13 +342,29 @@
     }).format(date);
   }
 
+  function formatChicagoStamp(iso) {
+    var date = new Date(iso);
+    if (!isFinite(date.getTime())) return '';
+    var parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Chicago',
+      month: 'short', day: 'numeric', year: 'numeric',
+      hour: 'numeric', minute: '2-digit', hour12: true
+    }).formatToParts(date);
+    function get(type) {
+      for (var i = 0; i < parts.length; i++) if (parts[i].type === type) return parts[i].value;
+      return '';
+    }
+    if (!get('year')) return '';
+    return get('month') + ' ' + get('day') + ', ' + get('year') + ' ' + get('hour') + ':' + get('minute') + ' ' + get('dayPeriod') + ' CT';
+  }
+
   function savedUploadLine(fileName, detail, approvedAt) {
     var bits = [];
     if (fileName) bits.push(String(fileName));
     if (detail) bits.push(String(detail));
-    var when = formatChicagoTime(approvedAt);
-    bits.push(when ? 'approved ' + when : 'approved');
-    return 'Saved: ' + bits.join(' · ');
+    var when = formatChicagoStamp(approvedAt);
+    bits.push(when ? 'uploaded ' + when : 'uploaded');
+    return bits.join(' · ');
   }
 
   // Any picked day snaps to a Wednesday cook date. A Wednesday is that cook date.
@@ -711,7 +736,9 @@
     formatCycle: formatCycle,
     cycleCookForDay: cycleCookForDay,
     openCookDate: openCookDate,
+    workingCookDate: workingCookDate,
     formatChicagoTime: formatChicagoTime,
+    formatChicagoStamp: formatChicagoStamp,
     savedUploadLine: savedUploadLine,
     selectCookDate: selectCookDate,
     cookKeyFromLegacyWeek: cookKeyFromLegacyWeek,

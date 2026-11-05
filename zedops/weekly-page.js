@@ -839,6 +839,13 @@
     if (dishes.length) detail += ' · ' + dishes.length + ' dishes · cups and lids ' + summary.cup;
     return ZedBek.savedUploadLine(plate.fileName, detail, plate.approvedAt);
   }
+  function savedCookText() {
+    var cook = state.cook;
+    if (!cook || !cookComponents(cook).length && !cook.fileName) return '';
+    var count = cookComponents(cook).length;
+    var detail = count ? count + ' components' : '';
+    return ZedBek.savedUploadLine(cook.fileName, detail, cook.approvedAt);
+  }
   function renderSavedUploads() {
     if (!state.recipeBusy && !state.pendingRecipe) {
       var recipeStatus = document.getElementById('recipeStatus');
@@ -847,6 +854,10 @@
     if (!state.plateBusy && !state.pendingPlate) {
       var plateStatus = document.getElementById('plateStatus');
       if (plateStatus) plateStatus.textContent = savedPlateText();
+    }
+    if (!state.cookBusy && !state.pendingCook) {
+      var cookStatus = document.getElementById('cookStatus');
+      if (cookStatus) cookStatus.textContent = savedCookText();
     }
   }
 
@@ -887,7 +898,10 @@
       ? '<button type="button" id="approveCook">Approve cook list</button> <button type="button" id="discardCook">Discard</button>'
       : '';
     panel.style.display = 'block';
-    panel.innerHTML = '<h2>Cook list ' + esc(cook.cookDate || '') + '</h2><p>' + cookCupSummary(cook) + '</p>' +
+    var savedLine = !state.pendingCook && (cook.fileName || cook.approvedAt)
+      ? '<p class="upload-saved">' + esc(ZedBek.savedUploadLine(cook.fileName, '', cook.approvedAt)) + '</p>'
+      : '';
+    panel.innerHTML = '<h2>Cook list ' + esc(cook.cookDate || '') + '</h2>' + savedLine + '<p>' + cookCupSummary(cook) + '</p>' +
       '<table class="order-table"><thead><tr><th>Component</th><th>Count</th><th>Cup</th><th>Catalog item</th></tr></thead><tbody>' +
       body + '</tbody></table>' + approve;
     var approveBtn = document.getElementById('approveCook');
@@ -2100,6 +2114,7 @@
     var button = event.target.closest && event.target.closest('#submitOrder');
     if (!button) return;
     if (!confirmOrder()) return;
+    rememberPlaced(state.weekKey);
     ZedPdf.downloadPdf('bek-order-' + state.weekKey + '.pdf', ZedPdf.buildPdf({ title: 'Weekly BEK order', lines: bekOrderLines() }));
     setPageStatus('Order submitted. The BEK PDF downloaded.');
   });
@@ -2206,6 +2221,51 @@
     ZedPdf.downloadPdf('bek-special-order-' + state.weekKey + '.pdf', ZedPdf.buildPdf({ title: 'Special order — send direct to the BEK rep', lines: lines }));
   });
 
+  function rememberPlaced(week) {
+    var list = [];
+    try { list = JSON.parse(localStorage.getItem('zedops_orders_placed') || '[]'); } catch (e) { list = []; }
+    if (!Array.isArray(list)) list = [];
+    if (week && list.indexOf(week) === -1) list.push(week);
+    try { localStorage.setItem('zedops_orders_placed', JSON.stringify(list)); } catch (e2) {}
+    return list;
+  }
+  function placedWeeks() {
+    try {
+      var list = JSON.parse(localStorage.getItem('zedops_orders_placed') || '[]');
+      return Array.isArray(list) ? list : [];
+    } catch (e) { return []; }
+  }
+  function chooseWorkingWeek() {
+    var today = ZedBek.chicagoParts(new Date()).ymd;
+    function datedWeeks(node, skip) {
+      var found = [];
+      Object.keys(node || {}).forEach(function (key) {
+        if (skip && skip[key]) return;
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) return;
+        var value = node[key];
+        if (!value || typeof value !== 'object' || !Object.keys(value).length) return;
+        found.push(key);
+      });
+      return found;
+    }
+    return Promise.all([
+      db.ref(ZedStorage.PATHS.recipe).once('value'),
+      db.ref(ZedStorage.PATHS.plate).once('value'),
+      db.ref(ZedStorage.PATHS.cook).once('value'),
+      db.ref(ZedStorage.PATHS.counts).once('value')
+    ]).then(function (snaps) {
+      var weeks = [];
+      weeks = weeks.concat(datedWeeks(snaps[0].val()));
+      weeks = weeks.concat(datedWeeks(snaps[1].val(), { pack: true, link: true, pieces: true, case: true }));
+      weeks = weeks.concat(datedWeeks(snaps[2].val(), { map: true }));
+      Object.keys(snaps[3].val() || {}).forEach(function (loc) {
+        weeks = weeks.concat(datedWeeks(snaps[3].val()[loc]));
+      });
+      state.weekKey = ZedBek.workingCookDate(today, { weeks: weeks, placed: placedWeeks() });
+    }).catch(function () {
+      state.weekKey = ZedBek.openCookDate(today);
+    });
+  }
   function showApp(role) {
     state.role = role || 'team';
     document.getElementById('login-screen').style.display = 'none';
@@ -2231,7 +2291,10 @@
       state.catalog = ZedSchema.migrateCatalog({ schemaVersion: raw.schemaVersion || 1, items: raw.items || {}, shelf: raw.shelf || {} });
       state.locationDoc = snaps[1].val() || {};
       fillStores();
-      return seedRimPars().then(function () { return reload(); });
+      return chooseWorkingWeek().then(function () {
+        document.getElementById('weekSelect').value = state.weekKey;
+        return seedRimPars().then(function () { return reload(); });
+      });
     }).catch(showError);
   }
 
