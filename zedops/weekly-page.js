@@ -2223,10 +2223,15 @@
       sections: sections
     }));
   }
+  function sheetRowsNow(loc) {
+    if (state.rows && state.rows.length) return state.rows;
+    if (!loc || ZedLocations.listSourceOf(loc) === 'catalog') return catalogSheetRows();
+    return [];
+  }
   function downloadOnHandPdf() {
     var loc = currentStore();
     if (loc) state.locationId = loc.id;
-    var rows = state.rows && state.rows.length ? state.rows : catalogSheetRows();
+    var rows = sheetRowsNow(loc);
     if (rows.length) {
       if (!state.rows || !state.rows.length) state.rows = rows;
       emitOnHandPdf(loc, rows);
@@ -2237,7 +2242,7 @@
     ready.then(function () {
       loc = currentStore();
       if (loc) state.locationId = loc.id;
-      var loaded = state.rows && state.rows.length ? state.rows : catalogSheetRows();
+      var loaded = sheetRowsNow(loc);
       if (loaded.length) {
         state.rows = state.rows && state.rows.length ? state.rows : loaded;
         emitOnHandPdf(loc, loaded);
