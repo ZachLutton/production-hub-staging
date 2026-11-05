@@ -51,12 +51,20 @@
     });
   }
   function stores() {
+    var list = ZedLocations.listLocations(state.locationDoc);
+    if (list.length) return list;
+    var defaults = ZedLocations.defaultLocations();
+    defaults.forEach(function (loc) {
+      if (!state.locationDoc[loc.id]) state.locationDoc[loc.id] = loc;
+    });
     return ZedLocations.listLocations(state.locationDoc);
   }
   function currentStore() {
     var list = stores();
-    for (var i = 0; i < list.length; i++) if (list[i].id === state.locationId) return list[i];
-    return list[0] || null;
+    var select = document.getElementById('locationSelect');
+    var id = (select && select.value) || state.locationId;
+    for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
+    return list.filter(function (loc) { return loc.isProductionHub; })[0] || list[0] || null;
   }
   function markSaved() {
     var now = new Date();
@@ -2182,16 +2190,73 @@
     });
     return groups;
   }
-  function downloadOnHandPdf() {
-    var loc = currentStore();
-    var cook = state.weekKey || '';
-    var place = loc ? loc.name : 'Store';
-    var slug = loc && loc.id ? String(loc.id).toLowerCase().replace(/[^a-z0-9]+/g, '-') : 'store';
+  function catalogSheetRows() {
+    var rows = [];
+    if (!state.catalog) return rows;
+    ['guide', 'special', 'vendorChecks'].forEach(function (shelf) {
+      ZedBek.orderedItems(state.catalog, shelf).forEach(function (item) {
+        if (!item) return;
+        rows.push({ id: item.id, item: item, legacyKey: '', section: item.label || '', source: shelf });
+      });
+    });
+    return rows;
+  }
+  function emitOnHandPdf(loc, rows) {
+    var place = loc && loc.name ? loc.name : 'Colonnade';
+    var cook = state.weekKey || ((document.getElementById('weekSelect') || {}).value) || '';
+    var slug = loc && loc.id ? String(loc.id).toLowerCase().replace(/[^a-z0-9]+/g, '-') : 'colonnade';
+    var previous = state.rows;
+    state.rows = rows;
+    var sections;
+    try {
+      sections = onHandSections(loc);
+    } finally {
+      if (previous && previous.length) state.rows = previous;
+    }
+    if (!sections.length) {
+      setPageStatus('The on-hand sheet for ' + place + ' has not loaded yet. Wait for the items, then try again.', true);
+      return;
+    }
     ZedPdf.downloadPdf('zedrics-onhand-' + slug + '-' + cook + '.pdf', ZedPdf.buildSheetPdf({
       title: "Zedric's On-Hand Inventory — " + place + " — week of " + cook,
       generated: 'Generated ' + chicagoClock(new Date()) + ' CT',
-      sections: onHandSections(loc)
+      sections: sections
     }));
+  }
+  function downloadOnHandPdf() {
+    var loc = currentStore();
+    if (loc) state.locationId = loc.id;
+    var rows = state.rows && state.rows.length ? state.rows : catalogSheetRows();
+    if (rows.length) {
+      if (!state.rows || !state.rows.length) state.rows = rows;
+      emitOnHandPdf(loc, rows);
+      return;
+    }
+    var ready = state.boot || Promise.resolve();
+    setPageStatus('Loading the on-hand sheet…');
+    ready.then(function () {
+      loc = currentStore();
+      if (loc) state.locationId = loc.id;
+      var loaded = state.rows && state.rows.length ? state.rows : catalogSheetRows();
+      if (loaded.length) {
+        state.rows = state.rows && state.rows.length ? state.rows : loaded;
+        emitOnHandPdf(loc, loaded);
+        return;
+      }
+      if (!loc) {
+        setPageStatus('Pick a store, then download the on-hand PDF.', true);
+        return;
+      }
+      return rowsForStore(loc).then(function (fresh) {
+        state.rows = fresh && fresh.length ? fresh : catalogSheetRows();
+        return loadSupport(loc);
+      }).then(function () {
+        render();
+        emitOnHandPdf(loc, state.rows);
+      });
+    }).catch(function (err) {
+      setPageStatus((err && err.message) || 'Could not build the on-hand PDF.', true);
+    });
   }
   document.getElementById('pdfOnHand').addEventListener('click', function () {
     try {
@@ -2287,7 +2352,7 @@
     document.getElementById('roleBadge').textContent = state.role === 'admin' ? 'Admin' : 'Team';
     state.weekKey = ZedBek.openCookDate(ZedBek.chicagoParts(new Date()).ymd);
     document.getElementById('weekSelect').value = state.weekKey;
-    ZedBek.loadSeed().then(function (seed) { return ZedBek.prepareDatabase(db, seed); }).then(function (moves) {
+    state.boot = ZedBek.loadSeed().then(function (seed) { return ZedBek.prepareDatabase(db, seed); }).then(function (moves) {
       if (moves && moves.length) {
         var shown = moves.slice(0, 4).map(function (move) {
           return move.kind + ' ' + move.from + ' is now cook date ' + move.to;
