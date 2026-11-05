@@ -405,9 +405,23 @@
     return result;
   }
 
+  function shortUnit(unit, quantity) {
+    var key = canonUnit(unit);
+    if (key === 'case' || key === 'cs') return 'cs';
+    if (key === 'ea') return 'ea';
+    var one = Math.abs(Number(quantity) - 1) < 1e-9;
+    if (key === 'jar') return one ? 'jar' : 'jars';
+    if (key === 'can') return one ? 'can' : 'cans';
+    if (key === 'carton') return one ? 'carton' : 'cartons';
+    if (key === 'container') return one ? 'container' : 'containers';
+    var label = unitLabel(unit);
+    if (label === 'each') return 'ea';
+    return label || '';
+  }
+
   function needText(need) {
     if (!need) return '';
-    var text = roundQty(need.quantity) + (need.unit ? ' ' + unitLabel(need.unit) : '');
+    var text = roundQty(need.quantity) + (need.unit ? ' ' + shortUnit(need.unit, need.quantity) : '');
     if (need.convertedQuantity != null && need.convertedUnit) {
       var shownUnit = need.convertedUnit;
       if (shownUnit === 'container' && Math.abs(Number(need.convertedQuantity) - 1) >= 0.05) shownUnit = 'containers';
@@ -1095,6 +1109,7 @@
     casesToOrder: casesToOrder,
     needInCountUnit: needInCountUnit,
     needText: needText,
+    shortUnit: shortUnit,
     piecesPerCase: piecesPerCase,
     piecesInCase: piecesInCase,
     isCaseCountedPackaging: isCaseCountedPackaging,

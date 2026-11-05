@@ -245,8 +245,8 @@ test('the count week is the Tuesday it is due, in Chicago, and prices wait for t
   assert.equal(page.indexOf('id="recipeTools"') < page.indexOf('id="storeView"'), true);
   assert.equal(page.indexOf('id="orderSummary"') < page.indexOf('id="storeView"'), true);
   assert.equal(page.indexOf('id="storeView"') < page.indexOf('id="adminTools"'), true);
-  assert.equal(page.includes('Build 20261104an'), true);
-  assert.equal(page.includes('weekly-page.js?v=20261104an'), true);
+  assert.equal(page.includes('Build 20261104ao'), true);
+  assert.equal(page.includes('weekly-page.js?v=20261104ao'), true);
   assert.equal(page.includes('id="pdfOnHand"'), true);
   assert.equal(page.includes('button:disabled'), true);
   assert.equal(page.includes('id="plateFile"'), true);
@@ -323,8 +323,8 @@ test('a downloaded PDF is a real PDF and a spreadsheet keeps a leading zero', as
     sections: [{
       title: 'Walk-in Cooler',
       rows: [
-        { number: '028201', name: 'Juice Lemon', unit: 'gallon', onHand: '', entered: '' },
-        { number: '171985', name: 'Milk 2% Gal', unit: 'gallon', onHand: '0', entered: 'Ada · Nov 4, 1:00 PM CT' }
+        { number: '028201', name: 'Juice Lemon', unit: 'gal', onHand: '', entered: '' },
+        { number: '171985', name: 'Milk 2% Gal', unit: 'gal', onHand: '0', entered: 'Ada · Nov 4, 1:00 PM CT' }
       ]
     }]
   })).toString('latin1');
@@ -336,9 +336,10 @@ test('a downloaded PDF is a real PDF and a spreadsheet keeps a leading zero', as
   assert.equal(onHandPdfBytes.includes('Juice Lemon'), true);
   assert.equal(onHandPdfBytes.includes('Last entered'), true);
   assert.equal(onHandPdfBytes.includes('not counted'), false);
-  assert.equal(onHandPdfBytes.includes('(0) Tj'), true);
+  assert.equal(onHandPdfBytes.includes('(0 gal) Tj'), true);
+  assert.equal(onHandPdfBytes.includes('(gal 0) Tj'), false);
   const lemon = onHandPdfBytes.slice(onHandPdfBytes.indexOf('Juice Lemon'), onHandPdfBytes.indexOf('171985'));
-  assert.equal(lemon.includes('(0) Tj'), false);
+  assert.equal(lemon.includes('(gal) Tj'), false);
 
   const shared = '<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><si><t>Item #</t></si><si><t>Item Name</t></si><si><t>Pack / Size</t></si><si><t>Price</t></si><si><t>Label Name</t></si><si><t>028201</t></si><si><t>Juice Lemon</t></si><si><t>6 / .5 GAL</t></si><si><t>Walk-in Cooler</t></si></sst>';
   const sheet = '<worksheet><sheetData><row><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c><c r="C1" t="s"><v>2</v></c><c r="D1" t="s"><v>3</v></c><c r="E1" t="s"><v>4</v></c></row><row><c r="A2" t="s"><v>5</v></c><c r="B2" t="s"><v>6</v></c><c r="C2" t="s"><v>7</v></c><c r="D2"><v>10.24</v></c><c r="E2" t="s"><v>8</v></c></row></sheetData></worksheet>';

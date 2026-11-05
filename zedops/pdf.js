@@ -120,6 +120,16 @@
     return lines;
   }
 
+  // "12.5 lb", never "lb 12.5". A blank count stays blank, with no unit hanging on it.
+  function amountThenUnit(amount, unit) {
+    if (amount == null || amount === '') return '';
+    var qty = String(amount);
+    var word = String(unit || '').trim();
+    if (!word) return qty;
+    if (qty.slice(-word.length) === word) return qty;
+    return qty + ' ' + word;
+  }
+
   // Letter sheet with an orange header, section bands, and one row per item.
   function buildSheetPdf(doc) {
     var title = String((doc && doc.title) || "Zedric's On-Hand Inventory");
@@ -128,9 +138,8 @@
     var columns = [
       { key: 'number', label: 'BEK #', x: 36 },
       { key: 'name', label: 'Item', x: 100 },
-      { key: 'unit', label: 'Count unit', x: 330 },
-      { key: 'onHand', label: 'On hand', x: 408 },
-      { key: 'entered', label: 'Last entered', x: 468 }
+      { key: 'onHand', label: 'On hand', x: 340 },
+      { key: 'entered', label: 'Last entered', x: 450 }
     ];
     var blocks = [];
     sections.forEach(function (section) {
@@ -143,8 +152,7 @@
           cells: {
             number: row.number || '',
             name: nameLines,
-            unit: row.unit || '',
-            onHand: row.onHand == null ? '' : String(row.onHand),
+            onHand: amountThenUnit(row.onHand, row.unit),
             entered: row.entered || ''
           }
         });
@@ -206,9 +214,8 @@
         block.lines.forEach(function (line, index) {
           cmds.push('BT /F1 9 Tf 1 0 0 1 ' + columns[1].x + ' ' + (y - index * 12) + ' Tm (' + pdfString(line) + ') Tj ET');
         });
-        cmds.push('BT /F1 9 Tf 1 0 0 1 ' + columns[2].x + ' ' + y + ' Tm (' + pdfString(block.cells.unit) + ') Tj ET');
-        cmds.push('BT /F1 9 Tf 1 0 0 1 ' + columns[3].x + ' ' + y + ' Tm (' + pdfString(block.cells.onHand) + ') Tj ET');
-        cmds.push('BT /F1 8 Tf 1 0 0 1 ' + columns[4].x + ' ' + y + ' Tm (' + pdfString(block.cells.entered) + ') Tj ET');
+        cmds.push('BT /F1 9 Tf 1 0 0 1 ' + columns[2].x + ' ' + y + ' Tm (' + pdfString(block.cells.onHand) + ') Tj ET');
+        cmds.push('BT /F1 8 Tf 1 0 0 1 ' + columns[3].x + ' ' + y + ' Tm (' + pdfString(block.cells.entered) + ') Tj ET');
         y -= 8 + Math.max(1, block.lines.length) * 12;
       });
       cmds.push('0.4 0.4 0.4 rg');

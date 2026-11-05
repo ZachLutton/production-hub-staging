@@ -2153,6 +2153,11 @@
     }
     return { amount: ZedBek.formatQty(raw), entered: '' };
   }
+  function sheetUnit(item, amount) {
+    var word = ZedOrder.countWord(item);
+    if (ZedOrder.canonUnit(ZedOrder.resolvedCountUnit(item)) === 'case') word = 'cs';
+    return ZedOrder.shortUnit(word, amount);
+  }
   function onHandSections(loc) {
     var groups = [];
     var index = {};
@@ -2166,11 +2171,10 @@
       }
       var item = row.item || {};
       var counted = countRecord(row, loc);
-      var unit = ZedOrder.unitLabel(ZedOrder.resolvedCountUnit(item)) || item.countUnit || '';
       groups[index[title]].rows.push({
         number: item.itemNumber || '',
         name: item.name || '',
-        unit: unit,
+        unit: counted.amount ? sheetUnit(item, counted.amount) : '',
         onHand: counted.amount,
         entered: counted.entered
       });
@@ -2199,7 +2203,9 @@
         last = row.section;
       }
       var item = row.item || {};
-      lines.push((item.itemNumber || '—') + '  ' + (item.name || '') + '  ' + (item.pack || '') + '  On hand ________  Order ________');
+      var counted = countRecord(row, loc);
+      var handText = counted.amount ? counted.amount + ' ' + sheetUnit(item, counted.amount) : '________';
+      lines.push((item.itemNumber || '—') + '  ' + (item.name || '') + '  ' + (item.pack || '') + '  On hand ' + handText + '  Order ________');
     });
     ZedPdf.downloadPdf('paper-order-guide-' + (loc ? loc.id : 'store') + '.pdf', ZedPdf.buildPdf({
       title: 'Paper order guide — ' + (loc ? loc.name : ''),
@@ -2214,9 +2220,10 @@
     var lines = ['Send this list direct to the BEK rep.', ZedBek.formatCycle(state.weekKey), 'Food on this list uses the approved scaled recipe, not the BEK par.', ''];
     state.rows.filter(function (row) { return row.source === 'special'; }).forEach(function (row) {
       var hand = handOf(row);
+      var handText = hand == null ? 'not counted' : ZedBek.formatQty(hand) + ' ' + sheetUnit(row.item, hand);
       lines.push((row.item.temporary ? '[TEMPORARY] ' : '') + row.item.name + (row.item.itemNumber ? ' #' + row.item.itemNumber : ' (no BEK #)') +
         ' | ' + needLabel(needFor(row)) + ' | order ' + orderLabel(orderFor(row)) +
-        ' | on hand ' + (hand == null ? 'not counted' : hand + ' ' + (row.item.countUnit || '')));
+        ' | on hand ' + handText);
     });
     ZedPdf.downloadPdf('bek-special-order-' + state.weekKey + '.pdf', ZedPdf.buildPdf({ title: 'Special order — send direct to the BEK rep', lines: lines }));
   });
