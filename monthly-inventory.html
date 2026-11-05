@@ -1,0 +1,2120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zedric's Monthly Inventory (Staging)</title>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="firebase-config.js"></script>
+    <script src="inventory-store.js"></script>
+    <script src="staging-boot.js"></script>
+    <script src="hub-auth.js?v=2"></script>
+    <script src="zedops/price-overlay.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            /* Prevent iPad/iPhone pull-to-refresh while counting */
+            overscroll-behavior-y: contain;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+            padding: 10px;
+        }
+
+        .header {
+            background-color: #2d5016;
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .header-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+            align-items: center;
+            margin-top: 15px;
+        }
+
+        .header-controls label {
+            font-weight: 600;
+        }
+
+        .header-controls input[type="month"] {
+            padding: 10px;
+            font-size: 16px;
+            border: none;
+            border-radius: 4px;
+            height: 44px;
+        }
+
+        .header-controls button {
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #e8f5e0;
+            border: 2px solid #2d5016;
+            color: #2d5016;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            min-height: 44px;
+        }
+
+        .header-controls button:hover {
+            background-color: #2d5016;
+            color: #e8f5e0;
+        }
+
+        .note {
+            font-size: 14px;
+            margin-top: 10px;
+            font-style: italic;
+        }
+
+        .section {
+            margin-bottom: 20px;
+            background-color: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .section-header {
+            background-color: #e8f5e0;
+            padding: 15px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+            font-weight: 600;
+            border-left: 5px solid #2d5016;
+            min-height: 50px;
+        }
+
+        .section-header:hover {
+            background-color: #d4ead0;
+        }
+
+        .section-header-info {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .section-header-title {
+            font-size: 18px;
+            color: #2d5016;
+        }
+
+        .section-header-meta {
+            font-size: 13px;
+            color: #666;
+        }
+
+        .section-toggle {
+            font-size: 20px;
+            color: #2d5016;
+        }
+
+        .section-content {
+            display: none;
+        }
+
+        .section-content.expanded {
+            display: block;
+        }
+
+        .section-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .section-table thead {
+            background-color: #f9f9f9;
+            position: sticky;
+            top: 0;
+        }
+
+        .section-table th {
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid #2d5016;
+            font-size: 14px;
+        }
+
+        .section-table td {
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+            font-size: 14px;
+        }
+
+        .section-table tbody tr:nth-child(even) {
+            background-color: #fafafa;
+        }
+
+        .section-table tbody tr:hover {
+            background-color: #f0f0f0;
+        }
+
+        .item-number {
+            color: #999;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .item-name {
+            font-weight: 600;
+            color: #2d5016;
+        }
+
+        .item-brand {
+            font-size: 12px;
+            color: #666;
+        }
+
+        input[type="number"] {
+            width: 100%;
+            padding: 8px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+            min-height: 44px;
+        }
+
+        input[type="number"]:focus {
+            outline: none;
+            border-color: #2d5016;
+            background-color: #fffef5;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 8px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+            min-height: 44px;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #2d5016;
+            background-color: #fffef5;
+        }
+
+        .total {
+            font-weight: 600;
+            color: #2d5016;
+            text-align: right;
+        }
+
+        .section-total-row {
+            background-color: #e8f5e0;
+            font-weight: 600;
+        }
+
+        .delete-btn {
+            background-color: #ff6b6b;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            min-width: 44px;
+            min-height: 44px;
+            font-size: 18px;
+        }
+
+        .delete-btn:hover {
+            background-color: #d63031;
+        }
+
+        .add-btn {
+            background-color: #2d5016;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 16px;
+            min-height: 44px;
+            margin: 15px;
+        }
+
+        .add-btn:hover {
+            background-color: #1f3810;
+        }
+
+        .edit-price-btn {
+            background-color: transparent;
+            color: #888;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 2px 6px;
+            font-size: 12px;
+            cursor: pointer;
+            min-width: 26px;
+            margin-left: 4px;
+            vertical-align: middle;
+        }
+        .edit-price-btn:hover {
+            background-color: #e8f5e0;
+            color: #2d5016;
+            border-color: #2d5016;
+        }
+        @media print {
+            .edit-price-btn { display: none !important; }
+        }
+
+        .grand-total-section {
+            background-color: #2d5016;
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+            text-align: right;
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        @media print {
+            body {
+                padding: 0;
+            }
+
+            .header-controls button,
+            .add-btn,
+            .delete-btn,
+            .print-button,
+            .clear-button {
+                display: none !important;
+            }
+
+            th:last-child,
+            td:last-child {
+                display: none !important;
+            }
+
+            input[type="number"],
+            input[type="text"] {
+                border: none;
+                padding: 0;
+                background: transparent;
+            }
+
+            .section {
+                page-break-inside: avoid;
+            }
+
+            .section-header {
+                background-color: #e8f5e0;
+                border: 1px solid #2d5016;
+            }
+
+            .section-table {
+                font-size: 12px;
+            }
+
+            .section-table td,
+            .section-table th {
+                padding: 8px;
+            }
+        }
+
+        .meals-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .meals-table thead {
+            background-color: #f9f9f9;
+        }
+
+        .meals-table th {
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid #2d5016;
+            font-size: 14px;
+        }
+
+        .meals-table td {
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+            font-size: 14px;
+        }
+
+        .meals-table tbody tr:nth-child(even) {
+            background-color: #fafafa;
+        }
+
+        .meals-table tbody tr:hover {
+            background-color: #f0f0f0;
+        }
+
+        .meal-input {
+            flex: 1;
+            padding: 8px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+            min-height: 44px;
+        }
+
+        .meal-input:focus {
+            outline: none;
+            border-color: #2d5016;
+            background-color: #fffef5;
+        }
+
+        .align-center {
+            text-align: center;
+        }
+
+        /* ===== LOGIN SCREEN ===== */
+        #login-screen {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: #2d5016;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+        .login-box {
+            background: white;
+            border-radius: 12px;
+            padding: 40px 30px;
+            text-align: center;
+            width: 320px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        .login-box h1 {
+            color: #2d5016;
+            font-size: 22px;
+            margin-bottom: 6px;
+        }
+        .login-box p {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 24px;
+        }
+        .pin-input {
+            width: 180px;
+            font-size: 32px;
+            text-align: center;
+            letter-spacing: 12px;
+            padding: 12px;
+            border: 2px solid #ccc;
+            border-radius: 8px;
+            outline: none;
+        }
+        .pin-input:focus {
+            border-color: #2d5016;
+        }
+        .pin-error {
+            color: #e74c3c;
+            font-size: 14px;
+            margin-top: 12px;
+            min-height: 20px;
+        }
+        #main-content {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <!-- LOGIN SCREEN -->
+    <div id="login-screen">
+        <div class="login-box">
+            <h1>Zedric's Inventory</h1>
+            <p>Enter team PIN to continue</p>
+            <input type="password" id="pin-input" class="pin-input" maxlength="4" inputmode="numeric" pattern="[0-9]*" autofocus>
+            <div class="pin-error" id="pin-error"></div>
+        </div>
+    </div>
+
+    <!-- MAIN CONTENT (hidden until login) -->
+    <div id="main-content">
+    <div class="header">
+        <div style="text-align:left;margin-bottom:14px;">
+            <span style="display:inline-block;background:#F9A825;color:#333;font-size:13px;font-weight:700;padding:8px 14px;border-radius:6px;">STAGING copy. Counts save under staging_inventory. The live monthly inventory is not changed.</span>
+        </div>
+        <div style="text-align:left;margin-bottom:14px;">
+            <a href="dashboard.html" style="display:inline-block;background:white;color:#2d5016;text-decoration:none;font-size:15px;font-weight:700;padding:10px 18px;border-radius:6px;box-shadow:0 2px 6px rgba(0,0,0,0.2);">← Back to Dashboard</a>
+        </div>
+        <h1>Zedric's Monthly Inventory <span style="background:#F9A825;color:#333;font-size:12px;padding:2px 8px;border-radius:4px;">STAGING</span></h1>
+        <div class="header-controls">
+            <label for="locationSelect">Location:</label>
+            <select id="locationSelect" style="padding:10px;font-size:16px;border:none;border-radius:4px;height:44px;font-weight:600;">
+                <option value="main">Main</option>
+                <option value="rim">The Rim</option>
+            </select>
+            <label for="monthSelect">Month & Year:</label>
+            <input type="month" id="monthSelect">
+            <button class="print-button" onclick="window.print()">Print</button>
+            <button class="clear-button" onclick="clearAll()">Clear All</button>
+        </div>
+        <div class="note">Prices updated from BEK Order Guide — September 2026</div>
+        <div id="locationBadge" style="margin-top:8px;font-size:16px;font-weight:700;background:rgba(255,255,255,0.15);display:inline-block;padding:4px 14px;border-radius:20px;">Main Location</div>
+        <div id="syncStatus" style="margin-top:10px;font-size:14px;"><span style="color:#ff6b6b;">&#9679;</span> Connecting...</div>
+        <div id="lastSaved" style="margin-top:4px;font-size:13px;color:#aaa;">No changes yet</div>
+    </div>
+
+    <div id="inventory-container"></div>
+
+    <div class="grand-total-section">
+        GRAND TOTAL: $<span id="grandTotal">0.00</span>
+    </div>
+    </div><!-- end main-content -->
+
+    <script>
+        const INVENTORY_DATA = {
+            'Walk-in Cooler': [
+                { itemNumber: '106810', name: 'Potato Mashed Red Skin RFRG', brand: 'Simply Potatoes', pack: '4 / 6 LB', price: 35.33 },
+                { itemNumber: '171080', name: 'Potato Diced Sthrn Sty 5/8in', brand: 'Ellington Farms', pack: '2 / 10 LB', price: 28.84 },
+                { itemNumber: '104973', name: 'Cheese Cheddar Jack Shrd Fancy', brand: 'Masters Gallery', pack: '4 / 5 LB', price: 56.29 },
+                { itemNumber: '209928', name: 'Cheese Gruyere Shredded', brand: 'Di Santino', pack: '2 / 5 LB', price: 73.96 },
+                { itemNumber: '158418', name: 'Cheese Parm Grated Style', brand: 'Bellacibo', pack: '2 / 5 LB', price: 39.76 },
+                { itemNumber: '152510', name: 'Cheese Feta Crumbles', brand: 'Kronos', pack: '2 / 5 LB', price: 44.58 },
+                { itemNumber: '747140', name: 'Cheese Mozzarella Shred', brand: 'Stella', pack: '6 / 5 LB', price: 87.45 },
+                { itemNumber: '171985', name: 'Milk Lowfat 1% Gallon', brand: 'Oak Farms', pack: '4 / 1 GAL', price: 26.98 },
+                { itemNumber: '483810', name: 'Sauce Tzatziki For Gyros', brand: 'Tzatziki', pack: '4 / 0.5 GAL', price: 45.40 },
+                { itemNumber: '669027', name: 'Sour Cream Cultured', brand: 'Daisy Brands', pack: '4 / 5 LB', price: 30.88 },
+                { itemNumber: '393413', name: 'Egg White Liquid', brand: 'Papettis', pack: '15 / 2 LB', price: 78.00 },
+                { itemNumber: '120564', name: 'Egg Liquid Ez Breakfast Blend', brand: 'Papettis', pack: '2 / 20 LB', price: 77.36 },
+                { itemNumber: '131513', name: 'Bacon Topping Natural', brand: 'Hormel', pack: '2 / 5 LB', price: 87.16 },
+                { itemNumber: '798099', name: 'Milk Almond Silk Vanilla', brand: 'White Wave', pack: '6 / 64 OZ', price: 30.18 },
+                { itemNumber: '800401', name: 'Chocolate Chip Semi Sweet', brand: 'Hershey', pack: '12 / 12 OZ', price: 59.39 },
+                { itemNumber: '811052', name: 'Base Chicken All Natural', brand: 'Minor\'s', pack: '6 / 1 LB', price: 73.29 },
+                { itemNumber: '783276', name: 'Anchovy Paste Tube', brand: 'Roland', pack: '12 / 2 OZ', price: 35.33 },
+                { itemNumber: '028201', name: 'Juice Lemon Fresh Squeezed', brand: 'Markon Ready Set Serve', pack: '6 / .5 GAL', price: 10.10 },
+                { itemNumber: '029210', name: 'Juice Lime Gently Pasteurized', brand: 'Markon Ready Set Serve', pack: '6 / .5 GAL', price: 10.23 },
+                { itemNumber: '389120', name: 'Butter Unsalted European Style', brand: 'Plugra', pack: '36 / 1 LB', price: 95.61 },
+                { itemNumber: '158931', name: 'Cottage Cheese 2% Low Fat', brand: 'Daisy Brands', pack: '4 / 5 LB', price: 57.75 }
+            ],
+            'Produce': [
+                { itemNumber: '107107', name: 'Mushroom Sliced 1/2 In Trh', brand: 'Packer', pack: '1 / 10 LB', price: 24.88 },
+                { itemNumber: '140005', name: 'Mushroom White Small Button', brand: 'Markon First Crop', pack: '1 / 10 LB', price: 29.98 },
+                { itemNumber: '114107', name: 'Garlic Whole Peeled', brand: 'Markon Ready Set Serve', pack: '4 / 5 LB', price: 89.06 },
+                { itemNumber: '109001', name: 'Cucumber Large English 12 Ct', brand: 'Packer', pack: '1 / 12 CT', price: 11.44 },
+                { itemNumber: '150105', name: 'Onion Green Iceless', brand: 'Markon Ready Set Serve', pack: '4 / 2 LB', price: 30.80 },
+                { itemNumber: '104409', name: 'Cilantro Cello Wash & Trim', brand: 'Markon Ready Set Serve', pack: '4 / 1 LB', price: 21.57 },
+                { itemNumber: '177844', name: 'Lemon Choice Mini Pk 34-44 Ct', brand: 'Packer', pack: '1 / 7 LB', price: 16.98 },
+                { itemNumber: '160016', name: 'Parsley Italian Flat Leaf', brand: 'Fresh From Keith\'s', pack: '1 / 12 CT', price: 17.42 },
+                { itemNumber: '200305', name: 'Squash Spaghetti 1 1/9 Bsh', brand: 'Packer', pack: '1 / 1 CS', price: 36.98 },
+                { itemNumber: '195253', name: 'Pepper Poblanos Diced Rstd', brand: 'New Mexico Green Chile', pack: '1 / 25 LB', price: 54.72 },
+                { itemNumber: '187397', name: 'Pico De Gallo 5 Lb', brand: 'Markon Ready Set Serve', pack: '1 / 5 LB', price: 14.52 },
+                { itemNumber: '105016', name: 'Carrot Baby Peeled Tri Color', brand: 'Packer', pack: '1 / 5 LB', price: 21.74 },
+                { itemNumber: '080089', name: 'Broccoli Floret Bite Size', brand: 'Markon Ready Set Serve', pack: '4 / 3 LB', price: 30.98 },
+                { itemNumber: '164809', name: 'Carrot Bias Cut 1/4 In Trh', brand: 'Grimmway Farms', pack: '4 / 5 LB', price: 22.06 },
+                { itemNumber: '198717', name: 'Broccolini Iceless', brand: 'Markon Ready Set Serve', pack: '3 / 2 LB', price: 28.50 },
+                { itemNumber: '187390', name: 'Tomato Diced 1/4 In 20 Lb', brand: 'Markon Ready Set Serve', pack: '4 / 5 LB', price: 36.70 },
+                { itemNumber: '155099', name: 'Onion Yellow Diced 1/4 Inch', brand: 'Packer', pack: '4 / 5 LB', price: 33.49 },
+                { itemNumber: '231714', name: 'Onion Red Diced 1/4 Inch', brand: 'Lipman', pack: '2 / 5 LB', price: 17.75 },
+                { itemNumber: '129226', name: 'Brussels Sprouts Halves', brand: 'Markon Ready Set Serve', pack: '2 / 5 LB', price: 30.07 },
+                { itemNumber: '179416', name: 'Asparagus Jumbo  1', brand: 'Markon First Crop', pack: '11 / 1 LB', price: 44.73 },
+                { itemNumber: '552354', name: 'Bean Green Cut 1-2 in', brand: 'Packer', pack: '2 / 5 lb', price: 30.50 },
+                { itemNumber: '552722', name: 'Potatoes Fingerling Mixed Color', brand: 'Buds Fresh Cut Produce', pack: '2 / 5 LB', price: 38.77 },
+                { itemNumber: '558188', name: 'Cucumber English Medium 12 Ct', brand: 'Markon First Crop', pack: '1 / 12 CT', price: 18.74 },
+                { itemNumber: '182907', name: 'Onion Red Slab Slice 1/4 In', brand: 'Lipman', pack: '1 / 5 LB', price: 22.12 },
+                { itemNumber: '031293', name: 'Juice Orange Fresh Squeezed', brand: 'Markon Ready Set Serve', pack: '4 / 1 GAL', price: 53.29 }
+            ],
+            'Meat': [
+                { itemNumber: '111399', name: 'Chicken Thigh Bnls Chicharron', brand: 'Red Bird Farms', pack: '4 / 5 LB', price: 5.12 },
+                { itemNumber: '178369', name: 'Sausage Black Oak Smoked Fzn', brand: 'Black Oak', pack: '1 / 11 LB', price: 44.40 },
+                { itemNumber: '168546', name: 'Beef Ground 93/07 Fine', brand: 'Swift', pack: '6 / 10 LB', price: 6.18 },
+                { itemNumber: '185095', name: 'Beef Patty 4/1 90/10 Wide', brand: 'Winn Meat', pack: '48 / 4 OZ', price: 78.17 },
+                { itemNumber: '211262', name: 'Chicken Breast 4 Oz Blsl Fresh', brand: 'Rio Grande', pack: '2 / 10 LB', price: 79.77 },
+                { itemNumber: '512161', name: 'Beef Tip Tenderloin', brand: 'Keith Valley Packing Company', pack: '2 / 5 LB', price: 11.99 },
+                { itemNumber: '492005', name: 'Turkey Breast Roast Blsl', brand: 'Harvestland', pack: '4 / 5 LB', price: 5.65 },
+                { itemNumber: '553780', name: 'Turkey Ground No Antibiotics Ever', brand: 'Perdue', pack: '4 / 5 lb', price: 60.61 },
+                { itemNumber: '550312', name: 'Chicken Breast Random Blsl', brand: 'Wayne Farms', pack: '4 / 10 LB', price: 72.16 },
+                { itemNumber: '122844', name: 'Beef Brisket Bnls 120 Prime', brand: '1855', pack: '4 / 1 pc', price: 6.53 },
+                { itemNumber: '162516', name: 'Beef Top Butt Sirloin Bnls', brand: 'Palo Duro Meats', pack: '5 / 10-14 LB', price: 6.34 },
+                { itemNumber: '487529', name: 'Chicken Thigh Diced Raw', brand: 'Tyson', pack: '4 / 5 LB', price: 58.56 },
+                { itemNumber: '121792', name: 'Chicken Thigh Blsl Raw', brand: 'Koch Foods', pack: '4 / 10 LB', price: 92.60 },
+                { itemNumber: '500370', name: 'Beef Brisket 1 Piece', brand: 'Supreme', pack: '1 / 9-11 LB', price: 8.50 },
+                { itemNumber: '220607', name: 'Beef Sirloin Tips 1 In Diced', brand: 'Laxson', pack: '2 / 5 LB', price: 15.54 },
+                { itemNumber: '189197', name: 'Chicken Breast Shredded', brand: 'Garcia Foods', pack: '5 / 2 LB', price: 61.98 }
+            ],
+            'Label Printing Table': [
+                { itemNumber: '121690', name: 'Baking Cup White 4.5 In', brand: 'Regency Wraps', pack: '20 / 500 CT', price: 11.21 },
+                { itemNumber: '122588', name: 'Pecan Pieces Medium Fancy', brand: 'Ellington Farms', pack: '1 / 5 LB', price: 58.06 },
+                { itemNumber: '878324', name: 'Label 3 In Use First Orange', brand: 'Daymark Safety Systems', pack: '1 / 500 CT', price: 14.74 },
+                { itemNumber: '182093', name: 'Label 2x2.2 7-day Of Week', brand: 'Daymark Safety Systems', pack: '1 / 1000 CT', price: 30.46 },
+                { itemNumber: '214452', name: 'Bag Freezer Reclosable 1 Gal', brand: 'Essentials', pack: '1 / 200 CT', price: 24.99 }
+            ],
+            'Saute Line': [
+                { itemNumber: '774055', name: 'Cumin Comino Ground', brand: 'Spice Classics', pack: '1 / 4.5 LB', price: 31.16 },
+                { itemNumber: '115608', name: 'Chili Powder', brand: 'Spice Classics', pack: '1 / 6 LB', price: 37.49 },
+                { itemNumber: '104932', name: 'Paprika', brand: 'Gran Sabor', pack: '1 / 4.5 LB', price: 29.86 },
+                { itemNumber: '128173', name: 'Pepper Black Coarse Grind', brand: 'Spice Classics', pack: '1 / 5 LB', price: 59.31 },
+                { itemNumber: '774146', name: 'Oregano Leaves', brand: 'Mccormick', pack: '1 / 24 OZ', price: 33.71 },
+                { itemNumber: '774223', name: 'Thyme Leaf Whole', brand: 'Mccormick', pack: '1 / 27.5 OZ', price: 45.79 },
+                { itemNumber: '774411', name: 'Pepper Red Crushed', brand: 'Texas Custom Spice', pack: '1 / 3 LB', price: 28.79 },
+                { itemNumber: '774477', name: 'Seasoning Blackened Red Fish', brand: 'Cajun Magic', pack: '4 / 24 OZ', price: 55.50 },
+                { itemNumber: '101922', name: 'Sesame Seed Hulled', brand: 'Mccormick', pack: '1 / 16 OZ', price: 9.78 },
+                { itemNumber: '685406', name: 'Caper Nonpareilles Small', brand: 'Roland', pack: '6 / 32 OZ', price: 11.67 },
+                { itemNumber: '137394', name: 'Chia Seeds', brand: 'Di Santino', pack: '1 / 10 LB', price: 60.11 },
+                { itemNumber: '774062', name: 'Seasoning Dill Weed', brand: 'Mccormick', pack: '1 / 5 OZ', price: 18.08 },
+                { itemNumber: '775027', name: 'Chive Freeze Dried', brand: 'Mccormick', pack: '1 / 1.35 OZ', price: 11.56 },
+                { itemNumber: '774187', name: 'Rosemary Ground', brand: 'Mccormick', pack: '1 / 11 OZ', price: 21.99 },
+                { itemNumber: '774870', name: 'Garlic Powder', brand: 'Texas Custom Spice', pack: '1 / 16 OZ', price: 12.03 },
+                { itemNumber: '774994', name: 'Parsley Flake', brand: 'Texas Custom Spice', pack: '1 / 1 LB', price: 26.85 },
+                { itemNumber: '774137', name: 'Onion Powder', brand: 'Mccormick', pack: '1 / 20 OZ', price: 11.78 },
+                { itemNumber: '774038', name: 'Cinnamon Ground', brand: 'Mccormick', pack: '1 / 18 OZ', price: 16.26 },
+                { itemNumber: '686223', name: 'Vinegar Rice Wine', brand: 'Roland', pack: '4 / 1 GAL', price: 82.04 }
+            ],
+            'Spice Rack': [
+                { itemNumber: '696005', name: 'Baking Powder', brand: 'Clabber Girl', pack: '1 / 5 LB', price: 17.66 },
+                { itemNumber: '696131', name: 'Baking Soda', brand: 'Clabber Girl', pack: '1 / 5 LB', price: 6.59 },
+                { itemNumber: '777034', name: 'Extract Vanilla Pure', brand: 'Mccormick', pack: '1 / 1 QT', price: 84.04 },
+                { itemNumber: '799205', name: 'Cereal Oats Quick', brand: 'Quaker', pack: '12 / 42 OZ', price: 69.64 },
+                { itemNumber: '686207', name: 'Cooking Wine Marsala', brand: 'Roland', pack: '4 / 128 OZ', price: 69.98 },
+                { itemNumber: '686030', name: 'Vinegar Apple Cider', brand: 'Heinz', pack: '4 / 1 GAL', price: 12.61 },
+                { itemNumber: '793069', name: 'Honey Pure Blend', brand: 'Busybee Honey', pack: '1 / 1 GAL', price: 50.65 },
+                { itemNumber: '793062', name: 'Syrup Maple Dark', brand: 'Maple Grove Farms', pack: '1 / 1 GAL', price: 77.75 },
+                { itemNumber: '183640', name: 'Salt Sea Kosher Coarse', brand: 'Ellington Farms', pack: '12 / 3 LB', price: 32.08 },
+                { itemNumber: '113321', name: 'Sauce Bbq Hickory', brand: 'Sweet Baby Ray\'s', pack: '4 / 1 GAL', price: 71.02 },
+                { itemNumber: '660405', name: 'Sauce Buffalo Wing', brand: 'Franks', pack: '4 / 1 GAL', price: 80.20 },
+                { itemNumber: '661107', name: 'Sauce Tabasco', brand: 'Tabasco', pack: '4 / 1 GAL', price: 175.45 },
+                { itemNumber: '686235', name: 'Vinegar Balsamic', brand: 'Colavita', pack: '2 / 5 LTR', price: 40.50 },
+                { itemNumber: '553110', name: 'Mayonnaise Southern Style', brand: 'Golden Harvest', pack: '4 / 1 gal', price: 68.51 },
+                { itemNumber: '149820', name: 'Mustard Dijon Premium', brand: 'Plochman\'s Mustard', pack: '2 / 1 GAL', price: 36.07 },
+                { itemNumber: '779347', name: 'Oil Olive Pomace', brand: 'Roland', pack: '4 / 1 GAL', price: 174.86 },
+                { itemNumber: '700200', name: 'Pasta Farfalle Bowtie #65', brand: 'Barilla', pack: '2 / 10 LB', price: 27.97 },
+                { itemNumber: '205589', name: 'Pasta Elbow Macaroni', brand: 'Bellacibo Primo', pack: '2 / 10 LB', price: 29.22 },
+                { itemNumber: '205594', name: 'Pasta Rotini Tri Color', brand: 'Bellacibo Primo', pack: '2 / 10 LB', price: 36.35 },
+                { itemNumber: '798001', name: 'Milk Evaporated', brand: 'Velvet', pack: '24 / 12 OZ', price: 31.42 },
+                { itemNumber: '779181', name: 'Oil Sesame 100% Pure', brand: 'Roland', pack: '4 / 1 GAL', price: 56.55 },
+                { itemNumber: '124815', name: 'Sauce Soy Tamari Low Sodium Gf', brand: 'Kikkoman', pack: '6 / 0.5 GAL', price: 84.46 },
+                { itemNumber: '697100', name: 'Starch Corn 1 Lb', brand: 'Argo Corn Starch', pack: '24 / 1 LB', price: 46.50 },
+                { itemNumber: '780009', name: 'Sugar Brown Light 2 Lb', brand: 'Imperial Sugar', pack: '12 / 2 LB', price: 35.98 },
+                { itemNumber: '174372', name: 'Wood Chips Post Oak', brand: 'B&b Charcoal Inc', pack: '1 / 6 CT', price: 13.26 },
+                { itemNumber: '685042', name: 'Pepper Chipotle In Adobo', brand: 'San Marcos', pack: '24 / 7.5 OZ', price: 46.98 },
+                { itemNumber: '137488', name: 'Ginger Ground', brand: 'Mccormick', pack: '1 / 12.5 OZ', price: 18.53 },
+                { itemNumber: '774048', name: 'Coriander Ground', brand: 'Mccormick', pack: '1 / 14 OZ', price: 13.64 },
+                { itemNumber: '686012', name: 'Vinegar Red Wine', brand: 'Heinz', pack: '4 / 1 GAL', price: 14.29 },
+                { itemNumber: '184630', name: 'Vinegar Red Wine', brand: 'Bellacibo Primo', pack: '2 / 5 LTR', price: 30.88 },
+                // Oct 2026: replaces #686012 (kept as a hidden row so its saved counts stay attached).
+                // Price $23.93 per 2 / 5 LTR (confirmed by Zach 10/2/2026).
+                { itemNumber: '184631', name: 'Vinegar White Wine', brand: '', pack: '2 / 5 LTR', price: 23.93 }
+            ],
+            'Kitchen Dry Supplies': [
+                { itemNumber: '660333', name: 'Sauce Marinara Rtu', brand: 'Angela Mia', pack: '6 / #10 CAN', price: 66.07 },
+                { itemNumber: '125049', name: 'Applesauce Unsweetened Fancy', brand: 'Ellington Farms', pack: '6 / #10 CAN', price: 44.32 },
+                { itemNumber: '650454', name: 'Tomato Crushed Angela Mia', brand: 'Angela Mia', pack: '6 / #10 CAN', price: 46.93 },
+                { itemNumber: '650477', name: 'Ketchup Fancy', brand: 'Hunt\'s', pack: '6 / #10 CAN', price: 54.04 },
+                { itemNumber: '660220', name: 'Sauce Enchilada Mild Rtu', brand: 'La Victoria', pack: '6 / #10 CAN', price: 57.77 },
+                { itemNumber: '685055', name: 'Pepper Red Bell Diced', brand: 'Moody Dunbar', pack: '6 / #10 CAN', price: 74.60 },
+                { itemNumber: '650082', name: 'Bean Pinto Fancy', brand: 'Bush\'s Best', pack: '6 / #10 CAN', price: 41.30 },
+                { itemNumber: '106655', name: 'Rice Brown Parboiled Wg', brand: 'Producers Rice Mill, Inc', pack: '1 / 25 LB', price: 19.55 },
+                { itemNumber: '654028', name: 'Rice Jasmine', brand: 'Producers Rice Mill, Inc', pack: '1 / 25 LB', price: 32.98 },
+                { itemNumber: '197142', name: 'Film 18x2000 Clear Wrap', brand: 'Essentials', pack: '1 / 1 ROLL', price: 28.65 },
+                { itemNumber: '116607', name: 'Foil 18x500 Roll Heavy Duty', brand: 'Essentials', pack: '1 / 1 ROLL', price: 80.22 },
+                { itemNumber: '698007', name: 'Pan Spray Pam Saute & Grill', brand: 'Pam', pack: '6 / 17 OZ', price: 30.56 },
+                { itemNumber: '780002', name: 'Sugar Granulated Ex Fine 25 Lb', brand: 'Imperial Sugar', pack: '1 / 25 LB', price: 24.77 },
+                { itemNumber: '875476', name: 'Liner Pan Liftoff Grease Proof', brand: 'Dixie', pack: '1 / 1000 CT', price: 79.98 },
+                { itemNumber: '108310', name: 'Flour Almond', brand: 'Mandelin', pack: '1 / 25 LB', price: 165.98 },
+                { itemNumber: '177007', name: 'Bean Black In Brine', brand: 'Hanover Foods', pack: '6 / #10 CAN', price: 34.17 },
+                { itemNumber: '114293', name: 'Quinoa Tri Color Prewashed', brand: 'Roland', pack: '2 / 5 LB', price: 58.78 },
+                { itemNumber: '212500', name: 'Peanut Butter', brand: '', pack: '12 / 16 OZ', price: 42.67 }
+            ],
+            'Chemicals/Janitorial Supplies': [
+                { itemNumber: '112741', name: 'Rinse Aid Care Tablets Blue', brand: 'Rational Sales', pack: '1 / 150 CT', price: 173.13 },
+                { itemNumber: '174210', name: 'Cleaner Tablet Green Active', brand: 'Rational Sales', pack: '1 / 150 CT', price: 209.10 },
+                { itemNumber: '885911', name: 'Sanitizer Sani-quad Sinkrite', brand: 'Ssdc', pack: '2 / 1 GAL', price: 101.40 },
+                { itemNumber: '887065', name: 'Detergent Speed Clean', brand: 'Ssdc', pack: '2 / 1 GAL', price: 98.59 },
+                { itemNumber: '887092', name: 'Rinse Aid Fast Dry', brand: 'Ssdc', pack: '2 / 1 GAL', price: 108.76 },
+                { itemNumber: '134180', name: 'Pad Scour Hexagon Hvy Abrasive', brand: 'Scotch-brite', pack: '1 / 15 CT', price: 11.57 },
+                { itemNumber: '887005', name: 'Soap Dish Blue Liquid', brand: 'Essentials', pack: '1 / 5 GAL', price: 138.50 },
+                { itemNumber: '885916', name: 'Sanitizer Dish & Laundry', brand: 'Ssdc', pack: '1 / 5 GAL', price: 102.01 },
+                { itemNumber: '129831', name: 'Salt Wtr Softener Crystals', brand: 'Morton Salt Company', pack: '1 / 50 LB', price: 12.47 },
+                { itemNumber: '144183', name: 'Bleach Keith Ultra', brand: 'Essentials', pack: '6 / 1 GAL', price: 25.26 },
+                { itemNumber: '885147', name: 'Drain Maintainer Enzyme', brand: 'Essentials', pack: '12 / 32 OZ', price: 108.27 },
+                { itemNumber: '199170', name: 'Soap Hand 1 Gal', brand: 'Palmer Fixture Co', pack: '1 / 4 CT', price: 39.99 },
+                { itemNumber: '980196', name: 'Cleaner Stainless Steel Polish', brand: 'Diversified Chemicals Techn', pack: '4 / 32 OZ', price: 42.59 },
+                { itemNumber: '123438', name: 'Veg And Fruit Wash Treatment', brand: 'Kay Chemical Company', pack: '2 / 1 GAL', price: 150.16 },
+                { itemNumber: '885818', name: 'Degreaser Inside Out Moprite', brand: 'Ssdc', pack: '2 / 1 GAL', price: 81.93 },
+                { itemNumber: '885224', name: 'Cleaner Track Moprite', brand: 'Ssdc', pack: '2 / 1 GAL', price: 110.67 },
+                { itemNumber: '133594', name: 'Disinfectant Peroxide Cleaner Moprite', brand: 'Ssdc', pack: '2 / 0.8 GAL', price: 161.41 },
+                { itemNumber: '194880', name: 'Deodorizer Urinal Screen Melon', brand: 'Fresh Products Inc', pack: '1 / 10 CT', price: 26.10 }
+            ],
+            'Plating Team Supplies': [
+                { itemNumber: '660356', name: 'Glaze Balsamic', brand: 'Roland', pack: '6 / 12.9 OZ', price: 43.18 },
+                { itemNumber: '104426', name: 'Lid Plas 9-12-20 Oz No Slot', brand: 'Dart', pack: '10 / 100 CT', price: 61.51 },
+                { itemNumber: '104162', name: 'Cup Plas 9 Oz Squat Clear', brand: 'Ultra Clear', pack: '20 / 50 CT', price: 84.13 },
+                { itemNumber: '111634', name: 'Cup Plas Souffle 1.5 Oz Trans', brand: 'Solo Cup Company', pack: '10 / 250 CT', price: 45.73 },
+                { itemNumber: '130860', name: 'Lid Plas Souffle 2 Oz', brand: 'Dart', pack: '20 / 125 CT', price: 39.98 },
+                { itemNumber: '176430', name: 'Glove Vinyl Large Black Pf', brand: 'Handgards', pack: '10 / 100 CT', price: 29.44 },
+                { itemNumber: '195176', name: 'Glove Vinyl X-large Blue', brand: 'Safety Zone', pack: '10 / 100 CT', price: 25.58 },
+                { itemNumber: '883711', name: 'Hair Net Beard Protector', brand: 'Disco', pack: '1 / 100 CT', price: 8.30 },
+                { itemNumber: '883710', name: 'Bouffant', brand: 'Disco', pack: '1 / 144 CT', price: 22.09 },
+                { itemNumber: '871289', name: 'Cutlery Teaspoon Blk Mw Bulk', brand: 'Dixie', pack: '1 / 1000 CT', price: 38.75 },
+                { itemNumber: '197236', name: 'Liner Trash 60 Gal Black', brand: 'Essentials', pack: '1 / 100 CT', price: 49.13 },
+                { itemNumber: '157424', name: 'Cover Bun Rack Clear', brand: 'Pinnacle Plastics Inc', pack: '1 / 50 CT', price: 28.56 },
+                { itemNumber: '556260', name: 'Glove Vinyl Med PF Blue', brand: 'Safety Zone', pack: '10 / 100 ct', price: 35.98 },
+                { itemNumber: '883716', name: 'Glove Vinyl Small Powder Free', brand: 'Handgards', pack: '10 / 100 CT', price: 40.40 },
+                { itemNumber: '129707', name: 'Bag Reclosable 1 Gal 10.5x10.5', brand: 'Essentials', pack: '1 / 250 CT', price: 17.77 },
+                { itemNumber: '187911', name: 'Cup Plas Souffle 4 Oz Blk', brand: 'Crystalware', pack: '25 / 100 CT', price: 48.36 },
+                { itemNumber: '161647', name: 'Glove Vinyl Xl Black Pf', brand: 'Handgards', pack: '10 / 100 CT', price: 35.98 }
+            ],
+            'Front of House Supplies': [
+                { itemNumber: '116379', name: 'Water Smartwater', brand: 'Glaceau', pack: '12 / 1 LTR', price: 33.87 },
+                { itemNumber: '126331', name: 'Napkin Dixie Ultra 2-ply Brown', brand: 'Dixie Ultra', pack: '24 / 250 CT', price: 74.79 },
+                { itemNumber: '129847', name: 'Bag Paper Brown 60lb W/handles', brand: 'Duro Bag Mfg Co.', pack: '1 / 250 CT', price: 82.95 },
+                { itemNumber: '163458', name: 'Bag Thermal Blank 35 Liter', brand: 'Coldkeepers', pack: '1 / 50 CT', price: 174.37 },
+                { itemNumber: '188183', name: 'Meal Kit K F S Hw Blk Wrapped', brand: 'Wallace Packaging Llc', pack: '1 / 250 CT', price: 27.18 },
+                { itemNumber: '133525', name: 'Sauce Pc Packet Sriracha Chili', brand: 'Lkk', pack: '500 / 0.25 OZ', price: 29.38 },
+                { itemNumber: '139893', name: 'Sauce Pc Hot Cholula', brand: 'Cholula', pack: '200 / 0.25 OZ', price: 13.65 },
+                { itemNumber: '193880', name: 'Water Raspberry Orange', brand: 'Pathwater Inc', pack: '12 / 20.3 OZ', price: 40.22 },
+                { itemNumber: '193860', name: 'Water Sparkling Lemon Lime', brand: 'Pathwater Inc', pack: '12 / 20.3 OZ', price: 0.00 },
+                { itemNumber: '193861', name: 'Water Sparkling Grapefruit', brand: 'Pathwater Inc', pack: '12 / 20.3 OZ', price: 0.00 },
+                { itemNumber: '193858', name: 'Water Sparkling', brand: 'Pathwater Inc', pack: '12 / 20.3 OZ', price: 31.97 },
+                { itemNumber: '202978', name: 'Water Sparkling - Summer Berry', brand: 'Waterloo', pack: '2/24ct', price: 13.54 },
+                { itemNumber: '145076', name: 'Water Sparkling - Lemon Lime', brand: 'Waterloo', pack: '2/24ct', price: 13.56 },
+                { itemNumber: '202969', name: 'Water Sparkling - Blackberry Lemon', brand: 'Waterloo', pack: '2/24 Ct', price: 13.68 },
+                { itemNumber: '152501', name: 'Water Sparkling - Strawberry', brand: 'Waterloo', pack: '2/24ct', price: 13.51 },
+                { itemNumber: '129015', name: 'Tea Honey and Mint Sweet', brand: 'Moonshine Sweet Tea', pack: '', price: 17.61 },
+                { itemNumber: '131920', name: 'Tea Green Austin Honey', brand: 'Texas Tea', pack: '', price: 17.48 },
+                { itemNumber: '129017', name: 'Tea Original Sweet', brand: 'Moonshine Sweet Tea', pack: '', price: 17.61 },
+                { itemNumber: '129016', name: 'Tea Peach Sweet', brand: 'Moonshine Sweet Tea', pack: '', price: 17.61 },
+                { itemNumber: '129013', name: 'Tea Unsweetened Original', brand: 'Moonshine Sweet Tea', pack: '', price: 17.61 },
+                { itemNumber: '207660', name: 'Soda Cream Sparkling Tonic', brand: 'Olipop', pack: '', price: 25.49 },
+                { itemNumber: '195199', name: 'Soda Lemon Lime', brand: 'Olipop', pack: '', price: 25.62 },
+                { itemNumber: '195030', name: 'Soda Grape Classic', brand: 'Olipop', pack: '', price: 27.01 },
+                { itemNumber: '168928', name: 'Energy Drink - Sugar', brand: 'RedBull', pack: '1/24CT', price: 50.00 },
+                { itemNumber: '168927', name: 'Energy Drink - Sugar Free', brand: 'RedBull', pack: '1/24CT', price: 50.00 },
+                { itemNumber: '', name: 'Chocolate Protein Shake', brand: 'Fairlife', pack: '1/24 CT', price: 22.66 },
+                { itemNumber: '', name: 'Lidding Film Energy Machine (Small)', brand: 'Nexterra Packaging', pack: '1 Roll', price: 89.50 },
+                { itemNumber: '', name: '12 Oz Containers', brand: 'Go Green', pack: '552/cs', price: 126.65 },
+                { itemNumber: '', name: 'Lidding Film Speedy Machine (Large)', brand: 'Nexterra Packaging', pack: '1 Roll', price: 125.00 },
+                { itemNumber: '', name: 'Juice - Balm', brand: 'Stoke', pack: '1/EA', price: 7.25 },
+                { itemNumber: '', name: 'Juice - The Shield', brand: 'Stoke', pack: '1/EA', price: 7.25 },
+                { itemNumber: '', name: 'Juice - The Peak', brand: 'Stoke', pack: '1/EA', price: 7.25 },
+                { itemNumber: '', name: 'Juice - Battery', brand: 'Stoke', pack: '1/EA', price: 7.25 },
+                { itemNumber: '', name: 'Juice - Warrior', brand: 'Stoke', pack: '1/EA', price: 7.25 },
+                { itemNumber: '', name: 'Juice - Phoenix', brand: 'Stoke', pack: '1/EA', price: 7.25 },
+                { itemNumber: '', name: 'Juice - Hulk', brand: 'Stoke', pack: '1/EA', price: 7.25 },
+                { itemNumber: '', name: 'Ready Protein Bar - Variety Pack', brand: 'Ready', pack: '1/20pk', price: 16.98 },
+                { itemNumber: '', name: 'Pop Chips - Sour Cream and Onion', brand: 'Pop Chip', pack: '24 / 0.8 OZ', price: 20.67 },
+                { itemNumber: '', name: 'Pop Chips - Salt and Vinegar', brand: 'Pop Chip', pack: '24 / 0.8 OZ', price: 20.67 },
+                { itemNumber: '', name: 'Pop Chips - BBQ', brand: 'Pop Chip', pack: '24 / 0.8 OZ', price: 20.67 },
+                { itemNumber: '', name: 'Built Puff Bar', brand: 'Built', pack: '1/EA', price: 1.74 },
+                { itemNumber: '563091', name: 'Kombucha 12 Oz', brand: '', pack: '6 / 12 OZ', price: 13.31 },
+                { itemNumber: '563081', name: 'Kombucha 12 Oz', brand: '', pack: '6 / 12 OZ', price: 13.31 },
+                { itemNumber: '563278', name: 'Kombucha 12 Oz', brand: '', pack: '6 / 12 OZ', price: 13.31 }
+            ],
+            'Bathroom Supplies': [
+                { itemNumber: '881026', name: 'Towel Roll Enmotion 10 In', brand: 'Enmotion', pack: '6 / 800 FT', price: 91.95 },
+                { itemNumber: '185750', name: 'Toilet Tissue 2-ply Soft Mega', brand: 'Charmin', pack: '1 / 18 CT', price: 22.97 }
+            ],
+            'Freezer': [
+                { itemNumber: '337112', name: 'Cauliflower Iqf', brand: 'Markon First Crop', pack: '1 / 20 LB', price: 31.23 },
+                { itemNumber: '338610', name: 'Corn Cut', brand: 'Markon First Crop', pack: '1 / 20 LB', price: 29.00 },
+                { itemNumber: '349702', name: 'Vegetable Blend Peas & Carrots', brand: 'Markon First Crop', pack: '12 / 2.5 LB', price: 47.84 },
+                { itemNumber: '106530', name: 'Sausage Italian Topping Cooked', brand: 'Fontanini', pack: '3 / 5 LB', price: 74.58 },
+                { itemNumber: '348100', name: 'Spinach Chopped', brand: 'Markon First Crop', pack: '12 / 3 LB', price: 40.56 },
+                { itemNumber: '303037', name: 'Blueberry Wild Iqf', brand: 'Jasper Wyman', pack: '2 / 5 LB', price: 36.86 },
+                { itemNumber: '202105', name: 'Mahi Mahi Portion 4oz Ivp', brand: 'De La Isla', pack: '1 / 10 LB', price: 111.15 },
+                { itemNumber: '155882', name: 'Potato Sweet Roasted Unseasoned', brand: 'Roastworks', pack: '6 / 2.5 LB', price: 37.79 },
+                { itemNumber: '106719', name: 'Pasta Penne Rigati Bulk Cooked', brand: 'Marzetti', pack: '1 / 20 LB', price: 38.55 },
+                { itemNumber: '138232', name: 'Chicken Tenderloin Brd Gf Rtc', brand: 'Wayne Farms', pack: '2 / 5 LB', price: 54.57 },
+                { itemNumber: '345503', name: 'Squash Zucchini Sliced 1/4in', brand: 'Markon First Crop', pack: '12 / 2 LB', price: 30.14 },
+                { itemNumber: '492773', name: 'Turkey Sausage Patty Cooked', brand: 'Jimmy Dean', pack: '128 / 1.25 OZ', price: 43.21 },
+                { itemNumber: '311099', name: 'Banana Slice Iqf', brand: 'Markon First Crop', pack: '1 / 20 LB', price: 31.07 },
+                { itemNumber: '393795', name: 'Egg Omelette W/cheddar Chs', brand: 'Papettis', pack: '72 / 3.5 OZ', price: 58.85 },
+                { itemNumber: '165083', name: 'Pepper Serrano', brand: 'Fresh From Keith\'s', pack: '1 / 5 LB', price: 15.24 },
+                { itemNumber: '136442', name: 'Onion Caramelized Sliced', brand: 'Savor Imports', pack: '12 / 2 LB', price: 83.98 },
+                { itemNumber: '492254', name: 'Turkey Burger Mediterranean', brand: 'Butterball', pack: '30 / 5.33 OZ', price: 44.45 },
+                { itemNumber: '383859', name: 'Pasta Elbow Macaroni Fzn', brand: 'Marzetti', pack: '1 / 20 LB', price: 36.97 },
+                { itemNumber: '124087', name: 'Vegetable Blend Corn & JAL', brand: 'Roastworks', pack: '6 / 2.5 LB', price: 41.00 },
+                { itemNumber: '311185', name: 'Mango Cube Iqf', brand: 'Dole', pack: '2 / 5 LB', price: 39.86 },
+                { itemNumber: '522402', name: 'Meatball Italian 1 Oz Cooked', brand: 'Syracuse Sausage', pack: '1 / 10 LB', price: 49.73 },
+                { itemNumber: '555070', name: 'Cod Loin 4 oz Skinless Pacific', brand: 'Endeavor Seafood Inc', pack: '1 / 10 lb', price: 112.86 },
+                { itemNumber: '139366', name: 'Salmon Prtn 4oz Sknls Nor', brand: 'Admiral Of The Fleet', pack: '1 / 10 LB', price: 13.79 },
+                { itemNumber: '185467', name: 'Cauliflower Hashbrown', brand: '', pack: '', price: 48.35 },
+                { itemNumber: '311200', name: 'Cranberry Whole Iqf', brand: 'Markon First Crop', pack: '', price: 28.97 },
+                { itemNumber: '193517', name: 'Beef Bacon Halal Angus', brand: 'Devanco Food', pack: '1 / 10 LB', price: 90.08 },
+                { itemNumber: '219408', name: 'Salmon Portion 4 Oz (count in LB)', brand: '', pack: '40 / 4 OZ (10 LB)', price: 13.79 },   // BEK special order, priced per LB
+                { itemNumber: '172359', name: 'Cauliflower Hashbrown', brand: '', pack: '8 / 13.22 OZ', price: 48.86 },
+                { itemNumber: '206425', name: 'Chicken Tempura', brand: '', pack: '2 / 5 LB', price: 46.98 }
+            ],
+            'Labeling Station': [
+                { itemNumber: '', name: 'Container Labels', brand: 'House Labels', pack: '1 / 1000 CT', price: 22.35 }, // 1 roll of 1,000 (Oct 2026)
+                { itemNumber: '', name: 'Shipping/Delivery Labels', brand: 'House Labels', pack: '4 Stacks 4X6"', price: 200.09 }
+            ]
+        };
+
+        const MEALS_DATA = [
+            { name: 'Beef Brisket Hash', price: 2.64 },
+            { name: 'Beef Tenderloin Steak and Eggs', price: 4.82 },
+            { name: 'Blueberry Protein Pancakes with Egg Scramble', price: 1.85 },
+            { name: 'Blueberry Pancake a la Carte', price: 1.66 },
+            { name: 'Country Sausage Breakfast Bowl', price: 1.63 },
+            { name: 'Egg Bites with Cauliflower Hashbrown', price: 2.76 },
+            { name: 'Homemade Turkey Chorizo over Cilantro Lime Brown Rice', price: 1.44 },
+            { name: 'Turkey Sausage, Scrambled Egg and Sweet Potato Hash', price: 1.93 },
+            { name: 'Omelette', price: 1.94 },
+            { name: 'Overnight Oats', price: 1.86 },
+            { name: 'Southern Style Breakfast Bowl', price: 1.78 },
+            { name: 'Tex-Mex Ground Turkey Sweet Picadillo', price: 2.51 },
+            { name: 'Arroz con Pollo', price: 1.78 },
+            { name: 'Beef Taco Skillet', price: 3.76 },
+            { name: 'Chicken Enchilada Casserole', price: 1.55 },
+            { name: 'Blackened Mahi Mahi over Cilantro Lime Brown Rice', price: 4.02 },
+            { name: 'Blackened Chicken Alfredo', price: 2.25 },
+            { name: 'Blackened Chicken with Fingerling Potatoes', price: 3.76 },
+            { name: 'BBQ Brisket Mac', price: 2.90 },
+            { name: 'Chicken & Italian Sausage over Pasta', price: 2.35 },
+            { name: 'Chicken Madeira', price: 2.61 },
+            { name: 'Dirty Rice', price: 2.92 },
+            { name: 'Glazed Beef Meatloaf', price: 2.39 },
+            { name: 'Greek Chicken Bowl', price: 1.79 },
+            { name: 'Green Chile Chicken over Jasmine Rice', price: 1.49 },
+            { name: 'Grilled Chicken over Cheesy Bacon Broccoli Casserole', price: 2.35 },
+            { name: 'Grilled Salmon', price: 4.98 },
+            { name: 'Indian Chicken Curry over Jasmine Rice', price: 1.52 },
+            { name: 'Korean Beef Tenderloin BBQ', price: 3.98 },
+            { name: 'Parmesan Crusted Chop Steak', price: 2.77 },
+            { name: 'Ranch Seasoned Chicken with Mozzarella and Bacon', price: 3.12 },
+            { name: 'Roasted Turkey with Cajun Butter', price: 3.22 },
+            { name: 'Rustic Chicken Parmesan', price: 2.01 },
+            { name: 'Salisbury Steak', price: 2.97 },
+            { name: 'Seared Beef Tenderloin', price: 5.70 },
+            { name: 'Lemon Herb Chicken with Roasted Baby Carrots', price: 3.62 },
+            { name: 'Texas Style Turkey Chili Bowl', price: 2.31 },
+            { name: 'Turkey Ragu over Spaghetti Squash', price: 2.54 },
+            { name: 'Zed Strips over Mac n Cheese', price: 2.52 },
+            { name: 'Zedrics Texas Style Turkey Chili Mac Bowl', price: 1.89 },
+            { name: 'Chocolate Chip Zucchini Muffin', price: 0.84 },
+            { name: 'Peanut Butter Chocolate Chip Chew Snack', price: 1.34 },
+            { name: '1/2# Turkey Chorizo', price: 2.22 },
+            { name: '1/2# Green Chile Chicken', price: 1.98 },
+            { name: '1/2# Grilled Chicken', price: 3.45 },
+            { name: 'Gluten Free Chicken Zedstrips with Dijonnaise 1/2#', price: 3.93 },
+            { name: '1/2# Baked Chicken', price: 3.16 }
+        ];
+
+        let meals = [...MEALS_DATA];
+
+        function initializeInventory(itemsData, mealsData) {
+            const container = document.getElementById('inventory-container');
+            container.innerHTML = '';
+
+            const data = itemsData || INVENTORY_DATA;
+            Object.keys(data).forEach(sectionName => {
+                const section = createSection(sectionName, data[sectionName]);
+                container.appendChild(section);
+            });
+
+            createMealsSection(mealsData);
+        }
+
+        // Build a set of BEK item numbers from INVENTORY_DATA — used to decide
+        // whether an item's price should be editable or auto-synced from BEK
+        const BEK_ITEM_NUMBERS = new Set();
+        Object.values(INVENTORY_DATA).forEach(arr => {
+            (arr || []).forEach(it => { if (it.itemNumber) BEK_ITEM_NUMBERS.add(it.itemNumber); });
+        });
+        function isBekItem(itemNumber) {
+            return itemNumber && BEK_ITEM_NUMBERS.has(itemNumber);
+        }
+
+        // Discontinued items are HIDDEN from the count sheet but NOT deleted.
+        // Saved counts are keyed by each row's position in its section (s_<section>_<item#>_<index>),
+        // and The Rim's weekly pars/counts use the same positions. Deleting a row would shift every
+        // row below it and detach their saved counts and pars, so we keep the row (hidden) instead.
+        // Past months still include a hidden item's saved count in their totals.
+        // To bring an item back, remove its number from this list.
+        const DISCONTINUED_ITEM_NUMBERS = new Set([
+            '195176', // Glove Vinyl X-large Blue — discontinued by BEK (Sep 2026)
+            '111399', // Chicken Thigh Bnls Chicharron — no longer used (Sep 2026)
+            '512161', // Beef Tip Tenderloin — no longer used (Sep 2026)
+            '550312', // Chicken Breast Random Blsl — no longer used (Sep 2026)
+            '122844', // Beef Brisket Bnls 120 Prime — no longer used (Sep 2026)
+            '162516', // Beef Top Butt Sirloin Bnls — no longer used (Sep 2026)
+            '487529', // Chicken Thigh Diced Raw — no longer used (Sep 2026)
+            '109001', // Cucumber Large English 12 Ct — replaced by 558188 (own row)
+            '129707', // Bag Reclosable 1 Gal 10.5x10.5 — replaced by 214452 (own row)
+            '139366', // Salmon Prtn 4oz Sknls Nor — replaced by 219408 (own row, Freezer end)
+            '185467', // Cauliflower Hashbrown — replaced by 172359 (own row, Freezer end)
+            '158931', // Cottage Cheese 2% Low Fat — removed at Colonnade (Oct 2026)
+            '205589', // Pasta Elbow Macaroni (Bellacibo Primo) — removed at Colonnade (Oct 2026)
+            '187911', // Cup Plas Souffle 4 Oz Blk ("4oz Black Cup") — removed at Colonnade (Oct 2026)
+            '686012', // Vinegar Red Wine (Heinz 4/1 GAL) — replaced by 184631 Vinegar White Wine (own row, Spice Rack end)
+            '563091', // Kombucha 12 Oz case — replaced by per-can kombucha rows (Oct 2026)
+            '563081', // Kombucha 12 Oz case — replaced by per-can kombucha rows (Oct 2026)
+            '563278', // Kombucha 12 Oz case — replaced by per-can kombucha rows (Oct 2026)
+        ]);
+        // Items with NO item number can't go in the list above, so they're hidden by exact section + name
+        // (only rows whose item # is empty). Same rule: the row stays, it's just not shown or counted.
+        const HIDDEN_NAMED_ITEMS = [
+            { section: 'Front of House Supplies', name: 'Ready Protein Bar - Variety Pack' }, // removed (Oct 2026)
+            { section: 'Front of House Supplies', name: 'Karma Probiotic water' },  // replaced by per-bottle Karma Water rows (Oct 2026)
+        ];
+        function sectionIdOf(name) { return String(name).replace(/[^a-zA-Z0-9]/g, '_'); }
+        function isHiddenItem(item, sectionId) {
+            if (!item) return false;
+            if (item.hidden === true) return true; // removed with the X button (row kept in place)
+            if (isDiscontinued(item.itemNumber)) return true;
+            if (item.itemNumber && String(item.itemNumber).trim()) return false;
+            const nm = String(item.name || '').trim().toLowerCase();
+            return HIDDEN_NAMED_ITEMS.some(h => sectionIdOf(h.section) === sectionId && h.name.toLowerCase() === nm);
+        }
+        function isDiscontinued(itemNumber) {
+            return !!itemNumber && DISCONTINUED_ITEM_NUMBERS.has(String(itemNumber).trim());
+        }
+
+        function createItemRow(item, sectionId) {
+            const row = document.createElement('tr');
+            row.className = 'item-row';
+            row.setAttribute('data-price', item.price);
+            row.setAttribute('data-base-price', item.price);
+            row.setAttribute('data-section', sectionId);
+            // Saved identity of this row, checked before any targeted save of this row
+            row.setAttribute('data-saved-num', String(item.itemNumber || '').trim());
+            row.setAttribute('data-saved-name', String(item.name || '').trim());
+            if (isHiddenItem(item, sectionId)) {
+                // Keep the row in the DOM so positions (and saved-count keys) stay the same
+                row.classList.add('discontinued-row');
+                row.style.display = 'none';
+            }
+
+            // Non-BEK items show a static price with a small edit button (pencil).
+            // BEK items are always static — they auto-sync from the BEK order guide.
+            const bek = isBekItem(item.itemNumber);
+            const priceCell = bek
+                ? `<td class="align-center">$${item.price.toFixed(2)}</td>`
+                : `<td class="align-center price-cell-wrap" style="white-space:nowrap;"><span class="price-display">$${item.price.toFixed(2)}</span> <button class="edit-price-btn" tabindex="-1" onclick="editItemPrice(this)" title="Edit price">✎</button></td>`;
+
+            row.innerHTML = `
+                <td><div class="item-number">${item.itemNumber || ''}</div></td>
+                <td><div class="item-name">${item.name}</div><div class="item-brand">${item.brand || ''}</div></td>
+                <td>${item.pack || ''}</td>
+                ${priceCell}
+                <td><input type="number" step="0.01" min="0" class="qty-input" oninput="updateTotals()"></td>
+                <td class="total">$0.00</td>
+                <td><button class="delete-btn" tabindex="-1" onclick="deleteItemRow(this)">X</button></td>
+            `;
+            return row;
+        }
+
+        function createSection(sectionName, items) {
+            const sectionId = sectionName.replace(/[^a-zA-Z0-9]/g, '_');
+            const section = document.createElement('div');
+            section.className = 'section';
+            section.id = `section-${sectionId}`;
+            section.setAttribute('data-section-name', sectionName);
+
+            const header = document.createElement('div');
+            header.className = 'section-header';
+            header.onclick = () => toggleSection(section, header);
+
+            const headerInfo = document.createElement('div');
+            headerInfo.className = 'section-header-info';
+            headerInfo.innerHTML = `
+                <div class="section-header-title">${sectionName}</div>
+                <div class="section-header-meta" id="meta-${sectionId}">${items.filter(it => !isHiddenItem(it, sectionId)).length} items | Total: $0.00</div>
+            `;
+
+            const toggle = document.createElement('div');
+            toggle.className = 'section-toggle';
+            toggle.textContent = '▼';
+
+            header.appendChild(headerInfo);
+            header.appendChild(toggle);
+
+            const content = document.createElement('div');
+            content.className = 'section-content expanded';
+
+            const addBtn = document.createElement('button');
+            addBtn.className = 'add-btn';
+            addBtn.tabIndex = -1;
+            addBtn.textContent = '+ Add Item';
+            addBtn.onclick = (e) => { e.stopPropagation(); addNewItem(sectionId); };
+            content.appendChild(addBtn);
+
+            const table = document.createElement('table');
+            table.className = 'section-table';
+            table.id = `table-${sectionId}`;
+
+            const thead = document.createElement('thead');
+            thead.innerHTML = `<tr>
+                <th style="width:80px;">Item #</th>
+                <th>Name / Brand</th>
+                <th style="width:80px;">Pack/Size</th>
+                <th style="width:80px;">Price</th>
+                <th style="width:80px;">On Hand</th>
+                <th style="width:80px;">Total</th>
+                <th style="width:50px;"></th>
+            </tr>`;
+            table.appendChild(thead);
+
+            const tbody = document.createElement('tbody');
+            tbody.id = `tbody-${sectionId}`;
+            items.forEach(item => {
+                tbody.appendChild(createItemRow(item, sectionId));
+            });
+
+            const totalRow = document.createElement('tr');
+            totalRow.className = 'section-total-row';
+            totalRow.innerHTML = `
+                <td colspan="5" style="text-align:right;padding:12px;"><strong>Section Total:</strong></td>
+                <td id="section-total-${sectionId}" class="total">$0.00</td>
+                <td></td>
+            `;
+            tbody.appendChild(totalRow);
+
+            table.appendChild(tbody);
+            content.appendChild(table);
+            section.appendChild(header);
+            section.appendChild(content);
+            return section;
+        }
+
+        function toggleSection(section, header) {
+            const content = section.querySelector('.section-content');
+            const toggle = header.querySelector('.section-toggle');
+            content.classList.toggle('expanded');
+            toggle.textContent = content.classList.contains('expanded') ? '▼' : '▶';
+        }
+
+        function deleteItemRow(btn) {
+            if (confirm('Remove this item?')) {
+                btn.closest('tr').remove();
+                updateTotals();
+            }
+        }
+
+        // When a non-BEK price input is edited: update data-price, recompute totals,
+        // and save ONLY that row's price to the saved items list.
+        let _pricePersistTimer = null;
+
+        // Tap the pencil to edit a non-BEK item's price via a prompt.
+        // This prevents accidental price edits during counting on tablets.
+        function editItemPrice(btn) {
+            const row = btn.closest('.item-row');
+            if (!row) return;
+            const name = row.querySelector('.item-name')?.textContent || 'this item';
+            const currentPrice = parseFloat(row.getAttribute('data-price')) || 0;
+            const input = prompt('New price for ' + name + ':', currentPrice.toFixed(2));
+            if (input === null) return; // cancelled
+            const parsed = parseFloat(input);
+            if (isNaN(parsed) || parsed < 0) {
+                alert('Please enter a valid number');
+                return;
+            }
+            const showPrice = (v) => {
+                row.setAttribute('data-price', v);
+                const display = row.querySelector('.price-display');
+                if (display) display.textContent = '$' + v.toFixed(2);
+                updateTotals();
+            };
+            showPrice(parsed);
+            // Save ONLY this row's price (never the whole list)
+            saveItemFields(row, { price: parsed }).catch(err => {
+                showPrice(currentPrice);
+                listSaveFailed(err);
+            });
+        }
+
+        function onPriceEdited(input) {
+            const row = input.closest('.item-row');
+            if (!row) return;
+            const newPrice = parseFloat(input.value) || 0;
+            row.setAttribute('data-price', newPrice);
+            updateTotals();
+            // Debounce so rapid typing doesn't hammer Firebase
+            clearTimeout(_pricePersistTimer);
+            _pricePersistTimer = setTimeout(() => {
+                saveItemFields(row, { price: newPrice }).catch(listSaveFailed);
+            }, 500);
+        }
+
+        function addNewItem(sectionId) {
+            const name = prompt('Item name:');
+            if (!name) return;
+            const brand = prompt('Brand (or leave blank):') || '';
+            const pack = prompt('Pack / Size (or leave blank):') || '';
+            const priceStr = prompt('Price per case:');
+            if (priceStr === null) return;
+            const price = parseFloat(priceStr) || 0;
+            const itemNum = prompt('Item # (or leave blank):') || '';
+
+            const item = { itemNumber: itemNum, name, brand, pack, price };
+            const tbody = document.getElementById(`tbody-${sectionId}`);
+            const totalRow = tbody.querySelector('.section-total-row');
+            tbody.insertBefore(createItemRow(item, sectionId), totalRow);
+            updateTotals();
+        }
+
+        function createMealsSection(mealsData) {
+            const data = mealsData || MEALS_DATA;
+            const container = document.getElementById('inventory-container');
+
+            const section = document.createElement('div');
+            section.className = 'section';
+            section.id = 'section-meals';
+
+            const header = document.createElement('div');
+            header.className = 'section-header';
+            header.onclick = () => toggleSection(section, header);
+
+            const headerInfo = document.createElement('div');
+            headerInfo.className = 'section-header-info';
+            headerInfo.innerHTML = `
+                <div class="section-header-title">Front of House Meals</div>
+                <div class="section-header-meta" id="meta-meals">${data.filter(m => !isHiddenMeal(m)).length} meals | Total: $0.00</div>
+            `;
+
+            const toggle = document.createElement('div');
+            toggle.className = 'section-toggle';
+            toggle.textContent = '▼';
+
+            header.appendChild(headerInfo);
+            header.appendChild(toggle);
+
+            const content = document.createElement('div');
+            content.className = 'section-content expanded';
+
+            const addBtn = document.createElement('button');
+            addBtn.className = 'add-btn';
+            addBtn.tabIndex = -1;
+            addBtn.textContent = '+ Add New Meal';
+            addBtn.onclick = (e) => { e.stopPropagation(); addNewMeal(); };
+            content.appendChild(addBtn);
+
+            const table = document.createElement('table');
+            table.className = 'meals-table';
+            table.id = 'meals-table';
+
+            const thead = document.createElement('thead');
+            thead.innerHTML = `<tr>
+                <th>Meal Name</th>
+                <th style="width:100px;">Price</th>
+                <th style="width:100px;">Quantity</th>
+                <th style="width:120px;">Total</th>
+                <th style="width:50px;"></th>
+            </tr>`;
+            table.appendChild(thead);
+
+            const tbody = document.createElement('tbody');
+            tbody.id = 'meals-tbody';
+            data.forEach(meal => {
+                tbody.appendChild(createMealRow(meal));
+            });
+
+            const totalRow = document.createElement('tr');
+            totalRow.className = 'section-total-row';
+            totalRow.innerHTML = `
+                <td colspan="3" style="text-align:right;padding:12px;"><strong>Section Total:</strong></td>
+                <td id="section-total-meals" class="total">$0.00</td>
+                <td></td>
+            `;
+            tbody.appendChild(totalRow);
+
+            table.appendChild(tbody);
+            content.appendChild(table);
+            section.appendChild(header);
+            section.appendChild(content);
+            container.appendChild(section);
+        }
+
+        // Meal counts are keyed by position too (m_<name>_<index>), so removed meals are HIDDEN, not deleted.
+        // Past months still include a hidden meal's saved qty in their totals. Matched case-insensitively.
+        const HIDDEN_MEAL_NAMES = [
+            'Ranch Seasoned Chicken with Mozzarella and Bacon', // Zach: "...Mozzarella & Bacon" (Oct 2026)
+            'Roasted Turkey with Cajun Butter',                 // Oct 2026
+            'Buffalo Chicken Mac',                              // Oct 2026 (Colonnade row is spelled "Buffalo Chicken mac")
+        ];
+        function isHiddenMeal(meal) {
+            if (meal && meal.hidden === true) return true; // removed with the X button (row kept in place)
+            const nm = String((meal && meal.name) || '').trim().toLowerCase();
+            return HIDDEN_MEAL_NAMES.some(n => n.toLowerCase() === nm);
+        }
+        // New meals, appended to the END of each location's saved meals list once (by name).
+        const MEAL_ADDITIONS = [
+            { name: 'Chicken with Smoked Mozzarella Penne and Broccolini', price: 3.43 },
+            { name: 'Orange Chicken with A Warm Edamame Salad', price: 2.17 },
+            { name: 'Greek Chicken 1/2#', price: 3.46 },
+        ];
+        function applyMealAdditions(meals) {
+            const names = new Set(meals.filter(Boolean).map(m => String(m.name || '').trim().toLowerCase()));
+            let changed = false;
+            MEAL_ADDITIONS.forEach(m => {
+                const nm = m.name.trim().toLowerCase();
+                if (names.has(nm)) return;
+                meals.push({ name: m.name, price: m.price });
+                names.add(nm);
+                changed = true;
+            });
+            return changed;
+        }
+
+        function createMealRow(meal) {
+            const row = document.createElement('tr');
+            row.className = 'meal-row';
+            // Saved identity of this meal row, checked before any targeted save of this row
+            row.setAttribute('data-saved-name', String(meal.name || ''));
+            row.setAttribute('data-saved-price', String(Number(meal.price) || 0));
+            if (isHiddenMeal(meal)) {
+                row.classList.add('discontinued-meal');
+                row.style.display = 'none';
+            }
+
+            row.innerHTML = `
+                <td><input type="text" value="${meal.name}" class="meal-input"></td>
+                <td><input type="number" step="0.01" min="0" value="${meal.price.toFixed(2)}" class="meal-input" oninput="updateTotals()"></td>
+                <td><input type="number" step="1" min="0" class="meal-input" oninput="updateTotals()"></td>
+                <td class="total">$0.00</td>
+                <td><button class="delete-btn" tabindex="-1" onclick="deleteMealRow(this)">X</button></td>
+            `;
+            return row;
+        }
+
+        function deleteMealRow(btn) {
+            if (confirm('Remove this meal?')) {
+                btn.closest('tr').remove();
+                updateTotals();
+            }
+        }
+
+        function addNewMeal() {
+            const tbody = document.getElementById('meals-tbody');
+            const totalRow = tbody.querySelector('.section-total-row');
+            tbody.insertBefore(createMealRow({ name: 'New Meal', price: 0 }), totalRow);
+            updateTotals();
+        }
+
+        function updateTotals() {
+            let grandTotal = 0;
+
+            // Calculate supply section totals by reading the DOM directly
+            document.querySelectorAll('.section-table').forEach(table => {
+                let sectionTotal = 0;
+                let itemCount = 0;
+                const tbody = table.querySelector('tbody');
+                const sectionId = tbody.id.replace('tbody-', '');
+
+                tbody.querySelectorAll('.item-row').forEach(row => {
+                    if (!row.classList.contains('discontinued-row')) itemCount++;
+                    const price = parseFloat(row.getAttribute('data-price')) || 0;
+                    // Use .qty-input specifically — otherwise for non-BEK rows the first
+                    // input[type=number] is the editable price, not the quantity.
+                    const input = row.querySelector('.qty-input') || row.querySelector('input[type="number"]');
+                    const onHand = parseFloat(input.value) || 0;
+                    const total = price * onHand;
+                    row.querySelector('.total').textContent = '$' + total.toFixed(2);
+                    sectionTotal += total;
+                });
+
+                const sectionTotalCell = document.getElementById(`section-total-${sectionId}`);
+                if (sectionTotalCell) sectionTotalCell.textContent = '$' + sectionTotal.toFixed(2);
+
+                const meta = document.getElementById(`meta-${sectionId}`);
+                if (meta) meta.textContent = `${itemCount} items | Total: $${sectionTotal.toFixed(2)}`;
+
+                grandTotal += sectionTotal;
+            });
+
+            // Calculate meals total
+            let mealTotal = 0;
+            let mealCount = 0;
+            document.querySelectorAll('#meals-tbody .meal-row').forEach(row => {
+                if (!row.classList.contains('discontinued-meal')) mealCount++;
+                const inputs = row.querySelectorAll('input[type="number"]');
+                const price = parseFloat(inputs[0].value) || 0;
+                const qty = parseFloat(inputs[1].value) || 0;
+                const total = price * qty;
+                row.querySelector('.total').textContent = '$' + total.toFixed(2);
+                mealTotal += total;
+            });
+
+            const mealsTotalCell = document.getElementById('section-total-meals');
+            if (mealsTotalCell) mealsTotalCell.textContent = '$' + mealTotal.toFixed(2);
+
+            const mealsMeta = document.getElementById('meta-meals');
+            if (mealsMeta) mealsMeta.textContent = `${mealCount} meals | Total: $${mealTotal.toFixed(2)}`;
+
+            grandTotal += mealTotal;
+            document.getElementById('grandTotal').textContent = grandTotal.toFixed(2);
+        }
+
+        function clearAll() {
+            if (confirm('Are you sure you want to clear all quantities? This cannot be undone.')) {
+                document.querySelectorAll('input[type="number"]').forEach(input => {
+                    if (!input.closest('.meal-row') || input === input.parentElement.parentElement.querySelectorAll('input[type="number"]')[1]) {
+                        // For supply rows: clear the on-hand input
+                        // For meal rows: clear only the quantity (3rd column), not price
+                        input.value = '';
+                    }
+                });
+                // More targeted: clear supply on-hand and meal quantities only
+                document.querySelectorAll('.item-row input[type="number"]').forEach(i => i.value = '');
+                document.querySelectorAll('.meal-row').forEach(row => {
+                    const qtyInput = row.querySelectorAll('input[type="number"]')[1];
+                    if (qtyInput) qtyInput.value = '';
+                });
+                updateTotals();
+            }
+        }
+
+        // ==================== FIREBASE OR THIS BROWSER ====================
+        // Settings come only from firebase-config.js.
+        var boot = ZedBoot.start({ storageKey: 'zedops_staging_monthly_local_v1' });
+        if (boot.mode === 'blocked') {
+            throw new Error('Refusing to start. firebase-config.js points at the live Production Hub.');
+        }
+        const db = boot.db;
+        let currentMonthKey = '';
+        let currentLocation = '';
+        let monthRef = null;
+        let activeListeners = []; // track child listeners so we can detach
+        let suppressSync = {}; // keys currently being edited locally
+
+        const LOCATION_KEY = 'zedrics_inv_location';
+        function getLocation() {
+            return document.getElementById('locationSelect').value || 'main';
+        }
+        function getLocationLabel() {
+            return getLocation() === 'rim' ? 'The Rim' : 'Main Location';
+        }
+        function getMonthKey() {
+            return document.getElementById('monthSelect').value;
+        }
+
+        function setSyncStatus(connected) {
+            const el = document.getElementById('syncStatus');
+            if (window.ZEDOPS_STAGING && window.ZEDOPS_STAGING.mode === 'local') {
+                el.innerHTML = '<span style="color:#F9A825;">&#9679;</span> This browser only';
+                return;
+            }
+            if (connected) {
+                el.innerHTML = '<span style="color:#4CAF50;">&#9679;</span> Live sync on';
+            } else {
+                el.innerHTML = '<span style="color:#ff6b6b;">&#9679;</span> Connecting...';
+            }
+        }
+
+        // Build a stable unique key for a supply item row
+        function getSupplyKey(sectionId, row, idx) {
+            const itemNum = row.querySelector('.item-number')?.textContent?.trim();
+            const itemName = row.querySelector('.item-name')?.textContent?.trim();
+            const raw = itemNum || itemName || 'item';
+            const sanitized = raw.replace(/[.#$\/\[\]]/g, '_').replace(/\s+/g, '_').substring(0, 60);
+            return 's_' + sectionId + '_' + sanitized + '_' + idx;
+        }
+
+        // Build a stable unique key for a meal row
+        function getMealKey(row, idx) {
+            const nameInput = row.querySelector('input[type="text"]');
+            const name = (nameInput?.value || 'meal').substring(0, 40);
+            const sanitized = name.replace(/[.#$\/\[\]]/g, '_').replace(/\s+/g, '_');
+            return 'm_' + sanitized + '_' + idx;
+        }
+
+        // Assign data-fbkey attributes to all rows so we can match them
+        function assignFirebaseKeys() {
+            document.querySelectorAll('.section-table').forEach(table => {
+                const tbody = table.querySelector('tbody');
+                const sectionId = tbody.id.replace('tbody-', '');
+                tbody.querySelectorAll('.item-row').forEach((row, idx) => {
+                    row.setAttribute('data-fbkey', getSupplyKey(sectionId, row, idx));
+                });
+            });
+            document.querySelectorAll('#meals-tbody .meal-row').forEach((row, idx) => {
+                row.setAttribute('data-fbkey', getMealKey(row, idx));
+            });
+        }
+
+        // Save a single field to Firebase. Returns the promise so callers can
+        // tie protection windows to actual save completion (not a fixed timer).
+        function saveSingleField(fbKey, value) {
+            if (!monthRef) { console.warn('[Inventory] saveSingleField: monthRef is null!'); return Promise.reject('no monthRef'); }
+            const update = {};
+            update[fbKey] = value;
+            updateLastSavedTime();
+            return monthRef.update(update).then(() => {
+                console.log('[Inventory] Saved:', fbKey, '=', value);
+                updateLastSavedTime(true);
+            }).catch(err => {
+                console.error('[Inventory] Save failed:', fbKey, err);
+                throw err;
+            });
+        }
+
+        // Save a meal's full data (qty + price) to Firebase
+        function saveMealField(fbKey, data) {
+            if (!monthRef) return Promise.reject('no monthRef');
+            const update = {};
+            update[fbKey] = data;
+            updateLastSavedTime();
+            return monthRef.update(update).then(() => {
+                updateLastSavedTime(true);
+            }).catch(err => {
+                console.error('[Inventory] Save meal failed:', fbKey, err);
+                throw err;
+            });
+        }
+
+        // "Last saved at HH:MM:SS" indicator
+        function updateLastSavedTime(success) {
+            const el = document.getElementById('lastSaved');
+            if (!el) return;
+            const now = new Date();
+            const hh = String(now.getHours()).padStart(2,'0');
+            const mm = String(now.getMinutes()).padStart(2,'0');
+            const ss = String(now.getSeconds()).padStart(2,'0');
+            if (success) {
+                el.textContent = 'Saved at ' + hh + ':' + mm + ':' + ss;
+                el.style.color = '#4CAF50';
+            } else {
+                el.textContent = 'Saving...';
+                el.style.color = '#999';
+            }
+        }
+
+        // Delete a key from Firebase
+        function removeFirebaseKey(fbKey) {
+            if (!monthRef) return;
+            monthRef.child(fbKey).remove();
+        }
+
+        // Load ALL data from Firebase snapshot into the DOM
+        function loadAllFromFirebase(snapshot) {
+            const data = snapshot.val();
+            console.log('[Inventory] Firebase data received:', data ? Object.keys(data).length + ' keys' : 'null');
+            if (!data) return;
+
+            // Build a lookup of fbkey -> row for supplies
+            const supplyRows = {};
+            document.querySelectorAll('.item-row').forEach(row => {
+                const key = row.getAttribute('data-fbkey');
+                if (key) supplyRows[key] = row;
+            });
+
+            // Build a lookup for meal rows
+            const mealRows = {};
+            document.querySelectorAll('#meals-tbody .meal-row').forEach(row => {
+                const key = row.getAttribute('data-fbkey');
+                if (key) mealRows[key] = row;
+            });
+
+            // Apply all values from Firebase. NEVER overwrite an input the user is
+            // actively typing in (focused), and never overwrite a field whose save
+            // is still in flight (suppressSync flag is set).
+            const active = document.activeElement;
+            Object.keys(data).forEach(key => {
+                if (suppressSync[key]) return; // save is in flight — don't apply stale value
+
+                if (key.startsWith('s_') && supplyRows[key]) {
+                    // Target the QTY input specifically (never the editable price input)
+                    const input = supplyRows[key].querySelector('.qty-input') || supplyRows[key].querySelector('input[type="number"]');
+                    if (!input || input === active) return; // never disturb the focused input
+                    const val = data[key];
+                    const newDisplay = (val === null || val === undefined || val === '') ? '' : String(val);
+                    if (input.value !== newDisplay) {
+                        input.value = newDisplay;
+                    }
+                } else if (key.startsWith('m_') && mealRows[key]) {
+                    const mealData = data[key];
+                    if (typeof mealData === 'object') {
+                        const inputs = mealRows[key].querySelectorAll('input[type="number"]');
+                        if (inputs[0] && inputs[0] !== active) {
+                            const v = (mealData.price === null || mealData.price === undefined) ? '' : String(mealData.price);
+                            if (inputs[0].value !== v) inputs[0].value = v;
+                        }
+                        if (inputs[1] && inputs[1] !== active) {
+                            const v = (mealData.qty === null || mealData.qty === undefined) ? '' : String(mealData.qty);
+                            if (inputs[1].value !== v) inputs[1].value = v;
+                        }
+                    }
+                }
+            });
+
+            updateTotals();
+            applyPriceOverlayToDom();
+        }
+
+        // Approved BEK prices for this month only. No approval record: prices stay as they are.
+        function applyPriceOverlayToDom() {
+            if (!window.ZedPrice) return;
+            const approval = window.ZEDOPS_MONTH_PRICES;
+            let changed = false;
+            document.querySelectorAll('.item-row').forEach(row => {
+                if (row.querySelector('.price-display')) return;
+                const num = row.querySelector('.item-number')?.textContent?.trim() || '';
+                const baseAttr = row.getAttribute('data-base-price');
+                const base = baseAttr != null ? (parseFloat(baseAttr) || 0) : (parseFloat(row.getAttribute('data-price')) || 0);
+                const price = approval && approval.prices ? ZedPrice.approvedPrice(num, base, approval) : base;
+                if (String(row.getAttribute('data-price')) === String(price)) return;
+                row.setAttribute('data-price', String(price));
+                const cell = row.children[3];
+                if (cell) cell.textContent = '$' + price.toFixed(2);
+                changed = true;
+            });
+            if (changed) updateTotals();
+        }
+        function loadPriceOverlay(monthKey) {
+            window.ZEDOPS_MONTH_PRICES = null;
+            if (!monthKey || !db) return Promise.resolve();
+            return db.ref('staging_zedops_price_approvals/' + monthKey).once('value').then(snap => {
+                window.ZEDOPS_MONTH_PRICES = snap.val() || null;
+                applyPriceOverlayToDom();
+            }).catch(() => {
+                window.ZEDOPS_MONTH_PRICES = null;
+                applyPriceOverlayToDom();
+            });
+        }
+
+        // ==================== PER-LOCATION ITEM LIST ====================
+        // Each location stores its own list of items + meals at:
+        //   staging_inventory/{location}/items
+        //   staging_inventory/{location}/meals
+        // This way deletes at one location don't affect the other, and deletes
+        // persist across months. Prices auto-sync from INVENTORY_DATA whenever
+        // the HTML is updated with a new BEK guide.
+
+        function locationItemsRef(loc) { return db.ref('staging_inventory/' + loc + '/items'); }
+        function locationMealsRef(loc) { return db.ref('staging_inventory/' + loc + '/meals'); }
+
+        // Firebase forbids "/", ".", "#", "$", "[", "]" in keys. Section names like
+        // "Chemicals/Janitorial Supplies" need escaping when used as a Firebase key.
+        function escapeSectionKey(name) {
+            return name.replace(/\//g, '__SLASH__').replace(/\./g, '__DOT__')
+                       .replace(/#/g, '__HASH__').replace(/\$/g, '__DOLLAR__')
+                       .replace(/\[/g, '__LBRACK__').replace(/\]/g, '__RBRACK__');
+        }
+        function unescapeSectionKey(name) {
+            return name.replace(/__SLASH__/g, '/').replace(/__DOT__/g, '.')
+                       .replace(/__HASH__/g, '#').replace(/__DOLLAR__/g, '$')
+                       .replace(/__LBRACK__/g, '[').replace(/__RBRACK__/g, ']');
+        }
+        function escapeItemsForFirebase(items) {
+            const out = {};
+            Object.keys(items).forEach(k => { out[escapeSectionKey(k)] = items[k]; });
+            return out;
+        }
+        function unescapeItemsFromFirebase(items) {
+            const out = {};
+            Object.keys(items).forEach(k => { out[unescapeSectionKey(k)] = items[k]; });
+            return out;
+        }
+
+        // Apply latest INVENTORY_DATA prices to a saved items list (matching by item number)
+        function syncPricesFromConstant(savedData) {
+            const flatLatest = {};
+            Object.keys(INVENTORY_DATA).forEach(sec => {
+                INVENTORY_DATA[sec].forEach(it => {
+                    if (it.itemNumber) flatLatest[it.itemNumber] = it.price;
+                });
+            });
+            let changed = false;
+            Object.keys(savedData).forEach(sec => {
+                if (!Array.isArray(savedData[sec])) return;
+                savedData[sec].forEach(it => {
+                    if (it.itemNumber && flatLatest[it.itemNumber] !== undefined && it.price !== flatLatest[it.itemNumber]) {
+                        it.price = flatLatest[it.itemNumber];
+                        changed = true;
+                    }
+                });
+            });
+            return changed;
+        }
+
+        // Reorder a sections-object to match the canonical INVENTORY_DATA section order.
+        // Firebase doesn't preserve object key insertion order on read, so we enforce it here.
+        function reorderSectionsByConstant(data) {
+            const ordered = {};
+            Object.keys(INVENTORY_DATA).forEach(sec => {
+                if (data[sec]) ordered[sec] = data[sec];
+            });
+            // Preserve any extra sections that aren't in the constant (shouldn't normally happen)
+            Object.keys(data).forEach(sec => {
+                if (!ordered[sec]) ordered[sec] = data[sec];
+            });
+            return ordered;
+        }
+
+        // New items for existing locations. The saved item list per location only gets PRICE updates
+        // from INVENTORY_DATA, so new products must be appended explicitly. Each item is appended to the
+        // END of its section (existing rows keep their positions, so saved counts and Rim weekly pars
+        // don't shift), and only if that item # isn't already anywhere in the location's list, so this
+        // is safe to run on every load. Remove entries once they're live everywhere.
+        const LOCATION_ADDITIONS = {
+            main: {
+                'Meat': ['121792', '500370', '220607', '189197'],   // Sep 2026 replacements
+                'Freezer': ['219408', '172359', '206425'],          // BEK special orders; salmon/hashbrown replace 139366/185467
+                'Kitchen Dry Supplies': ['212500'],                 // peanut butter
+                'Front of House Supplies': ['563091', '563081', '563278'], // kombucha x3
+                'Spice Rack': ['184631'],                           // Oct 2026: Vinegar White Wine (replaces hidden 686012)
+            },
+            rim: {
+                'Plating Team Supplies': ['161647'],                // replaces discontinued blue XL glove 195176
+                'Front of House Supplies': ['563091', '563081', '563278'], // kombucha x3
+            },
+        };
+        // New items WITHOUT a BEK item number (can't come from INVENTORY_DATA by number). Appended to the END
+        // of the section, once, only if no row in that section already has the same name with an empty item #.
+        // Their saved-count key is built from the NAME, so never rename these rows after they go live.
+        const SNACK_DRINK_ADDS_OCT_2026 = [
+            // Snacks (Front of House Supplies — there is no "Snacks" section)
+            { itemNumber: '', name: 'Pumpkin Seeds', brand: 'Werner', pack: '1/EA', price: 1.75 },
+            { itemNumber: '', name: 'Sunflower Seeds', brand: 'Werner', pack: '1/EA', price: 1.75 },
+            // Drinks (Front of House Supplies — there is no "Drinks" section). Kombucha counted per CAN.
+            // $2.22 per can (confirmed by Zach, Oct 2026). Replaces the hidden 6 / 12 OZ case rows 563091/563081/563278.
+            { itemNumber: '', name: 'Kombucha Can - Ginger Nettle', brand: '', pack: '1 / 12 OZ can', price: 2.22 },
+            { itemNumber: '', name: 'Kombucha Can - Pure Green', brand: '', pack: '1 / 12 OZ can', price: 2.22 },
+            { itemNumber: '', name: 'Kombucha Can - Jasmine', brand: '', pack: '1 / 12 OZ can', price: 2.22 },
+            { itemNumber: '', name: 'Kombucha Can - Ashwaganda', brand: '', pack: '1 / 12 OZ can', price: 2.22 },
+            // Karma Water counted per BOTTLE: case of 12 = $16.98 -> $1.415 each (page shows $1.42; math uses 1.415)
+            { itemNumber: '', name: 'Karma Water - Pineapple', brand: 'Karma', pack: '1/EA bottle', price: 1.415 },
+            { itemNumber: '', name: 'Karma Water - Berry Cherry', brand: 'Karma', pack: '1/EA bottle', price: 1.415 },
+            { itemNumber: '', name: 'Karma Water - Blueberry Lemonade', brand: 'Karma', pack: '1/EA bottle', price: 1.415 },
+        ];
+        const LOCATION_NAMED_ADDITIONS = {
+            main: { 'Front of House Supplies': SNACK_DRINK_ADDS_OCT_2026 },
+            rim:  { 'Front of House Supplies': SNACK_DRINK_ADDS_OCT_2026 },
+        };
+        function applyLocationNamedAdditions(loc, data) {
+            const adds = LOCATION_NAMED_ADDITIONS[loc];
+            if (!adds) return false;
+            let changed = false;
+            Object.keys(adds).forEach(sec => {
+                if (!Array.isArray(data[sec])) { console.warn('[Inventory] Section missing at', loc, ':', sec); return; }
+                const names = new Set(data[sec].filter(it => it && !(it.itemNumber && String(it.itemNumber).trim()))
+                    .map(it => String(it.name || '').trim().toLowerCase()));
+                adds[sec].forEach(item => {
+                    const nm = item.name.trim().toLowerCase();
+                    if (names.has(nm)) return;
+                    data[sec].push(JSON.parse(JSON.stringify(item)));
+                    names.add(nm);
+                    changed = true;
+                });
+            });
+            return changed;
+        }
+
+        // One-time in-place pack/name fixes for saved rows that HAVE an item number (price sync only touches
+        // price). Matches item # and, if given, the OLD pack/name so it runs once and never overrides a later
+        // edit. Item # (part of the saved-count key) is never changed, so counts stay attached.
+        const NUMBERED_ITEM_UPDATES = [
+            { itemNumber: '696005', fromPack: '6/5lb', pack: '1 / 5 LB' },   // Baking Powder
+            { itemNumber: '696131', fromPack: '6/5lb', pack: '1 / 5 LB' },   // Baking Soda
+            { itemNumber: '793069', fromPack: '4/1gal', pack: '1 / 1 GAL' }, // Honey Pure Blend
+            { itemNumber: '793062', fromPack: '4/1gal', pack: '1 / 1 GAL' }, // Syrup Maple Dark
+            { itemNumber: '184630', fromPack: '', pack: '2 / 5 LTR' },        // Vinegar Red Wine (Bellacibo Primo)
+            { itemNumber: '883710', fromName: 'Hair Net Dark Brown Light Wgt', name: 'Bouffant' }, // "Black Hair net" (Zach, Oct 2026)
+        ];
+        function applyNumberedItemUpdates(data) {
+            const norm = v => String(v || '').replace(/\s+/g, '').toLowerCase();
+            let changed = false;
+            Object.values(data).forEach(arr => (arr || []).forEach(it => {
+                if (!it || !it.itemNumber) return;
+                NUMBERED_ITEM_UPDATES.forEach(u => {
+                    if (String(it.itemNumber).trim() !== u.itemNumber) return;
+                    if (u.pack !== undefined && 'fromPack' in u && norm(it.pack) === norm(u.fromPack) && it.pack !== u.pack) {
+                        it.pack = u.pack; changed = true;
+                    }
+                    if (u.name !== undefined && 'fromName' in u && String(it.name || '').trim() === u.fromName) {
+                        it.name = u.name; changed = true;
+                    }
+                });
+            }));
+            return changed;
+        }
+
+        function applyLocationAdditions(loc, data) {
+            const adds = LOCATION_ADDITIONS[loc];
+            if (!adds) return false;
+            const present = new Set();
+            Object.values(data).forEach(arr => (arr || []).forEach(it => { if (it && it.itemNumber) present.add(String(it.itemNumber).trim()); }));
+            const byNumber = {};
+            Object.values(INVENTORY_DATA).forEach(arr => arr.forEach(it => { if (it.itemNumber) byNumber[it.itemNumber] = it; }));
+            let changed = false;
+            Object.keys(adds).forEach(sec => {
+                if (!Array.isArray(data[sec])) { console.warn('[Inventory] Section missing at', loc, ':', sec); return; }
+                adds[sec].forEach(num => {
+                    if (present.has(num) || !byNumber[num]) return;
+                    data[sec].push(JSON.parse(JSON.stringify(byNumber[num])));
+                    present.add(num);
+                    changed = true;
+                });
+            });
+            return changed;
+        }
+
+        // One-time in-place updates for saved rows that have NO item number (price sync by number can't
+        // reach them). Matches exact section + exact name + empty item #, and only while the row still has
+        // the OLD pack, so it runs once and never overrides a later pencil edit. Nothing is moved, and the
+        // row's name/item # (which make up its saved-count key) are untouched. Applies to every location.
+        const NAMED_ITEM_UPDATES = [
+            // Sep 2026: pop chips now BEK 24 / 0.8 OZ at $20.67 (was 1/30 PK at $14.98)
+            { section: 'Front of House Supplies', name: 'Pop Chips - Sour Cream and Onion', fromPack: '1/30pk', pack: '24 / 0.8 OZ', price: 20.67 },
+            { section: 'Front of House Supplies', name: 'Pop Chips - Salt and Vinegar',     fromPack: '1/30pk', pack: '24 / 0.8 OZ', price: 20.67 },
+            { section: 'Front of House Supplies', name: 'Pop Chips - BBQ',                  fromPack: '1/30pk', pack: '24 / 0.8 OZ', price: 20.67 },
+        ];
+        function applyNamedItemUpdates(data) {
+            let changed = false;
+            NAMED_ITEM_UPDATES.forEach(u => {
+                const arr = data[u.section];
+                if (!Array.isArray(arr)) return;
+                arr.forEach(it => {
+                    if (!it || (it.itemNumber && String(it.itemNumber).trim())) return;
+                    if (String(it.name || '').trim() !== u.name) return;
+                    if (String(it.pack || '').replace(/\s+/g, '').toLowerCase() !== u.fromPack) return;
+                    it.pack = u.pack;
+                    it.price = u.price;
+                    changed = true;
+                });
+            });
+            return changed;
+        }
+
+        // ---- Targeted list writes (Oct 2026) ----
+        // The items/meals lists are NEVER rewritten as a whole from this page. Every edit writes only the
+        // changed field(s) of the one row it touches, after checking the saved row at that position is
+        // still the same item. A tablet with an old copy of the list can't overwrite other rows.
+        const SECTION_KEYS = {}; // loc -> { 'Section Name': 'saved Firebase key' }
+        function sectionKeyFor(loc, sectionName) {
+            return (SECTION_KEYS[loc] && SECTION_KEYS[loc][sectionName]) || escapeSectionKey(sectionName);
+        }
+        function staleListError() {
+            const err = new Error('This list was changed on another device. Reload the page, then try again.');
+            err.stale = true;
+            return err;
+        }
+        function listSaveFailed(err) {
+            console.error('[Inventory] Row save failed:', err);
+            alert(err && err.stale ? err.message : 'Could not save this change: ' + ((err && err.message) || err));
+        }
+        // Where an item row lives in the saved list: section key + position (DOM rows are never removed,
+        // so the position on the page is the position in the saved list).
+        function itemRowRef(row) {
+            const loc = currentLocation;
+            const section = row && row.closest('.section');
+            const sectionName = section && section.getAttribute('data-section-name');
+            if (!loc || !sectionName) return null;
+            const idx = Array.from(section.querySelectorAll('.item-row')).indexOf(row);
+            if (idx < 0) return null;
+            return locationItemsRef(loc).child(sectionKeyFor(loc, sectionName)).child(String(idx));
+        }
+        async function saveItemFields(row, fields) {
+            const ref = itemRowRef(row);
+            if (!ref) throw new Error('row not found');
+            const saved = (await ref.once('value')).val();
+            if (!saved || String(saved.itemNumber || '').trim() !== row.getAttribute('data-saved-num') ||
+                String(saved.name || '').trim() !== row.getAttribute('data-saved-name')) throw staleListError();
+            await ref.update(fields);
+            console.log('[Inventory] Saved row', ref.toString(), fields);
+        }
+        function mealRowRef(row) {
+            if (!currentLocation || !row) return null;
+            const idx = Array.from(document.querySelectorAll('#meals-tbody .meal-row')).indexOf(row);
+            return idx < 0 ? null : locationMealsRef(currentLocation).child(String(idx));
+        }
+        async function saveMealFields(row, fields) {
+            const ref = mealRowRef(row);
+            if (!ref) throw new Error('meal row not found');
+            const saved = (await ref.once('value')).val();
+            if (!saved || String(saved.name || '') !== row.getAttribute('data-saved-name')) throw staleListError();
+            await ref.update(fields);
+            if ('name' in fields) row.setAttribute('data-saved-name', String(fields.name));
+            if ('price' in fields) row.setAttribute('data-saved-price', String(fields.price));
+            console.log('[Inventory] Saved meal row', ref.toString(), fields);
+        }
+        // Next free position in a saved list (array or array-like object)
+        function nextIndexOf(val) {
+            if (!val) return 0;
+            if (Array.isArray(val)) return val.length;
+            const nums = Object.keys(val).map(Number).filter(n => !isNaN(n));
+            return nums.length ? Math.max(...nums) + 1 : 0;
+        }
+        // Append by writing ONLY the next empty position; if another device just took it, use the next one.
+        async function appendToList(listRef, value) {
+            let i = nextIndexOf((await listRef.once('value')).val());
+            for (let tries = 0; tries < 25; tries++, i++) {
+                const res = await listRef.child(String(i)).transaction(cur => (cur === null ? value : undefined));
+                if (res.committed) return i;
+            }
+            throw new Error('could not find a free position');
+        }
+        // Only the paths that differ between two copies of a list ('' prefix = the list root)
+        function diffListPaths(before, after, prefix, updates) {
+            (after || []).forEach((row, i) => {
+                const old = (before || [])[i];
+                if (old === undefined || old === null) { updates[prefix + i] = row; return; }
+                new Set([...Object.keys(old), ...Object.keys(row || {})]).forEach(f => {
+                    if (JSON.stringify(old[f]) !== JSON.stringify(row[f])) updates[prefix + i + '/' + f] = (row[f] === undefined ? null : row[f]);
+                });
+            });
+            return updates;
+        }
+        // Rebuild the page from the saved lists and re-apply the month's counts
+        async function refreshLocationView() {
+            await rebuildDOMForLocation(currentLocation);
+            if (monthRef) loadAllFromFirebase(await monthRef.once('value'));
+        }
+
+        async function loadItemsForLocation(loc) {
+            const ref = locationItemsRef(loc);
+            const snap = await ref.once('value');
+            let raw = snap.val();
+            if (!raw) {
+                // First time at this location — seed with the full BEK list, but only if it is still empty
+                const res = await ref.transaction(cur => (cur === null ? escapeItemsForFirebase(INVENTORY_DATA) : undefined));
+                raw = res.snapshot.val();
+                if (res.committed || !raw) { SECTION_KEYS[loc] = {}; return JSON.parse(JSON.stringify(INVENTORY_DATA)); }
+            }
+            const keyMap = {};
+            Object.keys(raw).forEach(k => { keyMap[unescapeSectionKey(k)] = k; });
+            SECTION_KEYS[loc] = keyMap;
+            let data = reorderSectionsByConstant(unescapeItemsFromFirebase(raw));
+            const before = JSON.parse(JSON.stringify(data));
+            // Sync any updated prices from the latest INVENTORY_DATA, and append any new items
+            const pricesChanged = syncPricesFromConstant(data);
+            const itemsAdded = applyLocationAdditions(loc, data);
+            const namedUpdated = applyNamedItemUpdates(data);
+            const namedAdded = applyLocationNamedAdditions(loc, data);
+            const numberedUpdated = applyNumberedItemUpdates(data);
+            if (pricesChanged || itemsAdded || namedUpdated || namedAdded || numberedUpdated) {
+                // Write only the changed fields / new positions — never the whole list
+                const updates = {};
+                Object.keys(data).forEach(sec => {
+                    if (!Array.isArray(data[sec])) return;
+                    diffListPaths(Array.isArray(before[sec]) ? before[sec] : [], data[sec], (keyMap[sec] || escapeSectionKey(sec)) + '/', updates);
+                });
+                if (Object.keys(updates).length) {
+                    await ref.update(updates);
+                    console.log('[Inventory] Saved item list changes for', loc, Object.keys(updates));
+                }
+            }
+            return data;
+        }
+
+        async function loadMealsForLocation(loc) {
+            const ref = locationMealsRef(loc);
+            const snap = await ref.once('value');
+            let data = snap.val();
+            if (!data) {
+                const res = await ref.transaction(cur => (cur === null ? MEALS_DATA : undefined));
+                data = res.snapshot.val();
+                if (res.committed || !data) return JSON.parse(JSON.stringify(MEALS_DATA));
+            }
+            // Firebase may hand back an array-like object; keep positions exactly as saved.
+            if (!Array.isArray(data)) data = Object.keys(data).sort((a, b) => a - b).map(k => data[k]);
+            const before = JSON.parse(JSON.stringify(data));
+            if (applyMealAdditions(data)) {
+                const updates = diffListPaths(before, data, '', {});
+                if (Object.keys(updates).length) {
+                    await ref.update(updates);
+                    console.log('[Inventory] Appended new meals for', loc, Object.keys(updates));
+                }
+            }
+            return data;
+        }
+
+        async function rebuildDOMForLocation(loc) {
+            const [items, meals] = await Promise.all([
+                loadItemsForLocation(loc),
+                loadMealsForLocation(loc)
+            ]);
+            initializeInventory(items, meals);
+            assignFirebaseKeys();
+            updateTotals();
+        }
+
+        // Connect to Firebase for the selected month + location
+        function connectToMonth() {
+            const monthKey = getMonthKey();
+            const location = getLocation();
+            if (!monthKey) return;
+            if (monthKey === currentMonthKey && location === currentLocation && monthRef) return;
+
+            // Detach previous listener
+            if (monthRef) {
+                monthRef.off();
+            }
+
+            currentMonthKey = monthKey;
+            currentLocation = location;
+            const path = 'staging_inventory/' + location + '/' + monthKey;
+            monthRef = db.ref(path);
+            console.log('[Inventory] Connected to Firebase path:', path);
+            loadPriceOverlay(monthKey);
+
+            // Update the location badge in the header
+            const badge = document.getElementById('locationBadge');
+            if (badge) badge.textContent = getLocationLabel();
+
+            // Clear any locally-typed values before loading fresh location data
+            document.querySelectorAll('.item-row input[type="number"]').forEach(i => i.value = '');
+            document.querySelectorAll('.meal-row').forEach(row => {
+                const qtyInput = row.querySelectorAll('input[type="number"]')[1];
+                if (qtyInput) qtyInput.value = '';
+            });
+            updateTotals();
+
+            // Listen for ALL changes and apply them
+            monthRef.on('value', (snapshot) => {
+                loadAllFromFirebase(snapshot);
+                setSyncStatus(true);
+            }, (err) => {
+                console.error('[Inventory] Firebase listen error:', err);
+            });
+        }
+
+        // Attach input listeners for real-time per-field saving.
+        // suppressSync is held until the actual save promise resolves (with a
+        // safety timeout fallback so a stuck save doesn't block sync forever).
+        function holdAndSave(fbKey, savePromise) {
+            suppressSync[fbKey] = true;
+            const safetyTimeout = setTimeout(() => { delete suppressSync[fbKey]; }, 8000);
+            savePromise.then(() => {
+                clearTimeout(safetyTimeout);
+                // Brief grace period after save completes before re-enabling listener
+                setTimeout(() => { delete suppressSync[fbKey]; }, 250);
+            }).catch(() => {
+                clearTimeout(safetyTimeout);
+                // On save failure, keep protection on for 5s then release so the
+                // listener can eventually re-sync from server. Critically this
+                // means a typed value stays visible until the next confirmed sync.
+                setTimeout(() => { delete suppressSync[fbKey]; }, 5000);
+            });
+        }
+
+        function attachFirebaseListeners() {
+            document.addEventListener('input', (e) => {
+                const row = e.target.closest('.item-row');
+                if (row) {
+                    // Only save qty-input changes here. Price-input changes are handled by
+                    // onPriceEdited(), which persists them to the items list (not the monthly qty).
+                    if (!e.target.classList.contains('qty-input')) {
+                        updateTotals();
+                        return;
+                    }
+                    const fbKey = row.getAttribute('data-fbkey');
+                    if (fbKey) {
+                        const val = parseFloat(e.target.value) || 0;
+                        holdAndSave(fbKey, saveSingleField(fbKey, val));
+                    }
+                    updateTotals();
+                    return;
+                }
+
+                const mealRow = e.target.closest('.meal-row');
+                if (mealRow) {
+                    const fbKey = mealRow.getAttribute('data-fbkey');
+                    if (fbKey) {
+                        const inputs = mealRow.querySelectorAll('input[type="number"]');
+                        const price = parseFloat(inputs[0].value) || 0;
+                        const qty = parseFloat(inputs[1].value) || 0;
+                        const nameInput = mealRow.querySelector('input[type="text"]');
+                        const name = nameInput?.value || '';
+                        holdAndSave(fbKey, saveMealField(fbKey, { name, price, qty }));
+                    }
+                    // Name / price edits also update ONLY this meal's row in the saved meals list
+                    // (debounced). Typing a qty changes nothing in the list.
+                    if (!e.target.matches('input[type="number"]') || e.target === mealRow.querySelectorAll('input[type="number"]')[0]) {
+                        clearTimeout(mealRow._listTimer);
+                        mealRow._listTimer = setTimeout(() => {
+                            const inputs = mealRow.querySelectorAll('input[type="number"]');
+                            const name = mealRow.querySelector('input[type="text"]')?.value || '';
+                            const price = parseFloat(inputs[0].value) || 0;
+                            const fields = {};
+                            if (name !== mealRow.getAttribute('data-saved-name')) fields.name = name;
+                            if (price !== (parseFloat(mealRow.getAttribute('data-saved-price')) || 0)) fields.price = price;
+                            if (Object.keys(fields).length) saveMealFields(mealRow, fields).catch(listSaveFailed);
+                        }, 500);
+                    }
+                    updateTotals();
+                    return;
+                }
+            });
+        }
+
+        // X button: mark ONLY that row hidden in the saved list (the row keeps its position, so no
+        // other row's count key moves), and clear its count for the month on screen.
+        deleteItemRow = function(btn) {
+            if (!confirm('Remove this item?')) return;
+            const row = btn.closest('tr');
+            saveItemFields(row, { hidden: true }).then(() => {
+                row.classList.add('discontinued-row');
+                row.style.display = 'none';
+                const fbKey = row.getAttribute('data-fbkey');
+                if (fbKey) removeFirebaseKey(fbKey);
+                updateTotals();
+            }).catch(listSaveFailed);
+        };
+
+        deleteMealRow = function(btn) {
+            if (!confirm('Remove this meal?')) return;
+            const row = btn.closest('tr');
+            saveMealFields(row, { hidden: true }).then(() => {
+                row.classList.add('discontinued-meal');
+                row.style.display = 'none';
+                const fbKey = row.getAttribute('data-fbkey');
+                if (fbKey) removeFirebaseKey(fbKey);
+                updateTotals();
+            }).catch(listSaveFailed);
+        };
+
+        // + Add: write the new row ONLY at the next free position of that list, then redraw
+        addNewItem = async function(sectionId) {
+            const section = document.getElementById('section-' + sectionId);
+            const sectionName = section && section.getAttribute('data-section-name');
+            if (!sectionName || !currentLocation) return;
+            const name = prompt('Item name:');
+            if (!name) return;
+            const brand = prompt('Brand (or leave blank):') || '';
+            const pack = prompt('Pack / Size (or leave blank):') || '';
+            const priceStr = prompt('Price per case:');
+            if (priceStr === null) return;
+            const price = parseFloat(priceStr) || 0;
+            const itemNumber = prompt('Item # (or leave blank):') || '';
+            try {
+                const loc = currentLocation;
+                await appendToList(locationItemsRef(loc).child(sectionKeyFor(loc, sectionName)), { itemNumber, name, brand, pack, price });
+                await refreshLocationView();
+            } catch (err) { listSaveFailed(err); }
+        };
+        addNewMeal = async function() {
+            if (!currentLocation) return;
+            try {
+                await appendToList(locationMealsRef(currentLocation), { name: 'New Meal', price: 0 });
+                await refreshLocationView();
+            } catch (err) { listSaveFailed(err); }
+        };
+
+        // Month selector change: clear inputs and load new month
+        document.getElementById('monthSelect').addEventListener('change', () => {
+            document.querySelectorAll('.item-row input[type="number"]').forEach(i => i.value = '');
+            document.querySelectorAll('.meal-row').forEach(row => {
+                const qtyInput = row.querySelectorAll('input[type="number"]')[1];
+                if (qtyInput) qtyInput.value = '';
+            });
+            currentMonthKey = ''; // force reconnect
+            updateTotals();
+            connectToMonth();
+        });
+
+        // Location selector change: rebuild DOM from new location's saved items, then reconnect month
+        document.getElementById('locationSelect').addEventListener('change', async () => {
+            const loc = getLocation();
+            try { localStorage.setItem(LOCATION_KEY, loc); } catch(e) {}
+
+            // Detach old month listener
+            if (monthRef) { monthRef.off(); monthRef = null; }
+            currentMonthKey = '';
+            currentLocation = loc;
+
+            // Update the badge immediately for visual feedback
+            const badge = document.getElementById('locationBadge');
+            if (badge) badge.textContent = getLocationLabel();
+
+            // Rebuild the DOM from this location's saved items + meals
+            await rebuildDOMForLocation(loc);
+
+            // Now connect to the month for quantities
+            connectToMonth();
+        });
+
+        // Monitor connection state
+        db.ref('.info/connected').on('value', (snap) => {
+            setSyncStatus(snap.val() === true);
+        });
+
+        // ==================== PIN LOGIN ====================
+        // PINs are checked by Firebase (see hub-auth.js); they are not stored in this page.
+        function showApp() {
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('main-content').style.display = 'block';
+            startApp();
+        }
+
+        // PIN input handler (team or admin PIN)
+        document.getElementById('pin-input').addEventListener('input', function() {
+            const input = this;
+            document.getElementById('pin-error').textContent = '';
+            if (input.value.length === 4) {
+                const pin = input.value;
+                input.disabled = true;
+                HubAuth.signInWithPin(pin).then(() => {
+                    showApp();
+                    console.log('[Inventory] Logged in successfully');
+                }).catch(err => {
+                    document.getElementById('pin-error').textContent = HubAuth.friendlyError(err);
+                    input.value = '';
+                    console.error('[Inventory] Auth error:', err && err.code);
+                }).finally(() => { input.disabled = false; });
+            }
+        });
+
+        // Initialize the main app (called after successful login)
+        async function startApp() {
+            const now = new Date();
+            const monthStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+            document.getElementById('monthSelect').value = monthStr;
+
+            // Restore last-used location from localStorage
+            try {
+                const savedLoc = localStorage.getItem(LOCATION_KEY);
+                if (savedLoc === 'main' || savedLoc === 'rim') {
+                    document.getElementById('locationSelect').value = savedLoc;
+                }
+            } catch(e) {}
+
+            currentLocation = getLocation();
+            const badge = document.getElementById('locationBadge');
+            if (badge) badge.textContent = getLocationLabel();
+
+            // Build DOM from this location's saved items list (or seed it on first load)
+            await rebuildDOMForLocation(currentLocation);
+            attachFirebaseListeners();
+            connectToMonth();
+            console.log('[Inventory] App started, month=' + monthStr + ', location=' + currentLocation);
+        }
+
+        // On page load: stay logged in for 24h on this device
+        function initPage() {
+            HubAuth.restore().then(role => {
+                if (role) {
+                    showApp();
+                    console.log('[Inventory] Auto-login from saved session');
+                }
+                // Otherwise login screen is already visible
+            });
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initPage);
+        } else {
+            initPage();
+        }
+    </script>
+</body>
+</html>
