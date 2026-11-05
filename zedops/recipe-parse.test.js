@@ -411,6 +411,23 @@ test('gallon, carton, and chip rows order in the count unit', () => {
   assert.equal(order.orderExplain(whites, whiteNeed, 12), '12 carton × 2 lb = 24 lb on hand. Saved 12 kept as cartons, not converted from lb. 12.9 carton need − 12 carton on hand = 0.9 carton ÷ 15 carton/cs → 1 cs');
   assert.equal(order.orderExplain(blend, blendNeed, 0), '79.3 lb need − 0 lb on hand = 79.3 lb ÷ 40 lb/cs → 2 cs');
   assert.equal(order.orderExplain(chips, chipNeed, 12), '1 lb need − 12 lb on hand = 0 lb ÷ 12 lb/cs → 0 cs');
+  const mashed = catalog.items.bek__106810;
+  assert.equal(mashed.pack, '4 / 6 LB');
+  assert.equal(order.packAmount(mashed.pack).perCase, 24);
+  assert.equal(order.resolvedCountUnit(mashed), 'pound');
+  const mashedNeed = { quantity: 149.3, unit: 'lb', source: 'recipe' };
+  const mashedByCase = Object.assign({}, mashed, { countUnit: 'case', countUnitChosen: true });
+  assert.equal(order.orderCases(mashedByCase, mashedNeed, 1), 6);
+  assert.equal(order.orderExplain(mashedByCase, mashedNeed, 1), '149.3 lb need − 1 cs × 24 lb = 125.3 lb ÷ 24 lb/cs → 6 cs');
+  assert.equal(order.orderExplain(mashed, mashedNeed, 1), '149.3 lb need − 1 lb on hand = 148.3 lb ÷ 24 lb/cs → 7 cs');
+  Object.keys(catalog.items).forEach(function (id) {
+    const item = catalog.items[id];
+    const pack = order.packAmount(item && item.pack);
+    if (!pack || (pack.unit !== 'lb' && pack.unit !== 'oz' && pack.unit !== 'gal' && pack.unit !== 'qt')) return;
+    const line = order.orderExplain(Object.assign({}, item, { countUnit: 'case', countUnitChosen: true }), { quantity: 10, unit: 'lb', source: 'recipe' }, 1);
+    assert.equal(line.includes('case need'), false, (item.itemNumber || id) + ' ' + line);
+    assert.equal(line.includes('case/cs'), false, (item.itemNumber || id) + ' ' + line);
+  });
   const page = fs.readFileSync(path.join(__dirname, 'weekly-page.js'), 'utf8');
   assert.equal(page.includes('need-math'), true);
   assert.equal(page.includes('orderExplain'), true);

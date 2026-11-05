@@ -213,6 +213,26 @@
     return count > 0 ? count : 1;
   }
 
+  // Pounds in one case. "4 / 6 LB" is 24 lb. A gallon pack uses the gallon weight.
+  // A 64 oz or 128 oz carton is fluid ounces, not weight ounces.
+  function poundsPerCase(item, pack) {
+    if (String(item && item.itemNumber || '') === '800401') return 12;
+    pack = pack || packAmount(item && item.pack);
+    if (!pack || !(pack.perCase > 0)) return 0;
+    if (pack.unit === 'lb') return pack.perCase;
+    if (fluidCarton(item && item.pack)) {
+      var gallons = pack.perCase / 128;
+      var perGal = lbPerOf('gal', item && item.lbPerUnit, item);
+      return perGal > 0 ? gallons * perGal : 0;
+    }
+    if (pack.unit === 'oz') return pack.perCase / 16;
+    if (isVolumeUnit(pack.unit)) {
+      var per = lbPerOf(pack.unit, item && item.lbPerUnit, item);
+      return per > 0 ? pack.perCase * per : 0;
+    }
+    return 0;
+  }
+
   function usesSuggestedRecipe(item) {
     if (!item) return false;
     if (isPantryLiquid(item) || isKosherSalt(item) || canEachLb(item && item.pack)) return true;
@@ -558,8 +578,8 @@
       var needVol = needInCountUnit(need.quantity, need.unit, pack.unit, need.eachFactor, item && item.lbPerUnit, item);
       return casesToOrder(needVol / pack.each, have, boxesPerCase(pack));
     }
-    if (canonUnit(countUnit) === 'case' && canonUnit(need.unit) === 'lb' && pack && (pack.unit === 'lb' || pack.unit === 'oz')) {
-      var caseLb = pack.unit === 'lb' ? pack.perCase : pack.perCase / 16;
+    if (canonUnit(countUnit) === 'case' && canonUnit(need.unit) === 'lb') {
+      var caseLb = poundsPerCase(item, pack);
       if (caseLb > 0) return casesToOrder(Number(need.quantity) / caseLb, have, 1);
     }
     if (isPieceCountUnit(countUnit) && item && Number(item.eachPerCase) > 0 && canonUnit(need.unit) === 'ea') {
@@ -612,6 +632,15 @@
     var pack = packAmount(item.pack);
     var countUnit = resolvedCountUnit(item);
     var have = onHand == null || onHand === '' ? 0 : Number(onHand) || 0;
+    if (canonUnit(countUnit) === 'case' && canonUnit(need.unit) === 'lb') {
+      var caseLb = poundsPerCase(item, pack);
+      if (caseLb > 0) {
+        var netLb = (Number(need.quantity) || 0) - have * caseLb;
+        if (!(netLb > 0)) netLb = 0;
+        return roundApprox(need.quantity) + ' lb need − ' + explainQty(have) + ' cs × ' + explainQty(caseLb)
+          + ' lb = ' + roundApprox(netLb) + ' lb ÷ ' + explainQty(caseLb) + ' lb/cs → ' + result.amount + ' cs';
+      }
+    }
     var needQty = Number(need.quantity) || 0;
     var haveQty = have;
     var per = 1;
