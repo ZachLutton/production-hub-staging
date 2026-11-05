@@ -2174,6 +2174,7 @@
       groups[index[title]].rows.push({
         number: item.itemNumber || '',
         name: item.name || '',
+        pack: item.pack || '',
         unit: counted.amount ? sheetUnit(item, counted.amount) : '',
         onHand: counted.amount,
         entered: counted.entered

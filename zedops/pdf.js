@@ -137,21 +137,26 @@
     var sections = (doc && doc.sections) || [];
     var columns = [
       { key: 'number', label: 'BEK #', x: 36 },
-      { key: 'name', label: 'Item', x: 100 },
-      { key: 'onHand', label: 'On hand', x: 340 },
-      { key: 'entered', label: 'Last entered', x: 450 }
+      { key: 'name', label: 'Item', x: 92 },
+      { key: 'pack', label: 'Pack', x: 248 },
+      { key: 'onHand', label: 'On hand', x: 360 },
+      { key: 'entered', label: 'Last entered', x: 448 }
     ];
     var blocks = [];
     sections.forEach(function (section) {
       blocks.push({ kind: 'section', text: section.title || 'Items' });
       (section.rows || []).forEach(function (row) {
-        var nameLines = wrapWidth(row.name || '', 40);
+        var nameLines = wrapWidth(row.name || '', 26);
+        var packLines = wrapWidth(row.pack || '', 16);
+        if (!row.pack) packLines = [''];
         blocks.push({
           kind: 'row',
           lines: nameLines,
+          packLines: packLines,
           cells: {
             number: row.number || '',
             name: nameLines,
+            pack: packLines,
             onHand: amountThenUnit(row.onHand, row.unit),
             entered: row.entered || ''
           }
@@ -166,7 +171,7 @@
     var limit = 640;
     function blockHeight(block) {
       if (block.kind === 'section') return 22;
-      return 8 + Math.max(1, block.lines.length) * 12;
+      return 8 + Math.max(1, block.lines.length, (block.packLines || []).length) * 12;
     }
     blocks.forEach(function (block) {
       var height = blockHeight(block);
@@ -214,9 +219,12 @@
         block.lines.forEach(function (line, index) {
           cmds.push('BT /F1 9 Tf 1 0 0 1 ' + columns[1].x + ' ' + (y - index * 12) + ' Tm (' + pdfString(line) + ') Tj ET');
         });
-        cmds.push('BT /F1 9 Tf 1 0 0 1 ' + columns[2].x + ' ' + y + ' Tm (' + pdfString(block.cells.onHand) + ') Tj ET');
-        cmds.push('BT /F1 8 Tf 1 0 0 1 ' + columns[3].x + ' ' + y + ' Tm (' + pdfString(block.cells.entered) + ') Tj ET');
-        y -= 8 + Math.max(1, block.lines.length) * 12;
+        (block.packLines || ['']).forEach(function (line, index) {
+          cmds.push('BT /F1 8 Tf 1 0 0 1 ' + columns[2].x + ' ' + (y - index * 12) + ' Tm (' + pdfString(line) + ') Tj ET');
+        });
+        cmds.push('BT /F1 9 Tf 1 0 0 1 ' + columns[3].x + ' ' + y + ' Tm (' + pdfString(block.cells.onHand) + ') Tj ET');
+        cmds.push('BT /F1 8 Tf 1 0 0 1 ' + columns[4].x + ' ' + y + ' Tm (' + pdfString(block.cells.entered) + ') Tj ET');
+        y -= 8 + Math.max(1, block.lines.length, (block.packLines || []).length) * 12;
       });
       cmds.push('0.4 0.4 0.4 rg');
       cmds.push('BT /F1 8 Tf 1 0 0 1 480 28 Tm (' + pdfString('Page ' + (pageIndex + 1) + ' of ' + pages.length) + ') Tj ET');

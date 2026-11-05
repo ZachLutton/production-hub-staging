@@ -245,8 +245,8 @@ test('the count week is the Tuesday it is due, in Chicago, and prices wait for t
   assert.equal(page.indexOf('id="recipeTools"') < page.indexOf('id="storeView"'), true);
   assert.equal(page.indexOf('id="orderSummary"') < page.indexOf('id="storeView"'), true);
   assert.equal(page.indexOf('id="storeView"') < page.indexOf('id="adminTools"'), true);
-  assert.equal(page.includes('Build 20261104ap'), true);
-  assert.equal(page.includes('weekly-page.js?v=20261104ap'), true);
+  assert.equal(page.includes('Build 20261104aq'), true);
+  assert.equal(page.includes('weekly-page.js?v=20261104aq'), true);
   assert.equal(page.includes('id="pdfOnHand"'), true);
   assert.equal(page.includes('button:disabled'), true);
   assert.equal(page.includes('id="plateFile"'), true);
@@ -323,8 +323,10 @@ test('a downloaded PDF is a real PDF and a spreadsheet keeps a leading zero', as
     sections: [{
       title: 'Walk-in Cooler',
       rows: [
-        { number: '028201', name: 'Juice Lemon', unit: 'gal', onHand: '', entered: '' },
-        { number: '171985', name: 'Milk 2% Gal', unit: 'gal', onHand: '0', entered: 'Ada · Nov 4, 1:00 PM CT' }
+        { number: '393413', name: 'Egg White Liquid', pack: '15 / 2 LB', unit: 'carton', onHand: '12', entered: '' },
+        { number: '881026', name: 'Towel Roll', pack: '', unit: 'cs', onHand: '3', entered: '' },
+        { number: '028201', name: 'Juice Lemon', pack: '6 / .5 GAL', unit: 'gal', onHand: '', entered: '' },
+        { number: '171985', name: 'Milk 2% Gal', pack: '4 / 1 GAL', unit: 'gal', onHand: '0', entered: 'Ada · Nov 4, 1:00 PM CT' }
       ]
     }]
   })).toString('latin1');
@@ -336,7 +338,12 @@ test('a downloaded PDF is a real PDF and a spreadsheet keeps a leading zero', as
   assert.equal(onHandPdfBytes.includes('Juice Lemon'), true);
   assert.equal(onHandPdfBytes.includes('Last entered'), true);
   assert.equal(onHandPdfBytes.includes('not counted'), false);
+  assert.equal(onHandPdfBytes.includes('(15 / 2 LB) Tj'), true);
+  assert.equal(onHandPdfBytes.includes('(12 carton) Tj'), true);
+  assert.equal(onHandPdfBytes.includes('(3 cs) Tj'), true);
   assert.equal(onHandPdfBytes.includes('(0 gal) Tj'), true);
+  const towel = onHandPdfBytes.slice(onHandPdfBytes.indexOf('Towel Roll'), onHandPdfBytes.indexOf('Juice Lemon'));
+  assert.equal(/\([^)\n]*\/[^)\n]*\) Tj/.test(towel), false);
   assert.equal(onHandPdfBytes.includes('(gal 0) Tj'), false);
   const lemon = onHandPdfBytes.slice(onHandPdfBytes.indexOf('Juice Lemon'), onHandPdfBytes.indexOf('171985'));
   assert.equal(lemon.includes('(gal) Tj'), false);
