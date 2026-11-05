@@ -2193,7 +2193,13 @@
       sections: onHandSections(loc)
     }));
   }
-  document.getElementById('pdfOnHand').addEventListener('click', downloadOnHandPdf);
+  document.getElementById('pdfOnHand').addEventListener('click', function () {
+    try {
+      downloadOnHandPdf();
+    } catch (err) {
+      setPageStatus((err && err.message) || 'Could not build the on-hand PDF.', true);
+    }
+  });
   document.getElementById('pdfPaper').addEventListener('click', function () {
     var loc = currentStore();
     var lines = ['Store: ' + (loc ? loc.name : ''), 'Item #    Name    Pack    On hand ________    Order ________', ''];

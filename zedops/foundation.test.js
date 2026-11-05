@@ -245,8 +245,8 @@ test('the count week is the Tuesday it is due, in Chicago, and prices wait for t
   assert.equal(page.indexOf('id="recipeTools"') < page.indexOf('id="storeView"'), true);
   assert.equal(page.indexOf('id="orderSummary"') < page.indexOf('id="storeView"'), true);
   assert.equal(page.indexOf('id="storeView"') < page.indexOf('id="adminTools"'), true);
-  assert.equal(page.includes('Build 20261104aq'), true);
-  assert.equal(page.includes('weekly-page.js?v=20261104aq'), true);
+  assert.equal(page.includes('Build 20261104ar'), true);
+  assert.equal(page.includes('weekly-page.js?v=20261104ar'), true);
   assert.equal(page.includes('id="pdfOnHand"'), true);
   assert.equal(page.includes('button:disabled'), true);
   assert.equal(page.includes('id="plateFile"'), true);
@@ -256,6 +256,7 @@ test('the count week is the Tuesday it is due, in Chicago, and prices wait for t
   assert.equal(onHandPdf.includes('zedrics-onhand-'), true);
   assert.equal(onHandPdf.includes('setOnHand'), false);
   assert.equal(onHandPdf.includes('buildSheetPdf'), true);
+  assert.equal(typeof require('./order-math.js').countWord, 'function');
   assert.equal(onHandPdf.includes('requireAdmin'), false);
   assert.equal(logic.includes('workingCookDate'), true);
   assert.equal(logic.includes('savedCookText'), true);
