@@ -1127,7 +1127,7 @@
     var needText = needBlock(row, loc);
     var temp = item.temporary ? ' <span class="temp-badge">TEMPORARY</span>' : '';
     var food = ZedOrder.isFoodItem(item);
-    var countChoices = ['each', 'case', 'lb', 'gal', 'oz'];
+    var countChoices = ['each', 'case', 'lb', 'gal', 'oz', 'jar', 'can', 'carton', 'tub'];
     var countNow = String(ZedOrder.resolvedCountUnit(item) || 'each').toLowerCase();
     if (countNow === 'pound' || countNow === 'pounds') countNow = 'lb';
     if (countNow === 'gallon' || countNow === 'gallons') countNow = 'gal';

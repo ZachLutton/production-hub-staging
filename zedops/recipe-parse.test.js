@@ -198,9 +198,10 @@ test('cases always round up and an exact case does not', () => {
   const tzNeed = order.orderNeed(tzatziki, { recipe: { quantity: tzatzikiBlock.yieldPounds, unit: 'lb' }, countUnit: 'gallon' });
   assert.equal(order.needText(tzNeed), '4.7 lb ≈ 0.5 gal · 1.1 × 0.5 gal');
   assert.ok(Math.abs(tzNeed.convertedQuantity - (4.7 / 8.6)) < 1e-9);
+  assert.equal(order.resolvedCountUnit(tzatziki), 'tub');
   assert.equal(order.orderCases(tzatziki, tzNeed, 0), 1);
   assert.equal(order.orderCases(tzatziki, tzNeed, 0.5), 1);
-  assert.equal(order.orderCases(tzatziki, tzNeed, 1), 0);
+  assert.equal(order.orderCases(tzatziki, tzNeed, 2.875), 0);
   assert.equal(order.casesToOrder(4.7, 0, 2), 3);
   assert.equal(order.orderCases({ pack: '11 / 1 LB', countUnit: 'pound' }, { quantity: 31.2, unit: 'lb' }, 0), 3);
   const turkey = { name: 'Turkey Sausage Patty Cooked', pack: '128 / 1.25 OZ', countUnit: 'lb', itemNumber: '492773', tempZone: 'Frozen' };
@@ -269,7 +270,7 @@ test('cases always round up and an exact case does not', () => {
   assert.equal(order.packAmount(marinara.pack).cans, 6);
   assert.equal(order.canEachLb('6 / #5 CAN'), 3.5);
   assert.equal(order.canEachLb('6 / #2.5 CAN'), 1.75);
-  assert.equal(order.resolvedCountUnit(marinara), 'each');
+  assert.equal(order.resolvedCountUnit(marinara), 'can');
   assert.equal(order.defaultPieceLb(marinara), 6.5);
   assert.equal(order.isFoodItem(marinara), true);
   const marinaraNeed = order.orderNeed(marinara, { recipe: { quantity: 94, unit: 'lb' }, countUnit: 'each' });
@@ -340,8 +341,7 @@ test('cook list pieces use the pack, and peanut butter is 12 jars of 16 oz', () 
   assert.equal(thigh.unit, 'ea');
   assert.equal(thigh.amount, 110);
   const peanut = catalog.items.bek__212500;
-  assert.equal(peanut.countUnit, 'each');
-  assert.equal(order.resolvedCountUnit(peanut), 'each');
+  assert.equal(order.resolvedCountUnit(peanut), 'jar');
   assert.equal(order.packAmount(peanut.pack).each, 16);
   assert.equal(order.piecesPerCase(peanut), 12);
   const peanutNeed = { quantity: 3.3, unit: 'lb', source: 'recipe' };
@@ -362,7 +362,10 @@ test('gallon, carton, and chip rows order in the count unit', () => {
   assert.equal(order.orderResult(milk, milkNeed, 4).amount, 1);
   assert.equal(order.orderResult(milk, milkNeed, 5).amount, 0);
   const whites = catalog.items.bek__393413;
-  assert.equal(order.resolvedCountUnit(whites), 'each');
+  assert.equal(whites.pack, '15 / 2 LB');
+  assert.equal(order.resolvedCountUnit(whites), 'carton');
+  assert.equal(order.packAmount(whites.pack).perCase / order.packAmount(whites.pack).each, 15);
+  assert.equal(order.pieceWeightLb(whites), 2);
   const whiteNeed = order.orderNeed(whites, { recipe: { quantity: 25.8, unit: 'lb' }, countUnit: 'each' });
   assert.equal(order.needText(whiteNeed), '25.8 lb ≈ 12.9 carton');
   assert.equal(order.orderResult(whites, whiteNeed, 0).amount, 1);
@@ -382,8 +385,10 @@ test('gallon, carton, and chip rows order in the count unit', () => {
   const tz = catalog.items.bek__483810;
   const tzSmall = order.orderNeed(tz, { recipe: { quantity: 3, unit: 'lb' }, countUnit: 'gallon' });
   assert.equal(order.needText(tzSmall).includes('0.7 × 0.5 gal'), true);
+  assert.equal(tz.pack, '4 / 0.5 GAL');
+  assert.equal(order.resolvedCountUnit(tz), 'tub');
   assert.equal(order.orderResult(tz, tzSmall, 0).amount, 1);
-  assert.equal(order.orderResult(tz, tzSmall, 0.5).amount, 0);
+  assert.equal(order.orderResult(tz, tzSmall, 2.875).amount, 0);
   const lemon = catalog.items.bek__028201;
   const lemonNeed = order.orderNeed(lemon, { recipe: { quantity: 4.1, unit: 'lb' }, countUnit: 'gallon' });
   assert.equal(order.needText(lemonNeed).includes('1 × 0.5 gal'), true);
@@ -396,7 +401,10 @@ test('gallon, carton, and chip rows order in the count unit', () => {
   const bacon = catalog.items.bek__131513;
   assert.equal(order.orderResult(bacon, { quantity: 12.4, unit: 'lb', source: 'recipe' }, 0).amount, 2);
   const cream = catalog.items.bek__669027;
+  assert.equal(cream.pack, '4 / 5 LB');
+  assert.equal(order.resolvedCountUnit(cream), 'tub');
   assert.equal(order.orderResult(cream, { quantity: 20.2, unit: 'lb', source: 'recipe' }, 0).amount, 2);
+  assert.equal(order.orderResult(cream, { quantity: 20.2, unit: 'lb', source: 'recipe' }, 0.6).amount, 1);
   assert.equal(fs.readFileSync(path.join(__dirname, 'weekly-page.js'), 'utf8').includes('handLabel'), true);
   assert.equal(order.orderExplain({ name: 'Asparagus', pack: '1 / 5 LB', countUnit: 'pound' }, { quantity: 21, unit: 'lb', source: 'recipe' }, 6), '21 lb need − 6 lb on hand = 15 lb ÷ 5 lb/cs → 3 cs');
   assert.equal(order.orderExplain(milk, milkNeed, 0), '4.7 gal need − 0 gal on hand = 4.7 gal ÷ 4 gal/cs → 2 cs');
@@ -592,7 +600,7 @@ test('food follows the temp zone, even on a supply shelf, and a supply par saves
   assert.equal(order.orderCases(oats, oatNeed, 0), 1);
   const evap = spices.bek__798001;
   assert.equal(evap.pack, '24 / 12 OZ');
-  assert.equal(order.resolvedCountUnit(evap), 'each');
+  assert.equal(order.resolvedCountUnit(evap), 'can');
   const evapNeed = order.orderNeed(evap, { recipe: { quantity: 1.6, unit: 'lb' }, countUnit: 'each', forceFood: true });
   assert.equal(order.needText(evapNeed), '1.6 lb ≈ 2.1 cans');
   assert.equal(order.orderCases(evap, evapNeed, 6), 0);

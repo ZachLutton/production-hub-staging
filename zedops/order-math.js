@@ -14,7 +14,10 @@
     ml: 'ml', milliliter: 'ml', milliliters: 'ml',
     oz: 'oz', ounce: 'oz', ounces: 'oz',
     g: 'g', gram: 'g', grams: 'g',
-    ea: 'ea', each: 'ea', ct: 'ea', can: 'ea', cans: 'ea'
+    ea: 'ea', each: 'ea', ct: 'ea',
+    jar: 'jar', jars: 'jar', can: 'can', cans: 'can',
+    carton: 'carton', cartons: 'carton', tub: 'tub', tubs: 'tub',
+    case: 'case', cs: 'case'
   };
   // How many of that unit are in one gallon. Milk and water are about 8.6 lb per gallon.
   var LB_PER_GAL = 8.6;
@@ -45,6 +48,11 @@
   function canonUnit(value) {
     var key = String(value || '').toLowerCase().replace(/[^a-z]/g, '');
     return UNIT[key] || key || '';
+  }
+
+  function isPieceCountUnit(unit) {
+    var key = canonUnit(unit);
+    return key === 'ea' || key === 'jar' || key === 'can' || key === 'carton' || key === 'tub';
   }
 
   function isVolumeUnit(unit) {
@@ -136,16 +144,33 @@
     }
     if (isCaseCountedPackaging(item)) return 'case';
     var number = String(item && item.itemNumber || '');
-    if (number === '212500' || number === '393413') return 'each';
+    var pieceName = defaultPieceName(item);
+    if (pieceName) return pieceName;
     if (number === '800401' || number === '774477') return 'lb';
     if (number === '685406' || number === '799205' || isJarSpice(item)) return 'each';
     if (fluidCarton(item && item.pack)) return 'gal';
     if (isKosherSalt(item) || isBalsamicGlaze(item)) return 'each';
     if (isPortionPacket(item)) return 'case';
-    if (canEachLb(item && item.pack)) return 'each';
+    if (canEachLb(item && item.pack)) return 'can';
     var packText = String(item && item.pack || '');
     if (namePortionLb(item) && /(\d*\.\d+|\d+)\s*lb\s*case\b/i.test(packText)) return 'each';
     return volumeCountUnit(item);
+  }
+
+  // "15 / 2 LB" is 15 pieces of 2 lb. Egg white is a carton, sour cream and tzatziki are tubs.
+  function defaultPieceName(item) {
+    var pack = packAmount(item && item.pack);
+    if (!pack || !(pack.each > 0)) return '';
+    var pieces = pack.perCase / pack.each;
+    if (!(pieces > 1)) return '';
+    var name = String(item && item.name || '').toLowerCase();
+    var packText = String(item && item.pack || '');
+    if (/evaporated/.test(name) || /#\s*\d+(?:\.\d+)?\s*can/i.test(packText) || pack.canSize) return 'can';
+    if (/peanut butter/.test(name) || /\bjar\b/.test(name)) return 'jar';
+    if (/egg white/.test(name) || /\bcarton\b/.test(name)) return 'carton';
+    if (/sour cream|tzatziki|yogurt/.test(name) || /\btub\b/.test(name)) return 'tub';
+    if (/\bcan\b/.test(name)) return 'can';
+    return '';
   }
 
   function namePortionLb(item) {
@@ -178,7 +203,7 @@
   function pieceWeightLb(item, eachFactor) {
     var edited = Number(eachFactor);
     if (edited > 0) return edited;
-    if (item && Number(item.lbPerUnit) > 0 && canonUnit(resolvedCountUnit(item)) === 'ea') return Number(item.lbPerUnit);
+    if (item && Number(item.lbPerUnit) > 0 && isPieceCountUnit(resolvedCountUnit(item))) return Number(item.lbPerUnit);
     return defaultPieceLb(item);
   }
 
@@ -412,7 +437,6 @@
     var one = Math.abs(Number(quantity) - 1) < 1e-9;
     if (key === 'jar') return one ? 'jar' : 'jars';
     if (key === 'can') return one ? 'can' : 'cans';
-    if (key === 'carton') return one ? 'carton' : 'cartons';
     if (key === 'container') return one ? 'container' : 'containers';
     var label = unitLabel(unit);
     if (label === 'each') return 'ea';
@@ -521,20 +545,24 @@
     var pack = packAmount(item && item.pack);
     var countUnit = resolvedCountUnit(item);
     var have = onHand == null || onHand === '' ? 0 : Number(onHand) || 0;
-    if (canonUnit(countUnit) === 'ea' && canonUnit(need.unit) === 'lb') {
+    if (isPieceCountUnit(countUnit) && canonUnit(need.unit) === 'lb') {
       var boxLb = pieceWeightLb(item, need.eachFactor);
-      if (boxLb > 0) {
+      if (boxLb > 0 && pack && (pack.unit === 'lb' || pack.unit === 'oz' || !isVolumeUnit(pack.unit))) {
         var perBox = boxesPerCase(pack);
         var caseLb = pack && pack.unit === 'lb' ? pack.perCase : (pack && pack.unit === 'oz' ? pack.perCase / 16 : 0);
         if (!(pack && pack.each > 0) && caseLb > 0) perBox = caseLb / boxLb;
         return casesToOrder(Number(need.quantity) / boxLb, have, perBox);
       }
     }
+    if (isPieceCountUnit(countUnit) && pack && isVolumeUnit(pack.unit) && pack.each > 0) {
+      var needVol = needInCountUnit(need.quantity, need.unit, pack.unit, need.eachFactor, item && item.lbPerUnit, item);
+      return casesToOrder(needVol / pack.each, have, boxesPerCase(pack));
+    }
     if (canonUnit(countUnit) === 'case' && canonUnit(need.unit) === 'lb' && pack && (pack.unit === 'lb' || pack.unit === 'oz')) {
       var caseLb = pack.unit === 'lb' ? pack.perCase : pack.perCase / 16;
       if (caseLb > 0) return casesToOrder(Number(need.quantity) / caseLb, have, 1);
     }
-    if (canonUnit(countUnit) === 'ea' && item && Number(item.eachPerCase) > 0 && canonUnit(need.unit) === 'ea') {
+    if (isPieceCountUnit(countUnit) && item && Number(item.eachPerCase) > 0 && canonUnit(need.unit) === 'ea') {
       return casesToOrder(Number(need.quantity) || 0, have, Number(item.eachPerCase));
     }
     var needQty = needInCountUnit(need.quantity, need.unit, countUnit, need.eachFactor, item && item.lbPerUnit, item);
@@ -556,11 +584,12 @@
 
   function countWord(item) {
     var number = String(item && item.itemNumber || '');
+    var unit = canonUnit(resolvedCountUnit(item));
+    if (unit === 'jar' || unit === 'can' || unit === 'carton' || unit === 'tub') return unit;
     if (number === '212500' || number === '685406') return 'jar';
     if (number === '798001') return 'can';
     if (isJarSpice(item)) return 'container';
     if (number === '393413') return 'carton';
-    var unit = canonUnit(resolvedCountUnit(item));
     if (unit === 'gal') return 'gal';
     if (unit === 'lb' || unit === 'pound') return 'lb';
     if (unit === 'oz') return 'oz';
@@ -587,12 +616,18 @@
     var haveQty = have;
     var per = 1;
     var piece = 0;
+    var parts = [];
     if (pieceOrder(need)) {
       per = piecesPerCase(item, need.eachFactor);
       piece = namePortionLb(item) || 0;
       if (!(per > 0)) per = 0;
       else haveQty = onHandAsPieces(item, onHand, need.eachFactor);
-    } else if (canonUnit(countUnit) === 'ea' && canonUnit(need.unit) === 'lb') {
+    } else if (isPieceCountUnit(countUnit) && pack && isVolumeUnit(pack.unit) && pack.each > 0) {
+      var needVol = needInCountUnit(need.quantity, need.unit, pack.unit, need.eachFactor, item.lbPerUnit, item);
+      needQty = needVol / pack.each;
+      per = boxesPerCase(pack) || 1;
+      parts.push(explainQty(have) + ' ' + word + ' × ' + explainQty(pack.each) + ' ' + (unitLabel(pack.unit) || pack.unit) + ' = ' + explainQty(have * pack.each) + ' ' + (unitLabel(pack.unit) || pack.unit) + ' on hand');
+    } else if (isPieceCountUnit(countUnit) && canonUnit(need.unit) === 'lb') {
       piece = pieceWeightLb(item, need.eachFactor) || 0;
       if (piece > 0) {
         needQty = (Number(need.quantity) || 0) / piece;
@@ -609,8 +644,7 @@
     var net = needQty - haveQty;
     if (!(net > 0)) net = 0;
     var orderWord = result.unit === 'ea' ? word : 'cs';
-    var parts = [];
-    if (piece > 0 && canonUnit(countUnit) === 'ea') {
+    if (piece > 0 && isPieceCountUnit(countUnit)) {
       parts.push(explainQty(have) + ' ' + word + ' × ' + explainQty(piece) + ' lb = ' + explainQty(have * piece) + ' lb on hand');
       var storedUnit = canonUnit(item.countUnit);
       if (have && (storedUnit === 'oz' || storedUnit === 'lb' || storedUnit === 'pound' || storedUnit === 'ounce')) {
@@ -1090,6 +1124,7 @@
     volumeCountUnit: volumeCountUnit,
     resolvedCountUnit: resolvedCountUnit,
     defaultPieceLb: defaultPieceLb,
+    pieceWeightLb: pieceWeightLb,
     canEachLb: canEachLb,
     defaultStandards: function () { return Object.assign({}, DEFAULT_STANDARDS); },
     standardLabels: function () { return Object.assign({}, STANDARD_LABELS); },
@@ -1109,6 +1144,9 @@
     casesToOrder: casesToOrder,
     needInCountUnit: needInCountUnit,
     needText: needText,
+    shortUnit: shortUnit,
+    isPieceCountUnit: isPieceCountUnit,
+    defaultPieceName: defaultPieceName,
     shortUnit: shortUnit,
     piecesPerCase: piecesPerCase,
     piecesInCase: piecesInCase,
