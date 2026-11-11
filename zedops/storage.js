@@ -70,11 +70,12 @@
     return db.ref(assertWritable(path));
   }
 
-  function setOnHand(db, locationId, weekKey, itemId, value) {
+  function setOnHand(db, locationId, weekKey, itemId, value, unit) {
     var path = countPath(locationId, weekKey, itemId);
     if (value == null || value === '') return refOf(db, path).remove();
     var number = Number(value);
     if (!isFinite(number) || number < 0) return Promise.reject(new Error('Enter a count of zero or more.'));
+    if (unit) return refOf(db, path).set({ value: number, unit: String(unit) });
     return refOf(db, path).set(number);
   }
 

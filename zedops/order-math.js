@@ -17,6 +17,8 @@
     ea: 'ea', each: 'ea', ct: 'ea',
     jar: 'jar', jars: 'jar', can: 'can', cans: 'can',
     carton: 'carton', cartons: 'carton', tub: 'tub', tubs: 'tub',
+    bag: 'bag', bags: 'bag', jug: 'jug', jugs: 'jug',
+    bottle: 'bottle', bottles: 'bottle', container: 'container', containers: 'container',
     case: 'case', cs: 'case'
   };
   // How many of that unit are in one gallon. Milk and water are about 8.6 lb per gallon.
@@ -52,7 +54,7 @@
 
   function isPieceCountUnit(unit) {
     var key = canonUnit(unit);
-    return key === 'ea' || key === 'jar' || key === 'can' || key === 'carton' || key === 'tub';
+    return key === 'ea' || key === 'jar' || key === 'can' || key === 'carton' || key === 'tub' || key === 'bag' || key === 'jug' || key === 'bottle' || key === 'container';
   }
 
   function isVolumeUnit(unit) {
@@ -144,6 +146,12 @@
   // each, case, lb, or gal. Kosher salt is one box, and balsamic glaze is one bottle,
   // unless an admin already chose a unit.
   function resolvedCountUnit(item) {
+    var number = String(item && item.itemNumber || '');
+    if (number === '800401') {
+      var picked = item && item.countUnitChosen ? canonUnit(item.countUnit) : '';
+      if (picked && picked !== 'lb' && picked !== 'oz') return item.countUnit;
+      return 'bag';
+    }
     var chosen = item && item.countUnitChosen && item.countUnit;
     // A gallon jug saved as "each" is still a liquid. Count it in the pack's volume, like lemon juice.
     var eachOnLiquid = chosen && canonUnit(item.countUnit) === 'ea' && volumePackOf(item);
@@ -151,11 +159,11 @@
       return item.countUnit;
     }
     if (isCaseCountedPackaging(item)) return 'case';
-    var number = String(item && item.itemNumber || '');
     var pieceName = defaultPieceName(item);
     if (pieceName) return pieceName;
-    if (number === '800401' || number === '774477') return 'lb';
-    if (number === '685406' || number === '799205' || isJarSpice(item)) return 'each';
+    if (number === '774477') return 'lb';
+    if (number === '685406') return 'jar';
+    if (number === '799205' || isJarSpice(item)) return 'container';
     if (fluidCarton(item && item.pack)) return 'gal';
     if (isKosherSalt(item) || isBalsamicGlaze(item)) return 'each';
     if (isPortionPacket(item)) return 'case';
@@ -208,9 +216,23 @@
     return namePortionLb(item);
   }
 
+  function isChipBag(item) {
+    return String(item && item.itemNumber || '') === '800401';
+  }
+
+  // Hershey chips are 12 oz bags. A case is 12 lb, so 16 bags, not the guide's 12 / 12 OZ.
+  function chipBagLb() { return 0.75; }
+  function chipBagsPerCase() { return 16; }
+  function bagsFromPounds(pounds) {
+    var lb = Number(pounds);
+    if (!isFinite(lb) || lb < 0) return 0;
+    return Math.round(lb / chipBagLb() * 1000) / 1000;
+  }
+
   function pieceWeightLb(item, eachFactor) {
     var edited = Number(eachFactor);
     if (edited > 0) return edited;
+    if (isChipBag(item)) return chipBagLb();
     if (item && Number(item.lbPerUnit) > 0 && isPieceCountUnit(resolvedCountUnit(item))) return Number(item.lbPerUnit);
     return defaultPieceLb(item);
   }
@@ -474,9 +496,12 @@
     if (key === 'case' || key === 'cs') return 'cs';
     if (key === 'ea') return 'ea';
     var one = Math.abs(Number(quantity) - 1) < 1e-9;
+    if (key === 'bag') return one ? 'bag' : 'bags';
+    if (key === 'jug') return one ? 'jug' : 'jugs';
+    if (key === 'bottle') return one ? 'bottle' : 'bottles';
+    if (key === 'container') return one ? 'container' : 'containers';
     if (key === 'jar') return one ? 'jar' : 'jars';
     if (key === 'can') return one ? 'can' : 'cans';
-    if (key === 'container') return one ? 'container' : 'containers';
     var label = unitLabel(unit);
     if (label === 'each') return 'ea';
     return label || '';
@@ -631,8 +656,12 @@
       var boxLb = pieceWeightLb(item, need.eachFactor);
       if (boxLb > 0 && pack && (pack.unit === 'lb' || pack.unit === 'oz' || !isVolumeUnit(pack.unit))) {
         var perBox = boxesPerCase(pack);
+        if (isChipBag(item)) {
+          boxLb = chipBagLb();
+          perBox = chipBagsPerCase();
+        }
         var caseLb = pack && pack.unit === 'lb' ? pack.perCase : (pack && pack.unit === 'oz' ? pack.perCase / 16 : 0);
-        if (!(pack && pack.each > 0) && caseLb > 0) perBox = caseLb / boxLb;
+        if (!(pack && pack.each > 0) && caseLb > 0 && !isChipBag(item)) perBox = caseLb / boxLb;
         return casesToOrder(Number(need.quantity) / boxLb, have, perBox);
       }
     }
@@ -667,7 +696,8 @@
   function countWord(item) {
     var number = String(item && item.itemNumber || '');
     var unit = canonUnit(resolvedCountUnit(item));
-    if (unit === 'jar' || unit === 'can' || unit === 'carton' || unit === 'tub') return unit;
+    if (unit === 'jar' || unit === 'can' || unit === 'carton' || unit === 'tub' || unit === 'bag' || unit === 'jug' || unit === 'bottle' || unit === 'container') return unit;
+    if (number === '800401') return 'bag';
     if (number === '212500' || number === '685406') return 'jar';
     if (number === '798001') return 'can';
     if (isJarSpice(item)) return 'container';
@@ -694,6 +724,14 @@
     var pack = packAmount(item.pack);
     var countUnit = resolvedCountUnit(item);
     var have = onHand == null || onHand === '' ? 0 : Number(onHand) || 0;
+    if (isChipBag(item) && !pieceOrder(need) && canonUnit(need.unit) === 'lb' && isPieceCountUnit(countUnit)) {
+      var needLb = Number(need.quantity) || 0;
+      var heldLb = have * chipBagLb();
+      var leftLb = needLb - heldLb;
+      if (!(leftLb > 0)) leftLb = 0;
+      var bagWord = Math.abs(have - 1) < 1e-9 ? 'bag' : 'bags';
+      return roundApprox(needLb) + ' lb need − ' + explainQty(have) + ' ' + bagWord + ' (' + explainQty(heldLb) + ' lb) on hand = ' + roundApprox(leftLb) + ' lb → ' + result.amount + ' cs';
+    }
     if (!pieceOrder(need) && canonUnit(need.unit) === 'lb' && resolvedOrderUnit(item) === 'lb') {
       var needLb = Number(need.quantity) || 0;
       var heldLb = onHandAsPounds(item, onHand);
@@ -1253,6 +1291,8 @@
     isPieceCountUnit: isPieceCountUnit,
     defaultPieceName: defaultPieceName,
     piecesPerCase: piecesPerCase,
+    bagsFromPounds: bagsFromPounds,
+    isChipBag: isChipBag,
     piecesInCase: piecesInCase,
     isCaseCountedPackaging: isCaseCountedPackaging,
     orderResult: orderResult,

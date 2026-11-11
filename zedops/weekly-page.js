@@ -218,11 +218,50 @@
     });
   }
 
+  var CHIP_ID = 'bek__800401';
+  function chipBags(raw) {
+    if (raw == null || raw === '') return null;
+    if (typeof raw === 'object') {
+      var stored = Number(raw.value);
+      if (!isFinite(stored)) return null;
+      if (raw.unit === 'lb' || raw.unit === 'pound') return ZedOrder.bagsFromPounds(stored);
+      return stored;
+    }
+    var pounds = Number(raw);
+    if (!isFinite(pounds)) return null;
+    return ZedOrder.bagsFromPounds(pounds);
+  }
+  function rememberChipBags(bag) {
+    if (!bag || bag[CHIP_ID] == null) return;
+    var bags = chipBags(bag[CHIP_ID]);
+    if (bags == null) return;
+    bag[CHIP_ID] = bags;
+  }
+  function migrateChipPounds() {
+    return db.ref(ZedStorage.PATHS.counts).once('value').then(function (snap) {
+      var all = snap.val() || {};
+      var jobs = [];
+      Object.keys(all).forEach(function (loc) {
+        Object.keys(all[loc] || {}).forEach(function (week) {
+          var row = all[loc][week];
+          if (!row || typeof row[CHIP_ID] !== 'number') return;
+          jobs.push(ZedStorage.setOnHand(db, loc, week, CHIP_ID, ZedOrder.bagsFromPounds(row[CHIP_ID]), 'each'));
+        });
+      });
+      return Promise.all(jobs);
+    }).catch(function () {});
+  }
   function handOf(row, loc) {
     loc = loc || currentStore();
     if (!loc) return null;
     var bag = (state.hands && state.hands[loc.id]) || (loc.id === state.locationId ? state.onHand : {});
-    if (bag && bag[row.id] != null && bag[row.id] !== '') return Number(bag[row.id]);
+    if (bag && bag[row.id] != null && bag[row.id] !== '') {
+      if (row.id === CHIP_ID || (row.item && row.item.itemNumber === '800401')) {
+        if (typeof bag[row.id] === 'number') return bag[row.id];
+        return chipBags(bag[row.id]);
+      }
+      return Number(bag[row.id]);
+    }
     var remembered = state.legacyById && state.legacyById[loc.id];
     if (remembered && remembered[row.id] != null) return remembered[row.id];
     if (loc.id === state.locationId && row.legacyKey && state.legacyOnHand[row.legacyKey] != null) {
@@ -372,8 +411,12 @@
   }
   function handLabel(row, loc) {
     var hand = handOf(row, loc);
-    var unit = ZedOrder.unitLabel(ZedOrder.resolvedCountUnit(row.item));
     if (hand == null || hand === '') return '—';
+    var word = ZedOrder.countWord(row.item);
+    if (ZedOrder.isPieceCountUnit(word) || word === 'bag' || word === 'jug' || word === 'container' || word === 'bottle') {
+      return hand + ' ' + ZedOrder.shortUnit(word, hand);
+    }
+    var unit = ZedOrder.unitLabel(ZedOrder.resolvedCountUnit(row.item));
     return hand + (unit ? ' ' + unit : '');
   }
   function needBlock(row, loc) {
@@ -401,6 +444,7 @@
     }
     return Promise.all(jobs).then(function (snaps) {
       state.onHand = snaps[0].val() || {};
+      rememberChipBags(state.onHand);
       state.pars = snaps[1].val() || {};
       state.recipe = snaps[2].val() || {};
       state.matches = snaps[3].val() || {};
@@ -466,6 +510,7 @@
     return Promise.all(stores().map(function (loc) {
       return db.ref(ZedStorage.PATHS.counts + '/' + loc.id + '/' + state.weekKey).once('value').then(function (snap) {
         state.hands[loc.id] = snap.val() || {};
+        rememberChipBags(state.hands[loc.id]);
         return db.ref(ZedStorage.PATHS.pars + '/' + loc.id).once('value');
       }).then(function (snap) {
         state.allPars[loc.id] = snap.val() || {};
@@ -1122,8 +1167,7 @@
       : '';
     host.innerHTML = review + groups.map(function (group) {
       return '<div class="section"><div class="section-header"><div class="section-header-title">' + esc(group.title) +
-        '</div></div><table class="order-table"><thead><tr><th>Item #</th><th>Name</th><th>Pack</th><th>Need</th><th>On hand</th><th>Order</th>' +
-        (state.role === 'admin' ? '<th>Par</th>' : '') + '</tr></thead><tbody>' +
+        '</div></div><table class="order-table"><thead><tr><th>Item #</th><th>Name</th><th>Pack</th><th>Need</th><th>On hand</th><th>Order</th></tr></thead><tbody>' +
         group.rows.map(function (row) { return storeRow(row, loc); }).join('') + '</tbody></table></div>';
     }).join('') || '<div class="empty-state">No items for this store yet.</div>';
   }
@@ -1137,7 +1181,7 @@
     var needText = needBlock(row, loc);
     var temp = item.temporary ? ' <span class="temp-badge">TEMPORARY</span>' : '';
     var food = ZedOrder.isFoodItem(item);
-    var countChoices = ['each', 'case', 'lb', 'gal', 'oz', 'jar', 'can', 'carton', 'tub'];
+    var countChoices = ['each', 'bag', 'jug', 'tub', 'jar', 'can', 'carton', 'bottle', 'container', 'case', 'lb', 'gal', 'oz'];
     var countNow = String(ZedOrder.resolvedCountUnit(item) || 'each').toLowerCase();
     if (countNow === 'pound' || countNow === 'pounds') countNow = 'lb';
     if (countNow === 'gallon' || countNow === 'gallons') countNow = 'gal';
@@ -1177,7 +1221,10 @@
       parCell = '<input data-par="' + esc(row.id) + '" type="number" min="0" step="any" inputmode="decimal" aria-label="Standing par for ' + esc(item.name) + '" value="' + (parValue ? esc(parValue) : '') + '"><span class="field-note" data-par-note="' + esc(row.id) + '"></span>';
     }
     var controls = state.role === 'admin'
-      ? '<td class="admin-controls"><div class="row-controls' + (showDensity ? ' has-density' : '') + '"><div class="ctrl-par">' + parCell + '</div><div class="ctrl-count">' + orderSelect + countSelect + '</div><div class="ctrl-role">' + roleBtn + '</div><div class="ctrl-density">' + density + '</div></div></td>'
+      ? '<tr class="admin-line"><td colspan="6"><div class="row-controls">' + orderSelect + countSelect + roleBtn +
+        (parCell ? '<label class="ctrl-par">Par ' + parCell + '</label>' : '') +
+        (density ? '<span class="ctrl-density">' + density + '</span>' : '') +
+        '</div></td></tr>'
       : '';
     var src = ZedOrder.weightSource(item);
     var weightLine = src ? '<div class="item-brand">' + esc(Math.round(src.lb * 1000) / 1000) + ' lb · ' + esc(src.source) + '</div>' : '';
@@ -1186,8 +1233,8 @@
     return '<tr' + (warn.flagged ? ' class="order-flag"' : '') + '><td class="item-num">' + esc(item.itemNumber || 'no BEK #') + '</td><td><div class="item-name">' +
       esc(item.name) + temp + '</div><div class="item-brand">' + esc(item.brand || '') + '</div>' + weightLine + '</td><td>' + esc(item.pack || '') +
       '</td><td class="need-cell" data-need-for="' + esc(row.id) + '">' + needText + '</td><td><input class="onhand-input" data-hand="' + esc(row.id) + '" type="number" min="0" step="any" inputmode="decimal" aria-label="On hand ' + esc(item.name) + ' in ' + esc(countNow) + '" value="' +
-      (hand == null ? '' : esc(hand)) + '"></td><td class="need-order">' + esc(orderLabel(ordered)) + warnLine + '</td>' +
-      controls + '</tr>';
+      (hand == null ? '' : esc(hand)) + '"></td><td class="need-order">' + esc(orderLabel(ordered)) + warnLine + '</td></tr>' +
+      controls;
   }
 
   function renderOrder() {
@@ -1563,6 +1610,7 @@
     var id = input.dataset.hand;
     var raw = input.value.trim();
     if (!state.hands[state.locationId]) state.hands[state.locationId] = {};
+    var chip = id === CHIP_ID;
     if (raw === '') {
       delete state.onHand[id];
       delete state.hands[state.locationId][id];
@@ -1580,7 +1628,7 @@
       if (cell) cell.textContent = orderLabel(orderFor(row, locNow));
       renderSummary(locNow);
     }
-    ZedStorage.setOnHand(db, state.locationId, state.weekKey, id, raw === '' ? null : raw).then(function () {
+    ZedStorage.setOnHand(db, state.locationId, state.weekKey, id, raw === '' ? null : raw, chip ? 'each' : '').then(function () {
       var mealInput = document.querySelector('[data-meal-hand="' + id + '"]');
       if (mealInput && mealInput !== input) mealInput.value = raw;
       var typeId = mealInput && mealInput.getAttribute('data-meal-type');
@@ -2404,6 +2452,7 @@
       state.catalog = ZedSchema.migrateCatalog({ schemaVersion: raw.schemaVersion || 1, items: raw.items || {}, shelf: raw.shelf || {} });
       state.locationDoc = snaps[1].val() || {};
       fillStores();
+      migrateChipPounds();
       return chooseWorkingWeek().then(function () {
         document.getElementById('weekSelect').value = state.weekKey;
         return seedRimPars().then(function () { return reload(); });
