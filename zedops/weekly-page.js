@@ -219,33 +219,44 @@
   }
 
   var CHIP_ID = 'bek__800401';
-  function chipBags(raw) {
+  var LEMON_ID = 'bek__028201';
+  var SEASON_ID = 'bek__774477';
+  function convertedCount(id, raw) {
     if (raw == null || raw === '') return null;
     if (typeof raw === 'object') {
       var stored = Number(raw.value);
       if (!isFinite(stored)) return null;
-      if (raw.unit === 'lb' || raw.unit === 'pound') return ZedOrder.bagsFromPounds(stored);
+      if (id === CHIP_ID && (raw.unit === 'lb' || raw.unit === 'pound')) return ZedOrder.bagsFromPounds(stored);
+      if (id === LEMON_ID && (raw.unit === 'gal' || raw.unit === 'gallon')) return stored / 0.5;
+      if (id === SEASON_ID && (raw.unit === 'lb' || raw.unit === 'pound')) return Math.round(stored / 1.5 * 1000) / 1000;
       return stored;
     }
-    var pounds = Number(raw);
-    if (!isFinite(pounds)) return null;
-    return ZedOrder.bagsFromPounds(pounds);
+    var number = Number(raw);
+    if (!isFinite(number)) return null;
+    if (id === CHIP_ID) return ZedOrder.bagsFromPounds(number);
+    if (id === LEMON_ID) return number / 0.5;
+    if (id === SEASON_ID) return Math.round(number / 1.5 * 1000) / 1000;
+    return number;
   }
-  function rememberChipBags(bag) {
-    if (!bag || bag[CHIP_ID] == null) return;
-    var bags = chipBags(bag[CHIP_ID]);
-    if (bags == null) return;
-    bag[CHIP_ID] = bags;
+  function rememberConverted(bag) {
+    [CHIP_ID, LEMON_ID, SEASON_ID].forEach(function (id) {
+      if (!bag || bag[id] == null) return;
+      var next = convertedCount(id, bag[id]);
+      if (next == null) return;
+      bag[id] = next;
+    });
   }
-  function migrateChipPounds() {
+  function migrateUnitCounts() {
     return db.ref(ZedStorage.PATHS.counts).once('value').then(function (snap) {
       var all = snap.val() || {};
       var jobs = [];
       Object.keys(all).forEach(function (loc) {
         Object.keys(all[loc] || {}).forEach(function (week) {
           var row = all[loc][week];
-          if (!row || typeof row[CHIP_ID] !== 'number') return;
-          jobs.push(ZedStorage.setOnHand(db, loc, week, CHIP_ID, ZedOrder.bagsFromPounds(row[CHIP_ID]), 'each'));
+          if (!row) return;
+          if (typeof row[CHIP_ID] === 'number') jobs.push(ZedStorage.setOnHand(db, loc, week, CHIP_ID, ZedOrder.bagsFromPounds(row[CHIP_ID]), 'each'));
+          if (typeof row[LEMON_ID] === 'number') jobs.push(ZedStorage.setOnHand(db, loc, week, LEMON_ID, row[LEMON_ID] / 0.5, 'jug'));
+          if (typeof row[SEASON_ID] === 'number') jobs.push(ZedStorage.setOnHand(db, loc, week, SEASON_ID, Math.round(row[SEASON_ID] / 1.5 * 1000) / 1000, 'container'));
         });
       });
       return Promise.all(jobs);
@@ -256,9 +267,9 @@
     if (!loc) return null;
     var bag = (state.hands && state.hands[loc.id]) || (loc.id === state.locationId ? state.onHand : {});
     if (bag && bag[row.id] != null && bag[row.id] !== '') {
-      if (row.id === CHIP_ID || (row.item && row.item.itemNumber === '800401')) {
+      if (row.id === CHIP_ID || row.id === LEMON_ID || row.id === SEASON_ID) {
         if (typeof bag[row.id] === 'number') return bag[row.id];
-        return chipBags(bag[row.id]);
+        return convertedCount(row.id, bag[row.id]);
       }
       return Number(bag[row.id]);
     }
@@ -289,8 +300,27 @@
     if (row.item && ZedOrder.isPortionPacket(row.item)) return 1;
     return 0;
   }
+  function recipeForOrder() {
+    var source = state.recipe || {};
+    var items = state.catalog ? catalogChoices() : [];
+    var out = {};
+    Object.keys(source).forEach(function (key) {
+      if (key === '_meta') { out[key] = source[key]; return; }
+      var line = source[key];
+      if (!line) return;
+      var copy = Object.assign({ key: key }, line);
+      var saved = state.matches && state.matches[key];
+      if (saved && saved.hideMode === 'ignore') return;
+      if (!(saved && saved.catalogId) && !ZedOrder.forcedRecipeItemId(copy) && !copy.catalogId && items.length) {
+        var top = ZedOrder.filterCatalog(copy.name, items, { solidOnly: true, hidden: state.catalogHidden })[0];
+        if (top) copy.catalogId = top.id;
+      }
+      out[key] = copy;
+    });
+    return out;
+  }
   function recipeNeed(item) {
-    var found = ZedOrder.recipeLineFor(item, state.recipe);
+    var found = ZedOrder.recipeLineFor(item, recipeForOrder(), state.matches);
     if (!found) return null;
     return { quantity: found.pounds, unit: found.unit || 'lb', eachFactor: found.eachFactor };
   }
@@ -407,6 +437,7 @@
     if (!result || !(Number(result.amount) > 0)) return '0';
     if (result.unit === 'ea') return result.amount + ' ea';
     if (result.unit === 'lb') return result.amount + ' lb';
+    if (result.unit === 'jug') return result.amount + ' ' + (Number(result.amount) === 1 ? 'jug' : 'jugs');
     return result.amount + ' cs';
   }
   function handLabel(row, loc) {
@@ -444,7 +475,7 @@
     }
     return Promise.all(jobs).then(function (snaps) {
       state.onHand = snaps[0].val() || {};
-      rememberChipBags(state.onHand);
+      rememberConverted(state.onHand);
       state.pars = snaps[1].val() || {};
       state.recipe = snaps[2].val() || {};
       state.matches = snaps[3].val() || {};
@@ -510,7 +541,7 @@
     return Promise.all(stores().map(function (loc) {
       return db.ref(ZedStorage.PATHS.counts + '/' + loc.id + '/' + state.weekKey).once('value').then(function (snap) {
         state.hands[loc.id] = snap.val() || {};
-        rememberChipBags(state.hands[loc.id]);
+        rememberConverted(state.hands[loc.id]);
         return db.ref(ZedStorage.PATHS.pars + '/' + loc.id).once('value');
       }).then(function (snap) {
         state.allPars[loc.id] = snap.val() || {};
@@ -1106,7 +1137,7 @@
       var row = { id: id, item: item, legacyKey: '', source: 'guide' };
       var need = needFor(row, loc);
       var ordered = orderFor(row, loc);
-      var used = ZedOrder.recipeLineFor(item, state.recipe);
+      var used = ZedOrder.recipeLineFor(item, recipeForOrder(), state.matches);
       if (!(need && need.quantity > 0) && !(ordered.amount > 0) && !(used && ZedOrder.isFoodItem(item))) return;
       lines.push('<tr><td class="item-num">' + esc(item.itemNumber || 'no BEK #') + '</td><td>' + esc(item.name) + '</td><td class="need-cell">' +
         needBlock(row, loc) + '</td><td>' + esc(handLabel(row, loc)) + '</td><td class="need-order">' + esc(orderLabel(ordered)) + '</td></tr>');
@@ -1206,8 +1237,14 @@
     var countedUnit = ZedOrder.resolvedCountUnit(item);
     var canLb = ZedOrder.canEachLb(item && item.pack);
     var showCanEach = food && ZedOrder.canonUnit(countedUnit) === 'ea' && canLb > 0;
+    var showPieceAverage = state.role === 'admin' && (item.itemNumber === '121792' || item.itemNumber === '558188');
     var showDensity = state.role === 'admin' && food && (ZedOrder.isVolumeUnit(countedUnit) || showCanEach);
     var density = '';
+    if (showPieceAverage) {
+      var pieceDefault = item.itemNumber === '121792' ? 5 / 16 : 0.75;
+      var pieceSaved = Number(item.lbPerUnit) > 0 ? item.lbPerUnit : '';
+      density = '<label>lb per piece <input data-lb-per="' + esc(row.id) + '" type="number" min="0" step="any" inputmode="decimal" placeholder="' + pieceDefault + '" aria-label="Pounds per piece for ' + esc(item.name) + '" value="' + (pieceSaved === '' ? '' : esc(pieceSaved)) + '"></label><span class="field-note" data-lb-note="' + esc(row.id) + '"></span>';
+    }
     if (showDensity) {
       var perLabel = showCanEach ? 'each' : ZedOrder.unitLabel(countedUnit);
       var savedPer = Number(item.lbPerUnit) > 0 ? item.lbPerUnit : '';
@@ -1377,7 +1414,7 @@
     panel._pending = pending;
     panel.setAttribute('data-built', '1');
     panel.innerHTML = '<h2>Review raw purchases before the order is applied</h2><p id="recipeCycleWarning" class="recipe-warn"></p><p>Cook date ' + esc(pending.cookDate || '') +
-      '. These are raw weights. Cooked totals and sub-recipe outputs are not ordered twice. A match is saved only when you choose the BEK item on that row. A suggestion is not saved, and Approve does not save suggestions.</p>' +
+      '. These are raw weights. Cooked totals and sub-recipe outputs are not ordered twice. Approve saves the suggested BEK item on every row, unless you chose not to order that ingredient.</p>' +
       '<div class="match-tools"><input id="matchFilter" type="search" placeholder="Find an ingredient" autocomplete="off" enterkeyhint="search"><strong id="matchCount">' +
       reviewCountText(pending.purchases) + '</strong>' +
       '<label><input type="checkbox" id="showHiddenIngredients"' + (state.showHiddenIngredients ? ' checked' : '') + '> Show hidden ingredients</label></div>' +
@@ -1438,7 +1475,7 @@
     var choices = ZedOrder.filterCatalog(query, catalogChoices(), {
       hidden: state.catalogHidden,
       showHidden: state.showHiddenCatalog
-    }).slice(0, 40);
+    });
     if (row.catalogId && !choices.some(function (item) { return item.id === row.catalogId; }) && (state.showHiddenCatalog || !state.catalogHidden[row.catalogId])) {
       var selected = state.catalog.items[row.catalogId];
       if (selected) choices.unshift(selected);
@@ -1517,12 +1554,16 @@
       approveBlockMessage(state.approvingRecipe ? 'Already saving' : 'Nothing to approve, upload the PDF again');
       return;
     }
+    var suggestionItems = catalogChoices();
     (pending.purchases || []).forEach(function (row, index) {
       var factorEl = document.querySelector('[data-factor="' + index + '"]');
       if (factorEl) row.eachFactor = factorEl.value === '' ? '' : Number(factorEl.value);
-      if (row.matchSaved || row.hideMode === 'ignore' || !row.catalogId) return;
-      var suggested = state.catalog.items[row.catalogId];
-      if (suggested && (ZedOrder.usesSuggestedRecipe(suggested) || ZedOrder.isGlazeSauceOrCondiment(suggested))) row.includeInOrder = true;
+      if (row.hideMode === 'ignore') return;
+      if (!row.catalogId && suggestionItems.length) {
+        var top = ZedOrder.filterCatalog(row.name, suggestionItems, { solidOnly: true, hidden: state.catalogHidden })[0];
+        if (top) row.catalogId = top.id;
+      }
+      if (row.catalogId) row.includeInOrder = true;
     });
     var button = document.getElementById('approveRecipe');
     if (button) {
@@ -1610,7 +1651,7 @@
     var id = input.dataset.hand;
     var raw = input.value.trim();
     if (!state.hands[state.locationId]) state.hands[state.locationId] = {};
-    var chip = id === CHIP_ID;
+    var countedUnit = id === CHIP_ID ? 'each' : (id === LEMON_ID ? 'jug' : (id === SEASON_ID ? 'container' : ''));
     if (raw === '') {
       delete state.onHand[id];
       delete state.hands[state.locationId][id];
@@ -1628,7 +1669,7 @@
       if (cell) cell.textContent = orderLabel(orderFor(row, locNow));
       renderSummary(locNow);
     }
-    ZedStorage.setOnHand(db, state.locationId, state.weekKey, id, raw === '' ? null : raw, chip ? 'each' : '').then(function () {
+    ZedStorage.setOnHand(db, state.locationId, state.weekKey, id, raw === '' ? null : raw, countedUnit).then(function () {
       var mealInput = document.querySelector('[data-meal-hand="' + id + '"]');
       if (mealInput && mealInput !== input) mealInput.value = raw;
       var typeId = mealInput && mealInput.getAttribute('data-meal-type');
@@ -1990,7 +2031,8 @@
       if (willOpen) {
         pop.hidden = false;
         open.setAttribute('aria-expanded', 'true');
-        fillMatchList(index, '');
+        var named = state.pendingRecipe && state.pendingRecipe.purchases[index];
+        fillMatchList(index, named && named.name ? named.name : '');
         var search = pop.querySelector('input');
         if (search) search.focus();
       }
@@ -2452,7 +2494,7 @@
       state.catalog = ZedSchema.migrateCatalog({ schemaVersion: raw.schemaVersion || 1, items: raw.items || {}, shelf: raw.shelf || {} });
       state.locationDoc = snaps[1].val() || {};
       fillStores();
-      migrateChipPounds();
+      migrateUnitCounts();
       return chooseWorkingWeek().then(function () {
         document.getElementById('weekSelect').value = state.weekKey;
         return seedRimPars().then(function () { return reload(); });

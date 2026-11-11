@@ -161,7 +161,7 @@ test('cases always round up and an exact case does not', () => {
   assert.equal(order.resolvedCountUnit(glazeItem), 'each');
   assert.equal(order.orderCases(glazeItem, { quantity: 1.2, unit: 'lb', source: 'recipe' }, 0), 1);
   assert.equal(fs.readFileSync(path.join(__dirname, 'order-math.js'), 'utf8').includes('salt sea kosher'), true);
-  assert.equal(fs.readFileSync(path.join(__dirname, 'weekly-page.js'), 'utf8').includes('usesSuggestedRecipe'), true);
+  assert.equal(fs.readFileSync(path.join(__dirname, 'order-math.js'), 'utf8').includes('usesSuggestedRecipe'), true);
   const honey = { name: 'Honey Pure Blend', pack: '4 / 1 GAL', countUnit: 'gallon', tempZone: 'Refrigeration', itemNumber: '793069' };
   const honeyNeed = order.orderNeed(honey, { recipe: { quantity: 12.6, unit: 'lb' }, countUnit: 'gallon' });
   assert.equal(order.needText(honeyNeed), '12.6 lb ≈ 1.1 gal');
@@ -184,9 +184,9 @@ test('cases always round up and an exact case does not', () => {
     { key: 'syrups_maple', name: 'Syrups, maple', pounds: 3.1, catalogId: 'bek__793062', matchSaved: false, includeInOrder: true },
     { key: 'cumin_line', name: 'Cumin', pounds: 1, catalogId: 'bek__774055', matchSaved: false }
   ], '2026-11-11');
-  assert.equal(liquidPlan.matches.syrups_maple, undefined);
+  assert.equal(liquidPlan.matches.syrups_maple.catalogId, 'bek__793062');
   assert.equal(liquidPlan.lines.syrups_maple.pounds, 3.1);
-  assert.equal(liquidPlan.lines.cumin_line, undefined);
+  assert.equal(liquidPlan.lines.cumin_line.catalogId, 'bek__774055');
   const tzatzikiBlock = recipe.parseScaledRecipes(text).recipes.filter(function (row) { return row.name === 'Tzatziki Sauce'; })[0];
   assert.equal(tzatzikiBlock.yieldPounds, 4.7);
   const tzatziki = bek.buildCatalog(require('./seed.json')).items.bek__483810;
@@ -338,8 +338,8 @@ test('cook list pieces use the pack, and peanut butter is 12 jars of 16 oz', () 
   assert.equal(hash.unit, 'ea');
   assert.equal(hash.amount, 132);
   const thigh = ordered('bek__121792');
-  assert.equal(thigh.unit, 'ea');
-  assert.equal(thigh.amount, 110);
+  assert.equal(thigh.unit, 'cs');
+  assert.equal(thigh.amount, 1);
   const peanut = catalog.items.bek__212500;
   assert.equal(order.resolvedCountUnit(peanut), 'jar');
   assert.equal(order.packAmount(peanut.pack).each, 16);
@@ -618,7 +618,7 @@ test('food follows the temp zone, even on a supply shelf, and a supply par saves
   assert.equal(topSpice('blackening seasoning').itemNumber, '774477');
   assert.equal(topSpice('blackened seasoning').itemNumber, '774477');
   const blackened = bek.buildCatalog(require('./seed.json')).items.bek__774477;
-  assert.equal(order.resolvedCountUnit(blackened), 'lb');
+  assert.equal(order.resolvedCountUnit(blackened), 'container');
   assert.equal(order.perCaseInCountUnit(order.packAmount(blackened.pack), 'lb'), 6);
   assert.equal(order.orderCases(blackened, { quantity: 0.8, unit: 'lb', source: 'recipe' }, 0), 1);
   assert.equal(order.recipeLineFor(blackened, {
@@ -782,13 +782,13 @@ test('a single approve writes once, and a listener cannot approve again', async 
   const pending = order.claimApproval(pageState);
   assert.equal(order.claimApproval(pageState), null);
   const plan = order.planRecipeApproval(pending.purchases, order.recipeWeek(pending.cookDate));
-  const ordered = purchases.filter(function (row) { return row.matchSaved === true && row.hideMode !== 'ignore' && row.catalogId; });
+  const ordered = purchases.filter(function (row) { return row.hideMode !== 'ignore' && row.catalogId; });
   assert.equal(Object.keys(plan.lines).length, ordered.length);
   assert.equal(plan.lines[purchases[0].key], undefined);
   assert.equal(plan.matches[purchases[0].key].hideMode, 'ignore');
   assert.equal(plan.matches[purchases[0].key].catalogId, '');
-  assert.equal(plan.matches[cheddar.key], undefined);
-  assert.equal(plan.lines[cheddar.key], undefined);
+  assert.equal(plan.matches[cheddar.key].catalogId, 'bek__152510');
+  assert.equal(plan.lines[cheddar.key].pounds, cheddar.pounds);
   const kept = purchases.find(function (row) { return row.catalogId === 'bek__654028' && row.hideMode !== 'ignore'; });
   assert.equal(plan.lines[kept.key].catalogId, 'bek__654028');
   assert.equal(plan.lines[kept.key].pounds, kept.pounds);
@@ -827,7 +827,7 @@ test('a single approve writes once, and a listener cannot approve again', async 
   assert.equal((await realRef('staging_zedops_recipe/2026-11-10/keep_me/name').once('value')).val(), 'Other week');
   assert.equal((await realRef('staging_zedops_ingredient_map/already_remembered/catalogId').once('value')).val(), 'bek__9');
   assert.equal((await realRef('staging_zedops_ingredient_map/' + purchases[0].key + '/hideMode').once('value')).val(), 'ignore');
-  assert.equal((await realRef('staging_zedops_ingredient_map/cheddar_monterey_jack_cheese').once('value')).val(), null);
+  assert.equal((await realRef('staging_zedops_ingredient_map/cheddar_monterey_jack_cheese/catalogId').once('value')).val(), 'bek__152510');
   assert.equal((await realRef('staging_zedops_ingredient_map/' + kept.key + '/catalogId').once('value')).val(), 'bek__654028');
   pageState.approvingRecipe = false;
   pageState.pendingRecipe = { cookDate: '2026-11-04', purchases: purchases };
@@ -835,7 +835,7 @@ test('a single approve writes once, and a listener cannot approve again', async 
   await storage.saveRecipeApproval(db, order.planRecipeApproval(again.purchases, '2026-11-04'));
   assert.equal(updates, 2);
   assert.equal(Object.keys((await realRef('staging_zedops_recipe/2026-11-04').once('value')).val()).length, ordered.length);
-  assert.equal((await realRef('staging_zedops_ingredient_map/cheddar_monterey_jack_cheese').once('value')).val(), null);
+  assert.equal((await realRef('staging_zedops_ingredient_map/cheddar_monterey_jack_cheese/catalogId').once('value')).val(), 'bek__152510');
   const page = fs.readFileSync(path.join(__dirname, 'weekly-page.js'), 'utf8');
   assert.equal(page.includes('alert('), false);
   assert.equal(page.includes('window.confirm('), true);
@@ -868,8 +868,8 @@ test('a suggestion is not saved, and cheddar cheese is not offered as feta', () 
     catalogId: 'bek__152510', matchSaved: true, eachFactor: ''
   };
   const plan = order.planRecipeApproval([suggested, confirmed], '2026-11-11');
-  assert.equal(plan.matches[suggested.key], undefined);
-  assert.equal(plan.lines[suggested.key], undefined);
+  assert.equal(plan.matches[suggested.key].catalogId, 'bek__152510');
+  assert.equal(plan.lines[suggested.key].pounds, 16.4);
   assert.equal(plan.matches[confirmed.key].catalogId, 'bek__152510');
   assert.equal(plan.lines[confirmed.key].pounds, 1);
   const page = fs.readFileSync(path.join(__dirname, 'weekly-page.js'), 'utf8');
@@ -882,7 +882,7 @@ test('a suggestion is not saved, and cheddar cheese is not offered as feta', () 
   assert.equal(factor.includes('matchSaved'), true);
   const hide = page.slice(page.indexOf("getAttribute('data-apply-hide')"), page.indexOf("getAttribute('data-unhide-row')"));
   assert.equal(hide.includes('A suggestion is not saved'), true);
-  assert.equal(page.includes('Approve does not save suggestions'), true);
+  assert.equal(page.includes('Approve saves the suggested BEK item'), true);
 });
 
 test('sriracha and cholula packets are supplies counted by the case', () => {
