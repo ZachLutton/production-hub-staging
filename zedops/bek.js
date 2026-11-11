@@ -306,29 +306,24 @@
     return addDays(due, 8);
   }
 
-  // Calendar fallback when no week has been worked yet.
-  // The cook date is eight days after this week's count Tuesday.
-  // Thursday Nov 5, 2026 is still the Nov 11 cook (counts were due Nov 3).
-  // It does not move to Nov 18 until the next count Tuesday, Nov 10.
+  // The cook Wednesday still ahead of this calendar day.
+  // The page stays on that cook through the day before, including the Wednesday the order was placed.
+  // On the cook day itself it opens the following Wednesday, which is also the day that next order is due.
+  // Wednesday 2026-11-11 opens 2026-11-18. Tuesday 2026-11-10 still opens 2026-11-11.
   function openCookDate(ymd) {
-    var tuesday = addDays(ymd, 2 - weekdayOf(ymd));
-    return addDays(tuesday, 8);
+    var dow = weekdayOf(ymd);
+    if (dow < 0) return ymd;
+    var daysUntilCook = (3 - dow + 7) % 7;
+    if (daysUntilCook === 0) daysUntilCook = 7;
+    return addDays(ymd, daysUntilCook);
   }
 
-  // The week on screen. A saved cook week that has not been submitted wins over the calendar,
-  // so a refresh cannot skip 11/11 just because the order day has passed.
+  // Login uses the calendar cook week. The saved argument is the weeks with counts
+  // or an approved list, plus weeks already submitted. None of those replace the
+  // calendar date: an earlier week cannot stick past cook day, and a later week
+  // cannot skip the order that is due. The date box opens another week for this visit.
   function workingCookDate(today, saved) {
-    saved = saved || {};
-    var placed = {};
-    (saved.placed || []).forEach(function (day) { placed[String(day)] = true; });
-    var weeks = [];
-    (saved.weeks || []).forEach(function (day) {
-      var cook = cookKeyFromLegacyWeek(day);
-      if (weekdayOf(cook) !== 3 || placed[cook]) return;
-      if (weeks.indexOf(cook) === -1) weeks.push(cook);
-    });
-    weeks.sort();
-    if (weeks.length) return weeks[weeks.length - 1];
+    if (saved == null) saved = {};
     return openCookDate(today);
   }
 

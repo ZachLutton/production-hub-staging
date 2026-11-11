@@ -1736,6 +1736,7 @@
   document.getElementById('weekSelect').addEventListener('change', function () {
     var picked = ZedBek.selectCookDate(this.value || ZedBek.openCookDate(ZedBek.chicagoParts(new Date()).ymd));
     if (this.value !== picked) this.value = picked;
+    state.weekPicked = true;
     if (picked === state.weekKey) {
       syncRecipeWarning();
       render();
@@ -2345,8 +2346,10 @@
       Object.keys(snaps[3].val() || {}).forEach(function (loc) {
         weeks = weeks.concat(datedWeeks(snaps[3].val()[loc]));
       });
+      if (state.weekPicked) return;
       state.weekKey = ZedBek.workingCookDate(today, { weeks: weeks, placed: placedWeeks() });
     }).catch(function () {
+      if (state.weekPicked) return;
       state.weekKey = ZedBek.openCookDate(today);
     });
   }
@@ -2355,6 +2358,7 @@
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('main-content').style.display = 'block';
     document.getElementById('roleBadge').textContent = state.role === 'admin' ? 'Admin' : 'Team';
+    state.weekPicked = false;
     state.weekKey = ZedBek.openCookDate(ZedBek.chicagoParts(new Date()).ymd);
     document.getElementById('weekSelect').value = state.weekKey;
     state.boot = ZedBek.loadSeed().then(function (seed) { return ZedBek.prepareDatabase(db, seed); }).then(function (moves) {
