@@ -420,6 +420,31 @@ test('gallon, carton, and chip rows order in the count unit', () => {
   assert.equal(order.orderCases(mashedByCase, mashedNeed, 1), 6);
   assert.equal(order.orderExplain(mashedByCase, mashedNeed, 1), '149.3 lb need − 1 cs × 24 lb = 125.3 lb ÷ 24 lb/cs → 6 cs');
   assert.equal(order.orderExplain(mashed, mashedNeed, 1), '149.3 lb need − 1 lb on hand = 148.3 lb ÷ 24 lb/cs → 7 cs');
+  const squash = catalog.items.bek__200305;
+  assert.equal(squash.pack, '1 / 1 CS');
+  assert.equal(order.resolvedOrderUnit(squash), 'lb');
+  const squashNeed = { quantity: 27.7, unit: 'lb', source: 'recipe' };
+  assert.deepEqual(order.orderResult(squash, squashNeed, 0), { amount: 27.7, unit: 'lb' });
+  assert.equal(order.orderExplain(squash, squashNeed, 0), '27.7 lb need − 0 lb on hand = 27.7 lb');
+  assert.equal(order.orderWarning(squash, 28, squashNeed, 0).flagged, false);
+  assert.equal(order.resolvedOrderUnit(Object.assign({}, squash, { orderUnit: 'case', orderUnitChosen: true })), 'cs');
+  const lime = Object.assign({}, catalog.items.bek__029210, { countUnit: 'each', countUnitChosen: true });
+  assert.equal(order.resolvedCountUnit(lime), 'gal');
+  const limeNeed = order.orderNeed(lime, { recipe: { quantity: 13.2, unit: 'lb' }, countUnit: order.resolvedCountUnit(lime), forceFood: true });
+  assert.equal(order.needText(limeNeed), '13.2 lb ≈ 1.5 gal · 3.1 × 0.5 gal');
+  assert.equal(order.orderResult(lime, limeNeed, 0).amount, 1);
+  assert.equal(order.orderExplain(lime, limeNeed, 0), '1.5 gal need − 0 gal on hand = 1.5 gal ÷ 3 gal/cs → 1 cs');
+  assert.equal(order.orderExplain(lime, limeNeed, 0).includes('0 ea'), false);
+  const butter = catalog.items.bek__389120;
+  assert.equal(order.orderExplain(butter, { quantity: 2.5, unit: 'lb', source: 'recipe' }, 0), '2.5 lb need − 0 lb on hand = 2.5 lb ÷ 36 lb/cs → 1 cs');
+  assert.equal(order.orderResult(butter, { quantity: 2.5, unit: 'lb', source: 'recipe' }, 0).amount, 1);
+  Object.keys(catalog.items).forEach(function (id) {
+    const item = catalog.items[id];
+    const pack = order.packAmount(item && item.pack);
+    if (!pack || !order.isVolumeUnit(pack.unit)) return;
+    const forced = Object.assign({}, item, { countUnit: 'each', countUnitChosen: true });
+    assert.equal(order.canonUnit(order.resolvedCountUnit(forced)) === 'ea', false, item.itemNumber + ' ' + item.pack);
+  });
   Object.keys(catalog.items).forEach(function (id) {
     const item = catalog.items[id];
     const pack = order.packAmount(item && item.pack);

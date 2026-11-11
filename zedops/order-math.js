@@ -97,15 +97,20 @@
     return defaultLbPer(unit, item);
   }
 
+  function volumePackOf(item) {
+    var pack = packAmount(item && item.pack);
+    return pack && isVolumeUnit(pack.unit) ? pack : null;
+  }
+
   // A gallon or quart pack is counted in that volume, even if the stored count unit says each.
   function volumeCountUnit(item) {
-    var pack = packAmount(item && item.pack);
+    var pack = volumePackOf(item);
     var unit = item && item.countUnit;
-    if (pack && isVolumeUnit(pack.unit)) {
+    if (pack) {
       if (unit && isVolumeUnit(unit)) return unit;
       return pack.unit;
     }
-    return unit || (pack && pack.unit) || 'each';
+    return unit || 'each';
   }
 
   function fluidCarton(pack) {
@@ -139,7 +144,10 @@
   // each, case, lb, or gal. Kosher salt is one box, and balsamic glaze is one bottle,
   // unless an admin already chose a unit.
   function resolvedCountUnit(item) {
-    if (item && item.countUnitChosen && item.countUnit && !(canonUnit(item.countUnit) === 'oz' && isJarSpice(item))) {
+    var chosen = item && item.countUnitChosen && item.countUnit;
+    // A gallon jug saved as "each" is still a liquid. Count it in the pack's volume, like lemon juice.
+    var eachOnLiquid = chosen && canonUnit(item.countUnit) === 'ea' && volumePackOf(item);
+    if (chosen && !(canonUnit(item.countUnit) === 'oz' && isJarSpice(item)) && !eachOnLiquid) {
       return item.countUnit;
     }
     if (isCaseCountedPackaging(item)) return 'case';
@@ -439,6 +447,17 @@
       return result;
     }
     if (canonUnit(unit) === 'ea') {
+      var volPack = volumePackOf(item);
+      if (volPack && volPack.each > 0) {
+        result.convertedQuantity = needInCountUnit(result.quantity, result.unit, volPack.unit, result.eachFactor, item && item.lbPerUnit, item);
+        result.convertedUnit = unitLabel(volPack.unit);
+        if (result.convertedQuantity > 0 && volPack.each !== 1) {
+          result.pieceQuantity = result.convertedQuantity / volPack.each;
+          result.pieceSize = volPack.each;
+          result.pieceUnit = unitLabel(volPack.unit);
+        }
+        return result;
+      }
       var boxLb = pieceWeightLb(item, result.eachFactor);
       var piecePack = packAmount(item && item.pack);
       if (boxLb > 0) {
@@ -530,6 +549,44 @@
     return !!(need && (need.source === 'cook list' || need.source === 'plate list') && canonUnit(need.unit) === 'ea');
   }
 
+  // "1 / 1 CS" has no weight. Spaghetti squash is sold by the pound inside that case.
+  function isCatchWeightProduce(item) {
+    if (!item) return false;
+    if (String(item.itemNumber || '') === '200305') return true;
+    var pack = packAmount(item.pack);
+    if (pack && (pack.unit === 'lb' || pack.unit === 'oz' || isVolumeUnit(pack.unit) || pack.canSize)) return false;
+    var name = String(item.name || '').toLowerCase();
+    var text = String(item.pack || '');
+    return /squash|bushel|\bbsh\b/.test(name) && /1\s*\/\s*1\s*cs/i.test(text);
+  }
+
+  // case, or lb for catch-weight produce. An admin choice wins.
+  function resolvedOrderUnit(item) {
+    if (item && item.orderUnitChosen && item.orderUnit) {
+      var chosen = canonUnit(item.orderUnit);
+      if (chosen === 'lb' || chosen === 'pound') return 'lb';
+      if (chosen === 'case' || chosen === 'cs') return 'cs';
+    }
+    return isCatchWeightProduce(item) ? 'lb' : 'cs';
+  }
+
+  function onHandAsPounds(item, onHand) {
+    var have = onHand == null || onHand === '' ? 0 : Number(onHand) || 0;
+    var unit = canonUnit(resolvedCountUnit(item));
+    if (unit === 'lb' || unit === 'pound') return have;
+    if (unit === 'oz') return have / 16;
+    var caseLb = poundsPerCase(item);
+    if (unit === 'case' && caseLb > 0) return have * caseLb;
+    return 0;
+  }
+
+  // BEK takes catch-weight produce to the tenth of a pound, rounded up. 27.7 stays 27.7.
+  function roundUpTenth(number) {
+    var gap = Number(number) || 0;
+    if (!(gap > 0)) return 0;
+    return Math.ceil(gap * 10 - 1e-9) / 10;
+  }
+
   // Cook-list and plate-list pieces order by the case when the pack says how many pieces
   // are in it. Otherwise the order stays in each, and the summary must not call that a case.
   function orderResult(item, need, onHand) {
@@ -541,6 +598,11 @@
         amount: casesToOrder(Number(need.quantity) || 0, heldCases * packets, packets || 1),
         unit: 'cs'
       };
+    }
+    if (!pieceOrder(need) && canonUnit(need.unit) === 'lb' && resolvedOrderUnit(item) === 'lb') {
+      var heldLb = onHandAsPounds(item, onHand);
+      var leftLb = (Number(need.quantity) || 0) - heldLb;
+      return { amount: roundUpTenth(leftLb), unit: 'lb' };
     }
     if (pieceOrder(need)) {
       var per = piecesPerCase(item, need.eachFactor);
@@ -632,6 +694,13 @@
     var pack = packAmount(item.pack);
     var countUnit = resolvedCountUnit(item);
     var have = onHand == null || onHand === '' ? 0 : Number(onHand) || 0;
+    if (!pieceOrder(need) && canonUnit(need.unit) === 'lb' && resolvedOrderUnit(item) === 'lb') {
+      var needLb = Number(need.quantity) || 0;
+      var heldLb = onHandAsPounds(item, onHand);
+      var leftLb = needLb - heldLb;
+      if (!(leftLb > 0)) leftLb = 0;
+      return roundApprox(needLb) + ' lb need − ' + roundApprox(heldLb) + ' lb on hand = ' + roundApprox(roundUpTenth(leftLb)) + ' lb';
+    }
     if (canonUnit(countUnit) === 'case' && canonUnit(need.unit) === 'lb') {
       var caseLb = poundsPerCase(item, pack);
       if (caseLb > 0) {
@@ -655,7 +724,12 @@
       var needVol = needInCountUnit(need.quantity, need.unit, pack.unit, need.eachFactor, item.lbPerUnit, item);
       needQty = needVol / pack.each;
       per = boxesPerCase(pack) || 1;
-      parts.push(explainQty(have) + ' ' + word + ' × ' + explainQty(pack.each) + ' ' + (unitLabel(pack.unit) || pack.unit) + ' = ' + explainQty(have * pack.each) + ' ' + (unitLabel(pack.unit) || pack.unit) + ' on hand');
+      if (have > 0) {
+        parts.push(explainQty(have) + ' ' + word + ' × ' + explainQty(pack.each) + ' ' + (unitLabel(pack.unit) || pack.unit) + ' = ' + explainQty(have * pack.each) + ' ' + (unitLabel(pack.unit) || pack.unit) + ' on hand');
+      }
+      if (needVol > 0) {
+        parts.push(roundApprox(need.quantity) + ' lb = ' + roundApprox(needVol) + ' ' + (unitLabel(pack.unit) || pack.unit));
+      }
     } else if (isPieceCountUnit(countUnit) && canonUnit(need.unit) === 'lb') {
       piece = pieceWeightLb(item, need.eachFactor) || 0;
       if (piece > 0) {
@@ -898,9 +972,10 @@
     var reasons = [];
     var ordered = Number(cases) || 0;
     var avg = Number(item && item.weeklyCaseAverage);
-    if (ordered > 0 && avg > 0 && ordered > avg * 3 + 1e-9) {
+    var byPound = resolvedOrderUnit(item) === 'lb';
+    if (!byPound && ordered > 0 && avg > 0 && ordered > avg * 3 + 1e-9) {
       reasons.push(ordered + ' cs is more than 3× the usual ' + avg + ' cs');
-    } else if (ordered > 10 && !(avg > 0)) {
+    } else if (!byPound && ordered > 10 && !(avg > 0)) {
       reasons.push(ordered + ' cs and this item has no recent order history');
     }
     var counted = canonUnit(resolvedCountUnit(item));
@@ -1181,6 +1256,7 @@
     piecesInCase: piecesInCase,
     isCaseCountedPackaging: isCaseCountedPackaging,
     orderResult: orderResult,
+    resolvedOrderUnit: resolvedOrderUnit,
     orderExplain: orderExplain,
     orderCases: orderCases,
     isFoodItem: isFoodItem,

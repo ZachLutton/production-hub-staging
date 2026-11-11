@@ -366,7 +366,9 @@
   }
   function orderLabel(result) {
     if (!result || !(Number(result.amount) > 0)) return '0';
-    return result.amount + (result.unit === 'ea' ? ' ea' : ' cs');
+    if (result.unit === 'ea') return result.amount + ' ea';
+    if (result.unit === 'lb') return result.amount + ' lb';
+    return result.amount + ' cs';
   }
   function handLabel(row, loc) {
     var hand = handOf(row, loc);
@@ -1140,6 +1142,13 @@
     if (countNow === 'pound' || countNow === 'pounds') countNow = 'lb';
     if (countNow === 'gallon' || countNow === 'gallons') countNow = 'gal';
     if (countNow === 'ounce' || countNow === 'ounces') countNow = 'oz';
+    var orderNow = ZedOrder.resolvedOrderUnit(item) === 'lb' ? 'lb' : 'case';
+    var orderSelect = state.role === 'admin'
+      ? '<label>Order <select data-order-unit="' + esc(row.id) + '" aria-label="Order unit for ' + esc(item.name) + '">' +
+        ['case', 'lb'].map(function (choice) {
+          return '<option value="' + choice + '"' + (choice === orderNow ? ' selected' : '') + '>' + choice + '</option>';
+        }).join('') + '</select></label> '
+      : '';
     var countSelect = state.role === 'admin'
       ? '<label>Count <select data-count-unit="' + esc(row.id) + '" aria-label="Count unit for ' + esc(item.name) + '">' +
         countChoices.map(function (choice) {
@@ -1168,7 +1177,7 @@
       parCell = '<input data-par="' + esc(row.id) + '" type="number" min="0" step="any" inputmode="decimal" aria-label="Standing par for ' + esc(item.name) + '" value="' + (parValue ? esc(parValue) : '') + '"><span class="field-note" data-par-note="' + esc(row.id) + '"></span>';
     }
     var controls = state.role === 'admin'
-      ? '<td class="admin-controls"><div class="row-controls' + (showDensity ? ' has-density' : '') + '"><div class="ctrl-par">' + parCell + '</div><div class="ctrl-count">' + countSelect + '</div><div class="ctrl-role">' + roleBtn + '</div><div class="ctrl-density">' + density + '</div></div></td>'
+      ? '<td class="admin-controls"><div class="row-controls' + (showDensity ? ' has-density' : '') + '"><div class="ctrl-par">' + parCell + '</div><div class="ctrl-count">' + orderSelect + countSelect + '</div><div class="ctrl-role">' + roleBtn + '</div><div class="ctrl-density">' + density + '</div></div></td>'
       : '';
     var src = ZedOrder.weightSource(item);
     var weightLine = src ? '<div class="item-brand">' + esc(Math.round(src.lb * 1000) / 1000) + ' lb · ' + esc(src.source) + '</div>' : '';
@@ -1594,6 +1603,21 @@
   });
   document.getElementById('itemTable').addEventListener('change', function (event) {
     var input = event.target;
+    if (input.getAttribute && input.getAttribute('data-order-unit') != null) {
+      if (!requireAdmin()) return;
+      var orderId = input.getAttribute('data-order-unit');
+      var orderItem = state.catalog.items[orderId];
+      var orderChoice = input.value === 'lb' ? 'lb' : 'case';
+      if (!orderItem) return;
+      ZedStorage.setOrderUnit(db, orderId, orderChoice).then(function () {
+        orderItem.orderUnit = orderChoice;
+        orderItem.orderUnitChosen = true;
+        setPageStatus('Saved. ' + orderItem.name + ' is ordered by the ' + (orderChoice === 'lb' ? 'pound' : 'case') + '.');
+        render();
+        markSaved();
+      }).catch(showError);
+      return;
+    }
     if (input.getAttribute && input.getAttribute('data-count-unit') != null) {
       if (!requireAdmin()) return;
       var unitId = input.getAttribute('data-count-unit');
@@ -2283,7 +2307,8 @@
       var item = row.item || {};
       var counted = countRecord(row, loc);
       var handText = counted.amount ? counted.amount + ' ' + sheetUnit(item, counted.amount) : '________';
-      lines.push((item.itemNumber || '—') + '  ' + (item.name || '') + '  ' + (item.pack || '') + '  On hand ' + handText + '  Order ________');
+      var orderBlank = ZedOrder.resolvedOrderUnit(item) === 'lb' ? '________ lb' : '________ cs';
+      lines.push((item.itemNumber || '—') + '  ' + (item.name || '') + '  ' + (item.pack || '') + '  On hand ' + handText + '  Order ' + orderBlank);
     });
     ZedPdf.downloadPdf('paper-order-guide-' + (loc ? loc.id : 'store') + '.pdf', ZedPdf.buildPdf({
       title: 'Paper order guide — ' + (loc ? loc.name : ''),

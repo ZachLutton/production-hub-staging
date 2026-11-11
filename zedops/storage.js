@@ -102,6 +102,14 @@
     });
   }
 
+  function setOrderUnit(db, itemId, unit) {
+    var choice = String(unit || '').trim().toLowerCase();
+    return refOf(db, PATHS.catalog + '/items/' + itemId).update({
+      orderUnit: choice === 'lb' || choice === 'pound' ? 'lb' : 'case',
+      orderUnitChosen: true
+    });
+  }
+
   function setItemFields(db, itemId, fields) {
     return refOf(db, PATHS.catalog + '/items/' + itemId).update(fields || {});
   }
@@ -346,6 +354,7 @@
     setHidden: setHidden,
     setMatchHidden: setMatchHidden,
     setCountUnit: setCountUnit,
+    setOrderUnit: setOrderUnit,
     setItemFields: setItemFields,
     setIngredientMatch: setIngredientMatch,
     setRecipeLine: setRecipeLine,
