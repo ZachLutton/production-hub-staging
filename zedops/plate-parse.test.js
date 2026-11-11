@@ -1,0 +1,306 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('fs');
+const path = require('path');
+const plate = require('./plate-parse.js');
+const meals = require('./meal-supplies.js');
+const order = require('./order-math.js');
+const storage = require('./storage.js');
+const store = require('../inventory-store.js');
+
+const text = fs.readFileSync(path.join(__dirname, 'fixtures', 'plate-2026-11-04.txt'), 'utf8');
+
+test('the 11/4 plate list splits muffins and cookies off the meal trays', async () => {
+  const parsed = plate.parsePlateList(text);
+  assert.equal(parsed.cookDate, '2026-11-04');
+  assert.equal(parsed.totalCook, 4897);
+  const dishSum = parsed.dishes.reduce(function (sum, dish) { return sum + dish.count; }, 0);
+  assert.equal(dishSum, 4897);
+  const chew = parsed.dishes.filter(function (dish) { return dish.name === 'Peanut Butter & Chocolate Chews'; })[0];
+  const muffin = parsed.dishes.filter(function (dish) { return dish.name === 'Chocolate, Pecan, & Zucchini Muffin'; })[0];
+  assert.equal(chew.count, 100);
+  assert.equal(muffin.count, 50);
+  assert.equal(meals.packForDish(chew.name), 'cup_9oz');
+  assert.equal(meals.packForDish(muffin.name), 'cup_9oz');
+  assert.equal(meals.packForDish('Grilled Salmon One-Size'), 'meal_container');
+  assert.equal(meals.packForDish(muffin.name, 'meal_container'), 'meal_container');
+  const summary = meals.tally(parsed.dishes, {}, parsed.totalCook);
+  assert.equal(summary.cupPieces, 150);
+  assert.equal(summary.cup, 84);
+  assert.equal(summary.containers, 4747);
+  const lines = meals.linesFor(summary, {}, {});
+  assert.equal(lines[0].need, 4747);
+  assert.equal(lines[0].caseSize, 552);
+  assert.equal(lines[0].cases, 9);
+  assert.equal(lines[0].orderNeeded, true);
+  assert.equal(lines[1].name, '9 oz cups');
+  assert.equal(lines[1].need, 84);
+  assert.equal(lines[1].caseSize, 1000);
+  assert.equal(lines[0].onBekOrder, false);
+  assert.equal(lines[1].catalogNumber, '104162');
+  assert.equal(lines[1].onBekOrder, true);
+  assert.equal(lines[1].cases, 1);
+  assert.equal(lines[2].name, '9 oz lids');
+  assert.equal(lines[2].catalogNumber, '104426');
+  assert.equal(lines[2].onBekOrder, true);
+  assert.equal(lines[2].caseSize, 1000);
+  assert.equal(lines[2].cases, 1);
+  assert.equal(meals.typeForItemNumber('104162').id, 'cup_9oz');
+  assert.equal(meals.typeForItemNumber('104426').id, 'lid_9oz');
+  assert.equal(meals.typeForItemNumber(''), null);
+  const cup = { itemNumber: '104162', name: 'Cup Plas 9 Oz Squat Clear', pack: '20 / 50 CT', tempZone: 'Dry', countUnit: 'each' };
+  const plateNeed = order.orderNeed(cup, { plateList: { quantity: 150, unit: 'each' }, standingPar: 4, countUnit: 'each' });
+  assert.equal(plateNeed.source, 'plate list');
+  assert.equal(plateNeed.quantity, 150);
+  assert.equal(order.casesToOrder(plateNeed.quantity, 0, 1000), 1);
+  assert.equal(order.casesToOrder(plateNeed.quantity, 150, 1000), 0);
+  assert.equal(order.casesToOrder(plateNeed.quantity, 2000, 1000), 0);
+  const missing = order.orderNeed(cup, { plateList: { quantity: 0, unit: 'each', reason: meals.cupNeedReason(null, null) }, standingPar: 4 });
+  assert.equal(missing.quantity, 0);
+  assert.equal(missing.source, 'plate list');
+  assert.equal(missing.reason.includes('No plate list'), true);
+  const unmatched = meals.cupNeedReason({ totalCook: 10 }, meals.tally([{ key: 'salmon', name: 'Grilled Salmon', count: 10 }], {}, 10));
+  assert.equal(unmatched.includes('not matched') || unmatched.includes('matched muffin'), true);
+  assert.equal(meals.cupNeedReason({ totalCook: 4897, dishes: parsed.dishes }, summary), '');
+  const parOnly = order.orderNeed(cup, { standingPar: 4, countUnit: 'each' });
+  assert.equal(parOnly.source, 'standing par');
+  assert.equal(parOnly.quantity, 4);
+  const page = fs.readFileSync(path.join(__dirname, 'weekly-page.js'), 'utf8');
+  assert.equal(page.includes('plateListFor(row.item, loc)'), true);
+  assert.equal(page.includes("source === 'plate list'"), true);
+  assert.equal(meals.orderLine('meal_container', 4747, 4747, 552).cases, 0);
+  assert.equal(meals.orderLine('meal_container', 4747, 5000, 552).cases, 0);
+  const remembered = {};
+  remembered[muffin.key] = { packId: 'meal_container' };
+  const moved = meals.tally(parsed.dishes, remembered, parsed.totalCook);
+  assert.equal(moved.cup, 34);
+  assert.equal(moved.containers, 4797);
+  const db = store.createInventoryDb({ storage: { getItem: function () { return null; }, setItem: function () {} } });
+  await storage.setPlateTotal(db, '2026-11-04', { totalCook: 4897, dishes: parsed.dishes });
+  await storage.setPackChoice(db, muffin.key, { name: muffin.name, packId: 'meal_container' });
+  await storage.setCaseSize(db, 'cup_9oz', 1000);
+  const saved = (await db.ref('staging_zedops_plate/2026-11-04').once('value')).val();
+  assert.equal(saved.totalCook, 4897);
+  assert.equal(saved.dishes[chew.key].count, 100);
+  assert.equal((await db.ref('staging_zedops_plate/pack/' + muffin.key + '/packId').once('value')).val(), 'meal_container');
+  assert.equal((await db.ref('staging_zedops_plate/case/cup_9oz/caseSize').once('value')).val(), 1000);
+  assert.throws(function () { storage.assertWritable('staging_zedops_plate'); });
+  await assert.rejects(function () { return storage.setPlateTotal(db, '2026-11-04', { totalCook: 4897, dishes: [] }); });
+});
+
+test('the 11/11 plate list keeps split dish lines and fills cups and lids', async () => {
+  const text11 = fs.readFileSync(path.join(__dirname, 'fixtures', 'plate-2026-11-11.txt'), 'utf8');
+  const parsed = plate.parsePlateList(text11);
+  assert.equal(parsed.cookDate, '2026-11-11');
+  assert.equal(parsed.totalCook, 166);
+  const dishSum = parsed.dishes.reduce(function (sum, dish) { return sum + dish.count; }, 0);
+  assert.equal(dishSum, 166);
+  const cookie = parsed.dishes.filter(function (dish) { return dish.name === 'Chocolate Chip Cookie'; })[0];
+  const chew = parsed.dishes.filter(function (dish) { return dish.name === 'Peanut Butter & Chocolate Chews'; })[0];
+  const muffin = parsed.dishes.filter(function (dish) { return dish.name === 'Chocolate, Pecan, & Zucchini Muffin'; })[0];
+  const bites = parsed.dishes.filter(function (dish) { return dish.name === 'Bacon & Gruyere Egg Bites w/ Cauliflower Hashbrowns'; })[0];
+  assert.equal(cookie.count, 20);
+  assert.equal(chew.count, 30);
+  assert.equal(muffin.count, 20);
+  assert.equal(bites.count, 56);
+  const summary = meals.tally(parsed.dishes, {}, parsed.totalCook);
+  assert.equal(summary.cupPieces, 70);
+  assert.equal(summary.cup, 37);
+  assert.equal(summary.containers, 96);
+  const lines = meals.linesFor(summary, { cup_9oz: 0, lid_9oz: 0 }, {});
+  assert.equal(lines[1].need, 37);
+  assert.equal(lines[2].need, 37);
+  assert.equal(lines[1].cases, 1);
+  assert.equal(lines[2].cases, 1);
+  assert.equal(meals.cupNeedReason({ totalCook: 166, dishes: parsed.dishes }, summary), '');
+  const spelled = plate.parsePlateList('Colonnade Plate List for Wednesday November 11, 2026 Total Cook: 166\nOatmeal Cookie    4\n');
+  assert.equal(spelled.cookDate, '2026-11-11');
+  assert.equal(spelled.totalCook, 166);
+  assert.equal(spelled.dishes[0].count, 4);
+  const stored = { cookDate: '2026-11-11', totalCook: 166, fileName: 'plate-11-11.pdf', approvedAt: '2026-11-04T15:00:00Z', sourceText: text11 };
+  const repaired = plate.deriveFromStored(stored);
+  assert.equal(repaired.dishes.length, parsed.dishes.length);
+  assert.equal(meals.tally(repaired.dishes, {}, repaired.totalCook).cup, 37);
+  assert.equal(plate.deriveFromStored(repaired), null);
+  assert.equal(plate.deriveFromStored({ totalCook: 166, dishes: parsed.dishes }), null);
+  const db = store.createInventoryDb({ storage: { getItem: function () { return null; }, setItem: function () {} } });
+  await storage.setPlateTotal(db, '2026-11-11', {
+    totalCook: repaired.totalCook,
+    dishes: repaired.dishes,
+    fileName: repaired.fileName,
+    approvedAt: repaired.approvedAt,
+    sourceText: repaired.sourceText
+  });
+  const saved = (await db.ref('staging_zedops_plate/2026-11-11').once('value')).val();
+  assert.equal(saved.totalCook, 166);
+  assert.equal(saved.dishes[cookie.key].count, 20);
+  assert.equal(saved.dishes[muffin.key].count, 20);
+  assert.equal(saved.sourceText.includes('Chocolate Chip Cookie'), true);
+  const again = plate.deriveFromStored(saved);
+  assert.equal(again, null);
+  const page = fs.readFileSync(path.join(__dirname, 'weekly-page.js'), 'utf8');
+  const upload = page.slice(page.indexOf('function onPlateFile'), page.indexOf('function renderRecipeTools'));
+  assert.equal(upload.includes('saveParsedPlate'), true);
+  assert.equal(upload.includes('no dish lines'), true);
+  assert.equal(page.includes('deriveFromStored'), true);
+  assert.equal(page.includes('sourceText'), true);
+});
+
+test('a chew serving counted in pieces fills a 9 oz cup three at a time', async () => {
+  const parsed = plate.parsePlateList([
+    'Colonnade Plate List for Wednesday Nov 11, 2026 Total Cook: 350',
+    'Peanut Butter Chocolate Chip Chew Serving 300 (ea)',
+    'Chocolate, Pecan, & Zucchini Muffin 50'
+  ].join('\n'));
+  assert.equal(parsed.dishes[0].count, 300);
+  assert.equal(parsed.dishes[1].count, 50);
+  const summary = meals.tally(parsed.dishes, {}, parsed.totalCook);
+  assert.equal(summary.cup, 150);
+  const lines = meals.linesFor(summary, { cup_9oz: 0, lid_9oz: 0 }, {});
+  assert.equal(lines[1].need, 150);
+  assert.equal(lines[2].need, 150);
+  const tighter = meals.tally(parsed.dishes, {}, parsed.totalCook, { chew: 1, muffin: 1 });
+  assert.equal(tighter.cup, 350);
+  const db = store.createInventoryDb({ storage: { getItem: function () { return null; }, setItem: function () {} } });
+  await storage.setPiecesPerCup(db, 'chew', 3);
+  await storage.setPiecesPerCup(db, 'muffin', 1);
+  assert.equal((await db.ref('staging_zedops_plate/pieces/chew/piecesPerCup').once('value')).val(), 3);
+  assert.equal((await db.ref('staging_zedops_plate/pieces/muffin/piecesPerCup').once('value')).val(), 1);
+  const dropped = plate.parsePlateList('Peanut Butter Chocolate Chip Chew Serving\n300 (ea)\n');
+  assert.equal(dropped.dishes[0].count, 300);
+  const page = fs.readFileSync(path.join(__dirname, 'weekly-page.js'), 'utf8');
+  assert.equal(page.includes('data-pieces-per'), true);
+});
+
+test('the 11/11 cook list totals cups by size and maps each counts', () => {
+  const cook = require('./cook-parse.js');
+  const text = fs.readFileSync(path.join(__dirname, 'fixtures', 'cook-list-2026-11-11.txt'), 'utf8');
+  const parsed = cook.parseCookList(text);
+  assert.equal(parsed.cookDate, '2026-11-11');
+  const totals = cook.supplyTotals(parsed.components, {});
+  assert.equal(totals.souffleCups, 1215);
+  assert.equal(totals.souffleLids, 1215);
+  assert.equal(totals.nineCups, 150);
+  assert.equal(totals.nineLids, 150);
+  const chew = totals.rows.filter(function (row) { return /chew/i.test(row.name); })[0];
+  const muffin = totals.rows.filter(function (row) { return /muffin/i.test(row.name); })[0];
+  assert.equal(chew.piecesPerCup, 3);
+  assert.equal(chew.cups, 100);
+  assert.equal(muffin.piecesPerCup, 1);
+  assert.equal(muffin.cups, 50);
+  const omelette = cook.piecesForItem({ itemNumber: '393795', name: 'Egg Omelette W/cheddar Chs' }, parsed.components, {});
+  assert.equal(omelette.quantity, 85);
+  const chicken = cook.piecesForItem({ itemNumber: '211262', name: 'Chicken Breast 4 Oz Blsl Fresh' }, parsed.components, {});
+  assert.equal(chicken.quantity, 1755);
+  const mahi = cook.piecesForItem({ itemNumber: '202105', name: 'Mahi Mahi Portion 4oz Ivp' }, parsed.components, {});
+  assert.equal(mahi.quantity, 135);
+  const cup = cook.piecesForItem({ itemNumber: '111634', name: 'Cup Plas Souffle 1.5 Oz Trans' }, parsed.components, {});
+  assert.equal(cup.quantity, 1215);
+  const lid = cook.piecesForItem({ itemNumber: '130860', name: 'Lid Plas Souffle 2 Oz' }, parsed.components, {});
+  assert.equal(lid.quantity, 1215);
+  const nine = cook.piecesForItem({ itemNumber: '104162', name: 'Cup Plas 9 Oz Squat Clear' }, parsed.components, {});
+  assert.equal(nine.quantity, 150);
+  const nineLid = cook.piecesForItem({ itemNumber: '104426' }, parsed.components, {});
+  assert.equal(nineLid.quantity, 150);
+  const salmon = cook.piecesForItem({ internalKey: 'local_salmon_4oz', itemNumber: '', name: '4 oz salmon filets' }, parsed.components, {});
+  assert.equal(salmon.quantity, 85);
+  assert.equal(cook.defaultItem('Lemon Wedge').itemNumber, '');
+  const page = fs.readFileSync(path.join(__dirname, 'weekly-page.js'), 'utf8');
+  assert.equal(page.includes('cookListFor(row.item, loc)'), true);
+  assert.equal(page.includes('parseCookPdf'), true);
+  const order = require('./order-math.js');
+  const bek = require('./bek.js');
+  const catalog = bek.buildCatalog(require('./seed.json')).items;
+  const packs = {
+    '104426': 1000,
+    '104162': 1000,
+    '111634': 2500,
+    '130860': 2500
+  };
+  Object.keys(packs).forEach(function (number) {
+    const item = catalog['bek__' + number];
+    assert.equal(order.piecesInCase(item), packs[number]);
+    assert.equal(order.resolvedCountUnit(item), 'case');
+  });
+  const souffle = catalog.bek__111634;
+  const souffleNeed = { quantity: 1215, unit: 'ea', source: 'cook list' };
+  assert.deepEqual(order.orderResult(souffle, souffleNeed, 2), { amount: 0, unit: 'cs' });
+  assert.equal(order.orderExplain(souffle, souffleNeed, 2), '1215 ea need − 2 cs × 2500 = 5000 on hand → 0 cs');
+  assert.deepEqual(order.orderResult(souffle, souffleNeed, 0), { amount: 1, unit: 'cs' });
+  const nineCup = catalog.bek__104162;
+  assert.deepEqual(order.orderResult(nineCup, { quantity: 150, unit: 'ea', source: 'cook list' }, 0), { amount: 1, unit: 'cs' });
+  assert.deepEqual(order.orderResult(catalog.bek__104426, { quantity: 150, unit: 'ea', source: 'plate list' }, 1), { amount: 0, unit: 'cs' });
+});
+
+test('Seared Beef plates add balsamic glaze at 0.25 oz each', () => {
+  const garnish = require('./garnish.js');
+  const order = require('./order-math.js');
+  const plate = require('./plate-parse.js');
+  const bek = require('./bek.js');
+  const text = fs.readFileSync(path.join(__dirname, 'fixtures', 'plate-2026-11-04.txt'), 'utf8');
+  const parsed = plate.parsePlateList(text);
+  const seared = parsed.dishes.filter(function (dish) { return /seared beef/i.test(dish.name); })[0];
+  assert.equal(seared.count, 70);
+  const item = bek.buildCatalog(require('./seed.json')).items.bek__660356;
+  const found = garnish.forItem(item, parsed.dishes);
+  assert.equal(found.ounces, 17.5);
+  assert.equal(found.pounds, 1.094);
+  const need = order.orderNeed(item, { recipe: { quantity: found.pounds, unit: 'lb', source: 'plate garnish', reason: found.reason }, countUnit: 'each' });
+  assert.equal(need.source, 'plate garnish');
+  assert.equal(order.orderResult(item, need, 0).unit, 'cs');
+  assert.equal(order.orderResult(item, need, 0).amount, 1);
+  const cards = garnish.parseAssembly([
+    'Seared Beef Tenderloin',
+    'Sautéed Diced Beef Tenderloin,4,oz',
+    'Balsamic Glaze,0.25,oz',
+    'Red Skin Potato Mashers,4,oz'
+  ].join('\n'), [{ name: 'Balsamic Glaze', itemNumber: '660356' }]);
+  assert.equal(cards.length, 1);
+  assert.equal(cards[0].lines.length, 1);
+  assert.equal(cards[0].lines[0].name, 'Balsamic Glaze');
+  assert.equal(cards[0].lines[0].quantity, 0.25);
+  const page = fs.readFileSync(path.join(__dirname, 'weekly-page.js'), 'utf8');
+  assert.equal(page.includes('garnishFor(row.item)'), true);
+});
+
+test('Greek Chicken Bowl takes two souffle cups and two lids per plate', () => {
+  const dishes = [{ key: 'greek_chicken_bowl', name: 'Greek Chicken Bowl', count: 100 }];
+  const cup = { itemNumber: '111634', name: 'Cup Plas Souffle 1.5 Oz Trans' };
+  const lid = { itemNumber: '130860', name: 'Lid Plas Souffle 2 Oz' };
+  assert.equal(meals.plateItemPieces(cup, dishes, null), 200);
+  assert.equal(meals.plateItemPieces(lid, dishes, null), 200);
+  assert.equal(meals.defaultPlateItems(cup, dishes)[0].qty, 2);
+  assert.equal(meals.defaultPlateItems(lid, dishes)[0].qty, 2);
+  const page = fs.readFileSync(path.join(__dirname, 'weekly-page.js'), 'utf8');
+  assert.equal(page.includes('data-plate-link-index'), true);
+  assert.equal(page.includes('submitOrder'), true);
+  assert.equal(page.includes('orderWarning'), true);
+});
+
+test('the 11/4 omelette dishes order one cheddar omelette each', async () => {
+  const parsed = plate.parsePlateList(text);
+  const omelette = { id: 'bek__393795', name: 'Egg Omelette W/cheddar Chs', pack: '72 / 3.5 OZ', countUnit: 'lb', itemNumber: '393795', tempZone: 'Frozen' };
+  const other = { id: 'bek__492773', name: 'Turkey Sausage Patty Cooked', pack: '128 / 1.25 OZ', countUnit: 'lb', itemNumber: '492773' };
+  const linked = meals.defaultPlateItems(omelette, parsed.dishes);
+  assert.equal(linked.length, 1);
+  assert.equal(linked[0].name, 'Bacon, Tomato, & Mushroom Omelet One-Size');
+  assert.equal(linked[0].count, 90);
+  assert.equal(linked[0].qty, 1);
+  assert.equal(meals.plateItemPieces(omelette, parsed.dishes, null), 90);
+  assert.equal(meals.plateItemPieces(other, parsed.dishes, null), null);
+  const saved = {};
+  saved[linked[0].key] = { name: linked[0].name, qty: 2 };
+  assert.equal(meals.plateItemPieces(omelette, parsed.dishes, saved), 180);
+  assert.equal(meals.plateItemPieces(omelette, parsed.dishes, {}), null);
+  const need = order.orderNeed(omelette, { plateList: { quantity: 90, unit: 'each' }, standingPar: 2, countUnit: 'lb' });
+  assert.equal(need.source, 'plate list');
+  assert.equal(order.orderCases(omelette, need, 14), 1);
+  const db = store.createInventoryDb({ storage: { getItem: function () { return null; }, setItem: function () {} } });
+  await storage.setPlateLink(db, omelette.id, saved);
+  assert.equal((await db.ref('staging_zedops_plate/link/' + omelette.id + '/' + linked[0].key + '/qty').once('value')).val(), 2);
+  await storage.setPlateLink(db, omelette.id, {});
+  assert.equal((await db.ref('staging_zedops_plate/link/' + omelette.id).once('value')).val(), null);
+  const page = fs.readFileSync(path.join(__dirname, 'weekly-page.js'), 'utf8');
+  assert.equal(page.includes('plateItemPieces'), true);
+  assert.equal(page.includes('393795'), false);
+});
