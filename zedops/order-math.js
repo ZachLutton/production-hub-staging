@@ -658,6 +658,79 @@
     return namePortionLb(item) || 0;
   }
 
+  var GRAMS_PER_LB = 453.6;
+
+  // Pounds in one case. A pound or gallon pack already has that weight.
+  // A count-pack case uses the piece weight times the pieces in the case.
+  function caseWeightLb(item) {
+    var direct = poundsPerCase(item);
+    if (direct > 0) return direct;
+    var piece = averagePieceLb(item);
+    if (!(piece > 0)) return 0;
+    var pieces = piecesInCase(item);
+    if (!(pieces > 1)) {
+      var pack = packAmount(item && item.pack);
+      if (pack && pack.each > 0 && (pack.unit === 'lb' || pack.unit === 'oz')) pieces = pack.perCase / pack.each;
+    }
+    return pieces > 1 ? piece * pieces : 0;
+  }
+
+  // Pounds represented by one entered on-hand count. Null when this count has no known weight.
+  function countPounds(item, qty) {
+    var unit = canonUnit(resolvedCountUnit(item));
+    if (unit === 'lb') return qty;
+    if (unit === 'oz') return qty / 16;
+    if (unit === 'g') return qty / GRAMS_PER_LB;
+    if (isVolumeUnit(unit)) {
+      var per = lbPerOf(unit, item && item.lbPerUnit, item);
+      return per > 0 ? qty * per : null;
+    }
+    // Cups, lids, and the other count packs have a size in the name, not a weight.
+    if (isCaseCountedPackaging(item)) return null;
+    if (unit === 'case') {
+      var caseLb = caseWeightLb(item);
+      if (!(caseLb > 0) && Number(item && item.lbPerUnit) > 0) caseLb = Number(item.lbPerUnit);
+      return caseLb > 0 ? qty * caseLb : null;
+    }
+    if (isPieceCountUnit(unit)) {
+      var pack = packAmount(item && item.pack);
+      var countPack = !pack || /\bct\b/i.test(String(item && item.pack || '')) || pack.unit === 'ea';
+      if (!isFoodItem(item) && countPack && !(Number(item && item.lbPerUnit) > 0)) return null;
+      var piece = averagePieceLb(item);
+      if (!(piece > 0) && pack && isVolumeUnit(pack.unit) && pack.each > 0) {
+        var eachVol = lbPerOf(pack.unit, item && item.lbPerUnit, item);
+        if (eachVol > 0) piece = pack.each * eachVol;
+      }
+      return piece > 0 ? qty * piece : null;
+    }
+    return null;
+  }
+
+  function formatGrams(grams) {
+    var rounded = Math.round(grams);
+    var sign = rounded < 0 ? '-' : '';
+    var body = String(Math.abs(rounded)).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    return sign + body + ' g';
+  }
+
+  // Grams for the count already on the sheet. Does not include an order or a need.
+  // status blank: nothing entered. none: a count with no weight (supplies). missing: food with no weight.
+  function onHandGrams(item, amount) {
+    var empty = amount == null || amount === '';
+    var qty = empty ? NaN : Number(amount);
+    var known = !empty && isFinite(qty) ? countPounds(item, qty) : (countPounds(item, 1) == null ? null : 0);
+    if (empty || !isFinite(qty)) {
+      if (item && isFoodItem(item) && countPounds(item, 1) == null) return { grams: null, text: 'no weight set', status: 'missing' };
+      return { grams: null, text: '', status: 'blank' };
+    }
+    if (known == null) {
+      if (item && isFoodItem(item)) return { grams: null, text: 'no weight set', status: 'missing' };
+      return { grams: null, text: '\u2014', status: 'none' };
+    }
+    var grams = Math.round(known * GRAMS_PER_LB);
+    return { grams: grams, text: formatGrams(grams), status: 'ok' };
+  }
+
   function onHandAsPounds(item, onHand) {
     var have = onHand == null || onHand === '' ? 0 : Number(onHand) || 0;
     var unit = canonUnit(resolvedCountUnit(item));
@@ -1448,6 +1521,7 @@
     weakMatchReason: weakMatchReason,
     weakFoodReport: weakFoodReport,
     isBakingPantry: isBakingPantry,
+    onHandGrams: onHandGrams,
     orderNeed: orderNeed,
     filterCatalog: filterCatalog,
     matchCounts: matchCounts,

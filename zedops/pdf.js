@@ -131,34 +131,45 @@
   }
 
   // Letter sheet with an orange header, section bands, and one row per item.
+  // Portrait. Counts stay in the On hand column. Grams are that count's weight only.
   function buildSheetPdf(doc) {
     var title = String((doc && doc.title) || "Zedric's On-Hand Inventory");
+    var subtitle = String((doc && doc.subtitle) || '');
     var generated = String((doc && doc.generated) || '');
     var sections = (doc && doc.sections) || [];
     var columns = [
-      { key: 'number', label: 'BEK #', x: 36 },
-      { key: 'name', label: 'Item', x: 92 },
-      { key: 'pack', label: 'Pack', x: 248 },
-      { key: 'onHand', label: 'On hand', x: 360 },
-      { key: 'entered', label: 'Last entered', x: 448 }
+      { key: 'number', label: 'BEK #', x: 28 },
+      { key: 'name', label: 'Item', x: 74 },
+      { key: 'pack', label: 'Pack', x: 196 },
+      { key: 'onHand', label: 'On hand', x: 278 },
+      { key: 'grams', label: 'Grams', x: 362 },
+      { key: 'entered', label: 'Last entered', x: 458 }
     ];
+    function columnX(key) {
+      for (var i = 0; i < columns.length; i++) if (columns[i].key === key) return columns[i].x;
+      return 28;
+    }
     var blocks = [];
     sections.forEach(function (section) {
       blocks.push({ kind: 'section', text: section.title || 'Items' });
       (section.rows || []).forEach(function (row) {
-        var nameLines = wrapWidth(row.name || '', 26);
-        var packLines = wrapWidth(row.pack || '', 16);
+        var nameLines = wrapWidth(row.name || '', 22);
+        var packLines = wrapWidth(row.pack || '', 14);
+        var enteredLines = wrapWidth(row.entered || '', 22);
         if (!row.pack) packLines = [''];
+        if (!row.entered) enteredLines = [''];
         blocks.push({
           kind: 'row',
           lines: nameLines,
           packLines: packLines,
+          enteredLines: enteredLines,
           cells: {
             number: row.number || '',
             name: nameLines,
             pack: packLines,
             onHand: amountThenUnit(row.onHand, row.unit),
-            entered: row.entered || ''
+            grams: row.grams == null ? '' : String(row.grams),
+            entered: enteredLines
           }
         });
       });
@@ -168,10 +179,11 @@
     var pages = [];
     var current = [];
     var used = 0;
-    var limit = 640;
+    var limit = 620;
     function blockHeight(block) {
-      if (block.kind === 'section') return 22;
-      return 8 + Math.max(1, block.lines.length, (block.packLines || []).length) * 12;
+      if (block.kind === 'section') return 20;
+      var lines = Math.max(1, block.lines.length, (block.packLines || []).length, (block.enteredLines || []).length);
+      return 6 + lines * 11;
     }
     blocks.forEach(function (block) {
       var height = blockHeight(block);
@@ -197,34 +209,40 @@
     pages.forEach(function (blocksOnPage, pageIndex) {
       var cmds = [];
       cmds.push('0.949 0.396 0.129 rg');
-      cmds.push('0 746 612 46 re f');
-      cmds.push('BT /F2 12 Tf 1 1 1 rg 1 0 0 1 36 770 Tm (' + pdfString(title) + ') Tj ET');
-      cmds.push('BT /F1 9 Tf 1 0 0 1 36 754 Tm (' + pdfString(generated) + ') Tj ET');
+      cmds.push('0 728 612 64 re f');
+      cmds.push('BT /F2 11 Tf 1 1 1 rg 1 0 0 1 28 772 Tm (' + pdfString(title) + ') Tj ET');
+      if (subtitle) cmds.push('BT /F2 9 Tf 1 1 1 rg 1 0 0 1 28 758 Tm (' + pdfString(subtitle) + ') Tj ET');
+      cmds.push('BT /F1 8 Tf 1 1 1 rg 1 0 0 1 28 744 Tm (' + pdfString(generated) + ') Tj ET');
       cmds.push('0.25 0.25 0.25 rg');
       columns.forEach(function (col) {
-        cmds.push('BT /F2 8 Tf 1 0 0 1 ' + col.x + ' 728 Tm (' + pdfString(col.label) + ') Tj ET');
+        cmds.push('BT /F2 8 Tf 1 0 0 1 ' + col.x + ' 712 Tm (' + pdfString(col.label) + ') Tj ET');
       });
-      cmds.push('0.85 0.85 0.85 RG 0.6 w 36 722 m 576 722 l S');
-      var y = 708;
+      cmds.push('0.85 0.85 0.85 RG 0.6 w 28 706 m 584 706 l S');
+      var y = 692;
       blocksOnPage.forEach(function (block) {
         if (block.kind === 'section') {
           cmds.push('0.98 0.90 0.84 rg');
-          cmds.push('36 ' + (y - 12) + ' 540 18 re f');
-          cmds.push('BT /F2 9 Tf 0.55 0.22 0.08 rg 1 0 0 1 42 ' + (y - 7) + ' Tm (' + pdfString(block.text) + ') Tj ET');
-          y -= 22;
+          cmds.push('28 ' + (y - 11) + ' 556 16 re f');
+          cmds.push('BT /F2 9 Tf 0.55 0.22 0.08 rg 1 0 0 1 34 ' + (y - 6) + ' Tm (' + pdfString(block.text) + ') Tj ET');
+          y -= 20;
           return;
         }
         cmds.push('0.1 0.1 0.1 rg');
-        cmds.push('BT /F1 9 Tf 1 0 0 1 ' + columns[0].x + ' ' + y + ' Tm (' + pdfString(block.cells.number) + ') Tj ET');
+        cmds.push('BT /F1 8 Tf 1 0 0 1 ' + columnX('number') + ' ' + y + ' Tm (' + pdfString(block.cells.number) + ') Tj ET');
         block.lines.forEach(function (line, index) {
-          cmds.push('BT /F1 9 Tf 1 0 0 1 ' + columns[1].x + ' ' + (y - index * 12) + ' Tm (' + pdfString(line) + ') Tj ET');
+          cmds.push('BT /F1 8 Tf 1 0 0 1 ' + columnX('name') + ' ' + (y - index * 11) + ' Tm (' + pdfString(line) + ') Tj ET');
         });
         (block.packLines || ['']).forEach(function (line, index) {
-          cmds.push('BT /F1 8 Tf 1 0 0 1 ' + columns[2].x + ' ' + (y - index * 12) + ' Tm (' + pdfString(line) + ') Tj ET');
+          cmds.push('BT /F1 8 Tf 1 0 0 1 ' + columnX('pack') + ' ' + (y - index * 11) + ' Tm (' + pdfString(line) + ') Tj ET');
         });
-        cmds.push('BT /F1 9 Tf 1 0 0 1 ' + columns[3].x + ' ' + y + ' Tm (' + pdfString(block.cells.onHand) + ') Tj ET');
-        cmds.push('BT /F1 8 Tf 1 0 0 1 ' + columns[4].x + ' ' + y + ' Tm (' + pdfString(block.cells.entered) + ') Tj ET');
-        y -= 8 + Math.max(1, block.lines.length, (block.packLines || []).length) * 12;
+        cmds.push('BT /F1 8 Tf 1 0 0 1 ' + columnX('onHand') + ' ' + y + ' Tm (' + pdfString(block.cells.onHand) + ') Tj ET');
+        if (block.cells.grams === 'no weight set') cmds.push('0.54 0.12 0.12 rg');
+        cmds.push('BT /F1 8 Tf 1 0 0 1 ' + columnX('grams') + ' ' + y + ' Tm (' + pdfString(block.cells.grams) + ') Tj ET');
+        cmds.push('0.1 0.1 0.1 rg');
+        (block.enteredLines || ['']).forEach(function (line, index) {
+          cmds.push('BT /F1 7 Tf 1 0 0 1 ' + columnX('entered') + ' ' + (y - index * 11) + ' Tm (' + pdfString(line) + ') Tj ET');
+        });
+        y -= blockHeight(block);
       });
       cmds.push('0.4 0.4 0.4 rg');
       cmds.push('BT /F1 8 Tf 1 0 0 1 480 28 Tm (' + pdfString('Page ' + (pageIndex + 1) + ' of ' + pages.length) + ') Tj ET');

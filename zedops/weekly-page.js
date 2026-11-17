@@ -442,13 +442,20 @@
   }
   function handLabel(row, loc) {
     var hand = handOf(row, loc);
-    if (hand == null || hand === '') return '—';
-    var word = ZedOrder.countWord(row.item);
-    if (ZedOrder.isPieceCountUnit(word) || word === 'bag' || word === 'jug' || word === 'container' || word === 'bottle') {
-      return hand + ' ' + ZedOrder.shortUnit(word, hand);
+    var grams = ZedOrder.onHandGrams(row.item, hand == null || hand === '' ? '' : hand);
+    var base = '—';
+    if (hand != null && hand !== '') {
+      var word = ZedOrder.countWord(row.item);
+      if (ZedOrder.isPieceCountUnit(word) || word === 'bag' || word === 'jug' || word === 'container' || word === 'bottle' || word === 'patty' || word === 'breast') {
+        base = hand + ' ' + ZedOrder.shortUnit(word, hand);
+      } else {
+        var unit = ZedOrder.unitLabel(ZedOrder.resolvedCountUnit(row.item));
+        base = hand + (unit ? ' ' + unit : '');
+      }
     }
-    var unit = ZedOrder.unitLabel(ZedOrder.resolvedCountUnit(row.item));
-    return hand + (unit ? ' ' + unit : '');
+    if (!grams.text) return base;
+    if (base === '—') return grams.text;
+    return base + ' · ' + grams.text;
   }
   function needBlock(row, loc) {
     var need = needFor(row, loc);
@@ -1237,13 +1244,15 @@
     var countedUnit = ZedOrder.resolvedCountUnit(item);
     var canLb = ZedOrder.canEachLb(item && item.pack);
     var showCanEach = food && ZedOrder.canonUnit(countedUnit) === 'ea' && canLb > 0;
-    var showPieceAverage = state.role === 'admin' && (item.itemNumber === '121792' || item.itemNumber === '558188');
+    var missingWeight = food && ZedOrder.onHandGrams(item, 1).status === 'missing';
+    var showPieceAverage = state.role === 'admin' && (item.itemNumber === '121792' || item.itemNumber === '558188' || (missingWeight && (ZedOrder.isPieceCountUnit(countNow) || countNow === 'case')));
     var showDensity = state.role === 'admin' && food && (ZedOrder.isVolumeUnit(countedUnit) || showCanEach);
     var density = '';
     if (showPieceAverage) {
-      var pieceDefault = item.itemNumber === '121792' ? 5 / 16 : 0.75;
+      var pieceDefault = item.itemNumber === '121792' ? 5 / 16 : (item.itemNumber === '558188' ? 0.75 : '');
       var pieceSaved = Number(item.lbPerUnit) > 0 ? item.lbPerUnit : '';
-      density = '<label>lb per piece <input data-lb-per="' + esc(row.id) + '" type="number" min="0" step="any" inputmode="decimal" placeholder="' + pieceDefault + '" aria-label="Pounds per piece for ' + esc(item.name) + '" value="' + (pieceSaved === '' ? '' : esc(pieceSaved)) + '"></label><span class="field-note" data-lb-note="' + esc(row.id) + '"></span>';
+      var pieceLabel = countNow === 'case' ? 'lb per case' : 'lb per piece';
+      density = '<label>' + pieceLabel + ' <input data-lb-per="' + esc(row.id) + '" type="number" min="0" step="any" inputmode="decimal" placeholder="' + pieceDefault + '" aria-label="' + pieceLabel + ' for ' + esc(item.name) + '" value="' + (pieceSaved === '' ? '' : esc(pieceSaved)) + '"></label><span class="field-note" data-lb-note="' + esc(row.id) + '"></span>';
     }
     if (showDensity) {
       var perLabel = showCanEach ? 'each' : ZedOrder.unitLabel(countedUnit);
@@ -1267,10 +1276,12 @@
     var weightLine = src ? '<div class="item-brand">' + esc(Math.round(src.lb * 1000) / 1000) + ' lb · ' + esc(src.source) + '</div>' : '';
     var warn = ZedOrder.orderWarning(item, cases, need, hand);
     var warnLine = warn.flagged ? '<div class="order-warn">' + esc(warn.reasons.join(' ')) + '</div>' : '';
+    var grams = ZedOrder.onHandGrams(item, hand == null || hand === '' ? '' : hand);
+    var gramsNote = grams.text ? '<div class="hand-grams' + (grams.status === 'missing' ? ' missing' : '') + '">' + esc(grams.text) + '</div>' : '';
     return '<tr' + (warn.flagged ? ' class="order-flag"' : '') + '><td class="item-num">' + esc(item.itemNumber || 'no BEK #') + '</td><td><div class="item-name">' +
       esc(item.name) + temp + '</div><div class="item-brand">' + esc(item.brand || '') + '</div>' + weightLine + '</td><td>' + esc(item.pack || '') +
       '</td><td class="need-cell" data-need-for="' + esc(row.id) + '">' + needText + '</td><td><input class="onhand-input" data-hand="' + esc(row.id) + '" type="number" min="0" step="any" inputmode="decimal" aria-label="On hand ' + esc(item.name) + ' in ' + esc(countNow) + '" value="' +
-      (hand == null ? '' : esc(hand)) + '"></td><td class="need-order">' + esc(orderLabel(ordered)) + warnLine + '</td></tr>' +
+      (hand == null ? '' : esc(hand)) + '">' + gramsNote + '</td><td class="need-order">' + esc(orderLabel(ordered)) + warnLine + '</td></tr>' +
       controls;
   }
 
@@ -2294,12 +2305,14 @@
       }
       var item = row.item || {};
       var counted = countRecord(row, loc);
+      var grams = ZedOrder.onHandGrams(item, counted.amount);
       groups[index[title]].rows.push({
         number: item.itemNumber || '',
         name: item.name || '',
         pack: item.pack || '',
         unit: counted.amount ? sheetUnit(item, counted.amount) : '',
         onHand: counted.amount,
+        grams: grams.text,
         entered: counted.entered
       });
     });
@@ -2332,8 +2345,12 @@
       setPageStatus('The on-hand sheet for ' + place + ' has not loaded yet. Wait for the items, then try again.', true);
       return;
     }
+    var cycle = cook && ZedBek.weekdayOf(cook) >= 0 ? ZedBek.cycleForCook(cook) : null;
+    var cookText = cycle ? ZedBek.shortDate(cook) : '';
+    var deliveryText = cycle ? ZedBek.shortDate(cycle.delivery) : '';
     ZedPdf.downloadPdf('zedrics-onhand-' + slug + '-' + cook + '.pdf', ZedPdf.buildSheetPdf({
-      title: "Zedric's On-Hand Inventory — " + place + " — week of " + cook,
+      title: "Zedric's On-Hand Inventory — " + place,
+      subtitle: (cookText ? 'Cook ' + cookText + ' · ' : '') + 'On hand before BEK delivery' + (deliveryText ? ', ' + deliveryText : ''),
       generated: 'Generated ' + chicagoClock(new Date()) + ' CT',
       sections: sections
     }));

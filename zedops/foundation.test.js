@@ -250,19 +250,22 @@ test('the count week is the Tuesday it is due, in Chicago, and prices wait for t
   assert.equal(page.indexOf('id="recipeTools"') < page.indexOf('id="storeView"'), true);
   assert.equal(page.indexOf('id="orderSummary"') < page.indexOf('id="storeView"'), true);
   assert.equal(page.indexOf('id="storeView"') < page.indexOf('id="adminTools"'), true);
-  assert.equal(page.includes('Build 20261104az'), true);
-  assert.equal(page.includes('weekly-page.js?v=20261104az'), true);
+  assert.equal(page.includes('Build 20261104ba'), true);
+  assert.equal(page.includes('weekly-page.js?v=20261104ba'), true);
   assert.equal(page.includes('id="pdfOnHand"'), true);
   assert.equal(page.includes('button:disabled'), true);
   assert.equal(page.includes('id="plateFile"'), true);
   assert.equal(page.includes('id="mealChecks"'), true);
   assert.equal(logic.includes('function showView'), true);
-  const onHandPdf = logic.slice(logic.indexOf('function catalogSheetRows'), logic.indexOf("getElementById('pdfPaper')"));
+  const onHandPdf = logic.slice(logic.indexOf('function onHandSections'), logic.indexOf("getElementById('pdfPaper')"));
   assert.equal(onHandPdf.includes('zedrics-onhand-'), true);
   assert.equal(onHandPdf.includes('setOnHand'), false);
   assert.equal(onHandPdf.includes('buildSheetPdf'), true);
   assert.equal(onHandPdf.includes('catalogSheetRows'), true);
   assert.equal(onHandPdf.includes('sheetRowsNow'), true);
+  assert.equal(onHandPdf.includes('On hand before BEK delivery'), true);
+  assert.equal(onHandPdf.includes('orderFor'), false);
+  assert.equal(onHandPdf.includes('needFor'), false);
   assert.equal(typeof require('./order-math.js').countWord, 'function');
   assert.equal(onHandPdf.includes('requireAdmin'), false);
   assert.equal(logic.includes('workingCookDate'), true);
@@ -326,35 +329,68 @@ test('a downloaded PDF is a real PDF and a spreadsheet keeps a leading zero', as
   assert.equal(text.includes('Cooking Wine Marsala'), true);
   assert.equal(text.includes('%%EOF'), true);
   const onHandPdfBytes = Buffer.from(pdf.buildSheetPdf({
-    title: "Zedric's On-Hand Inventory — Colonnade — week of 2026-11-11",
+    title: "Zedric's On-Hand Inventory — Colonnade",
+    subtitle: 'Cook Wed 11/18 · On hand before BEK delivery, Sat 11/14',
     generated: 'Generated Nov 4, 2026, 1:52 PM CT',
     sections: [{
       title: 'Walk-in Cooler',
       rows: [
-        { number: '393413', name: 'Egg White Liquid', pack: '15 / 2 LB', unit: 'carton', onHand: '12', entered: '' },
-        { number: '881026', name: 'Towel Roll', pack: '', unit: 'cs', onHand: '3', entered: '' },
-        { number: '028201', name: 'Juice Lemon', pack: '6 / .5 GAL', unit: 'gal', onHand: '', entered: '' },
-        { number: '171985', name: 'Milk 2% Gal', pack: '4 / 1 GAL', unit: 'gal', onHand: '0', entered: 'Ada · Nov 4, 1:00 PM CT' }
+        { number: '393413', name: 'Egg White Liquid', pack: '15 / 2 LB', unit: 'carton', onHand: '12', grams: '10,886 g', entered: '' },
+        { number: '881026', name: 'Towel Roll', pack: '', unit: 'cs', onHand: '3', grams: '\u2014', entered: '' },
+        { number: '028201', name: 'Juice Lemon', pack: '6 / .5 GAL', unit: 'gal', onHand: '', grams: '', entered: '' },
+        { number: '200305', name: 'Squash Spaghetti', pack: '1 / 1 CS', unit: 'lb', onHand: '', grams: 'no weight set', entered: '' },
+        { number: '171985', name: 'Milk 2% Gal', pack: '4 / 1 GAL', unit: 'gal', onHand: '0', grams: '0 g', entered: 'Ada · Nov 4, 1:00 PM CT' }
       ]
     }]
   })).toString('latin1');
   assert.equal(onHandPdfBytes.includes('0.949 0.396 0.129 rg'), true);
+  assert.equal(onHandPdfBytes.includes('/MediaBox [0 0 612 792]'), true);
   assert.equal(onHandPdfBytes.includes('Helvetica-Bold'), true);
   assert.equal(onHandPdfBytes.includes("Zedric's On-Hand Inventory"), true);
+  assert.equal(onHandPdfBytes.includes('On hand before BEK delivery, Sat 11/14'), true);
+  assert.equal(onHandPdfBytes.includes('Cook Wed 11/18'), true);
   assert.equal(onHandPdfBytes.includes('Walk-in Cooler'), true);
   assert.equal(onHandPdfBytes.includes('028201'), true);
   assert.equal(onHandPdfBytes.includes('Juice Lemon'), true);
+  assert.equal(onHandPdfBytes.includes('(Grams) Tj'), true);
   assert.equal(onHandPdfBytes.includes('Last entered'), true);
   assert.equal(onHandPdfBytes.includes('not counted'), false);
   assert.equal(onHandPdfBytes.includes('(15 / 2 LB) Tj'), true);
   assert.equal(onHandPdfBytes.includes('(12 carton) Tj'), true);
+  assert.equal(onHandPdfBytes.includes('(10,886 g) Tj'), true);
   assert.equal(onHandPdfBytes.includes('(3 cs) Tj'), true);
   assert.equal(onHandPdfBytes.includes('(0 gal) Tj'), true);
+  assert.equal(onHandPdfBytes.includes('(0 g) Tj'), true);
+  assert.equal(onHandPdfBytes.includes('(no weight set) Tj'), true);
+  var spot = /1 0 0 1 (\d+) /g;
+  var found;
+  while ((found = spot.exec(onHandPdfBytes))) assert.equal(Number(found[1]) < 560, true);
   const towel = onHandPdfBytes.slice(onHandPdfBytes.indexOf('Towel Roll'), onHandPdfBytes.indexOf('Juice Lemon'));
   assert.equal(/\([^)\n]*\/[^)\n]*\) Tj/.test(towel), false);
   assert.equal(onHandPdfBytes.includes('(gal 0) Tj'), false);
-  const lemon = onHandPdfBytes.slice(onHandPdfBytes.indexOf('Juice Lemon'), onHandPdfBytes.indexOf('171985'));
+  const lemon = onHandPdfBytes.slice(onHandPdfBytes.indexOf('Juice Lemon'), onHandPdfBytes.indexOf('200305'));
   assert.equal(lemon.includes('(gal) Tj'), false);
+  const order = require('./order-math.js');
+  const built = bek.buildCatalog(seed);
+  const egg = built.items.bek__393413;
+  const patty = Object.assign({}, built.items.bek__185095, { countUnit: 'each', countUnitChosen: true });
+  const breast = Object.assign({}, built.items.bek__211262, { countUnit: 'each', countUnitChosen: true });
+  const lemonItem = built.items.bek__028201;
+  const milk = built.items.bek__171985;
+  const cup = built.items.bek__111634;
+  const squash = built.items.bek__200305;
+  assert.equal(order.onHandGrams(egg, 12).text, '10,886 g');
+  assert.equal(order.onHandGrams(patty, 15).text, '1,701 g');
+  assert.equal(order.onHandGrams(breast, 10).text, '1,134 g');
+  assert.equal(order.onHandGrams(lemonItem, 2).text, '3,901 g');
+  assert.equal(order.onHandGrams(milk, 1).text, '3,901 g');
+  assert.equal(order.onHandGrams(milk, 0).text, '0 g');
+  assert.equal(order.onHandGrams(cup, 2).text, '\u2014');
+  assert.equal(order.onHandGrams(cup, '').text, '');
+  assert.equal(order.onHandGrams(squash, '').status, 'missing');
+  assert.equal(order.onHandGrams(Object.assign({}, squash, { lbPerUnit: 10 }), 1).text, '4,536 g');
+  assert.equal(order.onHandGrams(built.items.bek__483810, 1).text, '1,950 g');
+  assert.equal(order.onHandGrams(egg, '').text, '');
 
   const shared = '<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><si><t>Item #</t></si><si><t>Item Name</t></si><si><t>Pack / Size</t></si><si><t>Price</t></si><si><t>Label Name</t></si><si><t>028201</t></si><si><t>Juice Lemon</t></si><si><t>6 / .5 GAL</t></si><si><t>Walk-in Cooler</t></si></sst>';
   const sheet = '<worksheet><sheetData><row><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c><c r="C1" t="s"><v>2</v></c><c r="D1" t="s"><v>3</v></c><c r="E1" t="s"><v>4</v></c></row><row><c r="A2" t="s"><v>5</v></c><c r="B2" t="s"><v>6</v></c><c r="C2" t="s"><v>7</v></c><c r="D2"><v>10.24</v></c><c r="E2" t="s"><v>8</v></c></row></sheetData></worksheet>';
