@@ -2329,6 +2329,24 @@
     });
     return rows;
   }
+  function countSheetDate(loc) {
+    var bags = [];
+    if (loc && state.hands && state.hands[loc.id]) bags.push(state.hands[loc.id]);
+    if (loc && loc.id === state.locationId && state.onHand) bags.push(state.onHand);
+    var latest = 0;
+    bags.forEach(function (bag) {
+      Object.keys(bag || {}).forEach(function (id) {
+        var raw = bag[id];
+        if (!raw || typeof raw !== 'object') return;
+        var when = raw.at || raw.updatedAt || raw.enteredAt;
+        if (when == null || when === '') return;
+        var ms = typeof when === 'number' || /^\d+$/.test(String(when)) ? Number(when) : new Date(when).getTime();
+        if (isFinite(ms) && ms > latest) latest = ms;
+      });
+    });
+    if (!latest) return '';
+    return ZedBek.chicagoParts(new Date(latest)).ymd;
+  }
   function emitOnHandPdf(loc, rows) {
     var place = loc && loc.name ? loc.name : 'Colonnade';
     var cook = state.weekKey || ((document.getElementById('weekSelect') || {}).value) || '';
@@ -2345,9 +2363,10 @@
       setPageStatus('The on-hand sheet for ' + place + ' has not loaded yet. Wait for the items, then try again.', true);
       return;
     }
-    var cycle = cook && ZedBek.weekdayOf(cook) >= 0 ? ZedBek.cycleForCook(cook) : null;
-    var cookText = cycle ? ZedBek.shortDate(cook) : '';
-    var deliveryText = cycle ? ZedBek.shortDate(cycle.delivery) : '';
+    var cookText = cook && ZedBek.weekdayOf(cook) >= 0 ? ZedBek.shortDate(cook) : '';
+    var countDate = countSheetDate(loc);
+    var today = ZedBek.chicagoParts(new Date()).ymd;
+    var deliveryText = ZedBek.shortDate(ZedBek.deliverySaturday(countDate, today));
     ZedPdf.downloadPdf('zedrics-onhand-' + slug + '-' + cook + '.pdf', ZedPdf.buildSheetPdf({
       title: "Zedric's On-Hand Inventory — " + place,
       subtitle: (cookText ? 'Cook ' + cookText + ' · ' : '') + 'On hand before BEK delivery' + (deliveryText ? ', ' + deliveryText : ''),

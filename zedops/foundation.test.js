@@ -202,6 +202,13 @@ test('the count week is the Tuesday it is due, in Chicago, and prices wait for t
   assert.equal(cycle.delivery, '2026-11-07');
   assert.equal(cycle.cook, '2026-11-11');
   assert.equal(bek.formatCycle('2026-11-11'), 'Counts due end of Tue 11/3 · Order Wed 11/4 · Delivery Sat 11/7 · Cook Wed 11/11');
+  assert.equal(bek.deliverySaturday('2026-11-17', '2026-11-01'), '2026-11-21');
+  assert.equal(bek.shortDate(bek.deliverySaturday('2026-11-17', '2026-11-01')), 'Sat 11/21');
+  assert.equal(bek.deliverySaturday('2026-11-21', '2026-11-17'), '2026-11-21');
+  assert.equal(bek.deliverySaturday('2026-11-14', '2026-11-17'), '2026-11-14');
+  assert.equal(bek.deliverySaturday('2026-11-20', '2026-11-17'), '2026-11-21');
+  assert.equal(bek.deliverySaturday('2026-11-22', '2026-11-17'), '2026-11-28');
+  assert.equal(bek.deliverySaturday('', '2026-11-17'), '2026-11-21');
   assert.equal(bek.cycleCookForDay('2026-11-03'), '2026-11-11');
   assert.equal(bek.cycleCookForDay('2026-11-04'), '2026-11-11');
   assert.equal(bek.cycleCookForDay('2026-10-31'), '2026-11-04');
@@ -250,8 +257,8 @@ test('the count week is the Tuesday it is due, in Chicago, and prices wait for t
   assert.equal(page.indexOf('id="recipeTools"') < page.indexOf('id="storeView"'), true);
   assert.equal(page.indexOf('id="orderSummary"') < page.indexOf('id="storeView"'), true);
   assert.equal(page.indexOf('id="storeView"') < page.indexOf('id="adminTools"'), true);
-  assert.equal(page.includes('Build 20261104ba'), true);
-  assert.equal(page.includes('weekly-page.js?v=20261104ba'), true);
+  assert.equal(page.includes('Build 20261104bb'), true);
+  assert.equal(page.includes('weekly-page.js?v=20261104bb'), true);
   assert.equal(page.includes('id="pdfOnHand"'), true);
   assert.equal(page.includes('button:disabled'), true);
   assert.equal(page.includes('id="plateFile"'), true);
@@ -264,6 +271,8 @@ test('the count week is the Tuesday it is due, in Chicago, and prices wait for t
   assert.equal(onHandPdf.includes('catalogSheetRows'), true);
   assert.equal(onHandPdf.includes('sheetRowsNow'), true);
   assert.equal(onHandPdf.includes('On hand before BEK delivery'), true);
+  assert.equal(onHandPdf.includes('deliverySaturday'), true);
+  assert.equal(onHandPdf.includes('cycle.delivery'), false);
   assert.equal(onHandPdf.includes('orderFor'), false);
   assert.equal(onHandPdf.includes('needFor'), false);
   assert.equal(typeof require('./order-math.js').countWord, 'function');
@@ -330,7 +339,7 @@ test('a downloaded PDF is a real PDF and a spreadsheet keeps a leading zero', as
   assert.equal(text.includes('%%EOF'), true);
   const onHandPdfBytes = Buffer.from(pdf.buildSheetPdf({
     title: "Zedric's On-Hand Inventory — Colonnade",
-    subtitle: 'Cook Wed 11/18 · On hand before BEK delivery, Sat 11/14',
+    subtitle: 'Cook Wed 11/18 · On hand before BEK delivery, Sat 11/21',
     generated: 'Generated Nov 4, 2026, 1:52 PM CT',
     sections: [{
       title: 'Walk-in Cooler',
@@ -347,7 +356,7 @@ test('a downloaded PDF is a real PDF and a spreadsheet keeps a leading zero', as
   assert.equal(onHandPdfBytes.includes('/MediaBox [0 0 612 792]'), true);
   assert.equal(onHandPdfBytes.includes('Helvetica-Bold'), true);
   assert.equal(onHandPdfBytes.includes("Zedric's On-Hand Inventory"), true);
-  assert.equal(onHandPdfBytes.includes('On hand before BEK delivery, Sat 11/14'), true);
+  assert.equal(onHandPdfBytes.includes('On hand before BEK delivery, Sat 11/21'), true);
   assert.equal(onHandPdfBytes.includes('Cook Wed 11/18'), true);
   assert.equal(onHandPdfBytes.includes('Walk-in Cooler'), true);
   assert.equal(onHandPdfBytes.includes('028201'), true);

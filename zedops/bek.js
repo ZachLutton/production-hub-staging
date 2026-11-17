@@ -294,6 +294,19 @@
     };
   }
 
+  // The first Saturday on or after a calendar day. A Saturday stays that Saturday.
+  function nextSaturday(ymd) {
+    var dow = weekdayOf(ymd);
+    if (dow < 0) return '';
+    return addDays(ymd, (6 - dow + 7) % 7);
+  }
+
+  // The BEK truck is the Saturday of the count. With no count date, use today.
+  function deliverySaturday(countDate, today) {
+    var basis = weekdayOf(countDate) >= 0 ? countDate : today;
+    return nextSaturday(basis);
+  }
+
   function formatCycle(cook) {
     if (!cook || weekdayOf(cook) < 0) return '';
     var cycle = cycleForCook(cook);
@@ -728,6 +741,8 @@
     weekdayOf: weekdayOf,
     shortDate: shortDate,
     cycleForCook: cycleForCook,
+    nextSaturday: nextSaturday,
+    deliverySaturday: deliverySaturday,
     formatCycle: formatCycle,
     cycleCookForDay: cycleCookForDay,
     openCookDate: openCookDate,
