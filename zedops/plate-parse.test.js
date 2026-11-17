@@ -50,10 +50,11 @@ test('the 11/4 plate list splits muffins and cookies off the meal trays', async 
   assert.equal(meals.typeForItemNumber(''), null);
   const cup = { itemNumber: '104162', name: 'Cup Plas 9 Oz Squat Clear', pack: '20 / 50 CT', tempZone: 'Dry', countUnit: 'each' };
   const plateNeed = order.orderNeed(cup, { plateList: { quantity: 150, unit: 'each' }, standingPar: 4, countUnit: 'each' });
-  assert.equal(plateNeed.source, 'plate list');
-  assert.equal(plateNeed.quantity, 150);
+  assert.equal(plateNeed.quantity, 154);
+  assert.equal(plateNeed.source, 'plate list + par');
   assert.equal(order.casesToOrder(plateNeed.quantity, 0, 1000), 1);
-  assert.equal(order.casesToOrder(plateNeed.quantity, 150, 1000), 0);
+  assert.equal(order.casesToOrder(plateNeed.quantity, 150, 1000), 1);
+  assert.equal(order.casesToOrder(plateNeed.quantity, 154, 1000), 0);
   assert.equal(order.casesToOrder(plateNeed.quantity, 2000, 1000), 0);
   const missing = order.orderNeed(cup, { plateList: { quantity: 0, unit: 'each', reason: meals.cupNeedReason(null, null) }, standingPar: 4 });
   assert.equal(missing.quantity, 0);

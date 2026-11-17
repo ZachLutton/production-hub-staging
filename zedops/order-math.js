@@ -230,11 +230,18 @@
     return Math.round(lb / chipBagLb() * 1000) / 1000;
   }
 
-  function pieceWeightLb(item, eachFactor) {
+  function pieceWeightLb(item, eachFactor, countUnit) {
     var edited = Number(eachFactor);
     if (edited > 0) return edited;
     if (isChipBag(item)) return chipBagLb();
-    if (item && Number(item.lbPerUnit) > 0 && isPieceCountUnit(resolvedCountUnit(item))) return Number(item.lbPerUnit);
+    var unit = countUnit ? canonUnit(countUnit) : resolvedCountUnit(item);
+    if (item && Number(item.lbPerUnit) > 0 && isPieceCountUnit(unit)) return Number(item.lbPerUnit);
+    if (isPieceCountUnit(unit)) {
+      var named = namePortionLb(item);
+      var pack = packAmount(item && item.pack);
+      // "4 Oz" in the name is one breast. "2 / 10 LB" is the inner box, not the piece.
+      if (named > 0 && pack && pack.unit === 'lb' && pack.each > named) return named;
+    }
     return defaultPieceLb(item);
   }
 
@@ -295,16 +302,20 @@
     return nameKey && matches[nameKey] ? matches[nameKey] : null;
   }
 
+  function isBrisketMeat(line) {
+    return /beef brisket|brisket whole/.test(fold(line && line.name));
+  }
+
   function recipeOwner(line, matches) {
+    var pounds = Number(line && line.pounds) || 0;
+    if (isBrisketMeat(line)) return 'bek__500370';
     var saved = savedMatch(line, matches);
     if (saved && saved.hideMode === 'ignore') return '';
+    if (saved && saved.catalogId === 'bek__500370' && pounds < 1) return '';
     if (saved && saved.catalogId) return saved.catalogId;
     var forced = forcedRecipeItemId(line);
     if (forced) return forced;
-    var pounds = Number(line && line.pounds) || 0;
-    var name = fold(line && line.name);
-    // A sub-pound line that is not the brisket was a bad match (the 0.2 lb garnish).
-    if (line && line.catalogId === 'bek__500370' && !/brisket/.test(name) && pounds < 1) return '';
+    if (line && line.catalogId === 'bek__500370' && pounds < 1) return '';
     return (line && line.catalogId) || '';
   }
 
@@ -469,6 +480,16 @@
     return qty;
   }
 
+  function pieceNoun(item, piecePack) {
+    var word = countWord(item);
+    if (word === 'patty' || word === 'breast' || word === 'carton' || word === 'jar' || word === 'can' || word === 'tub' || word === 'bag' || word === 'container') return word;
+    if (isJarSpice(item)) return word;
+    if (piecePack && piecePack.canSize) return 'can';
+    if (/egg white/i.test(String(item && item.name || ''))) return 'carton';
+    if (piecePack && piecePack.unit === 'oz') return 'bottle';
+    return 'box';
+  }
+
   function withVolume(item, result, countUnit) {
     var unit = countUnit || (item && item.countUnit) || '';
     if (!result || canonUnit(result.unit) !== 'lb') return result;
@@ -500,12 +521,11 @@
         }
         return result;
       }
-      var boxLb = pieceWeightLb(item, result.eachFactor);
+      var boxLb = pieceWeightLb(item, result.eachFactor, unit);
       var piecePack = packAmount(item && item.pack);
       if (boxLb > 0) {
         result.convertedQuantity = Number(result.quantity) / boxLb;
-        var containerWord = countWord(item);
-        result.convertedUnit = piecePack && piecePack.canSize ? 'can' : (isJarSpice(item) ? containerWord : (piecePack && piecePack.unit === 'oz' ? 'bottle' : (/egg white/i.test(String(item && item.name || '')) ? 'carton' : 'box')));
+        result.convertedUnit = pieceNoun(item, piecePack);
       }
     }
     return result;
@@ -520,6 +540,8 @@
     if (key === 'jug') return one ? 'jug' : 'jugs';
     if (key === 'bottle') return one ? 'bottle' : 'bottles';
     if (key === 'container') return one ? 'container' : 'containers';
+    if (key === 'patty') return one ? 'patty' : 'patties';
+    if (key === 'breast') return one ? 'breast' : 'breasts';
     if (key === 'jar') return one ? 'jar' : 'jars';
     if (key === 'can') return one ? 'can' : 'cans';
     var label = unitLabel(unit);
@@ -534,6 +556,8 @@
       var shownUnit = need.convertedUnit;
       if (shownUnit === 'container' && Math.abs(Number(need.convertedQuantity) - 1) >= 0.05) shownUnit = 'containers';
       if (shownUnit === 'can' && Math.abs(Number(need.convertedQuantity) - 1) >= 0.05) shownUnit = 'cans';
+      if (shownUnit === 'patty' && Math.abs(Number(need.convertedQuantity) - 1) >= 0.05) shownUnit = 'patties';
+      if (shownUnit === 'breast' && Math.abs(Number(need.convertedQuantity) - 1) >= 0.05) shownUnit = 'breasts';
       text += ' ≈ ' + roundApprox(need.convertedQuantity) + ' ' + shownUnit;
     }
     if (need.pieceQuantity != null && need.pieceUnit) {
@@ -591,7 +615,9 @@
   }
 
   function pieceOrder(need) {
-    return !!(need && (need.source === 'cook list' || need.source === 'plate list') && canonUnit(need.unit) === 'ea');
+    var source = String(need && need.source || '');
+    var fromList = source === 'cook list' || source === 'plate list' || source === 'cook list + par' || source === 'plate list + par';
+    return !!(need && fromList && canonUnit(need.unit) === 'ea');
   }
 
   // "1 / 1 CS" has no weight. Spaghetti squash is sold by the pound inside that case.
@@ -705,7 +731,7 @@
     var countUnit = resolvedCountUnit(item);
     var have = onHand == null || onHand === '' ? 0 : Number(onHand) || 0;
     if (isPieceCountUnit(countUnit) && canonUnit(need.unit) === 'lb') {
-      var boxLb = pieceWeightLb(item, need.eachFactor) || averagePieceLb(item);
+      var boxLb = pieceWeightLb(item, need.eachFactor, countUnit) || averagePieceLb(item);
       if (boxLb > 0 && (pack && (pack.unit === 'lb' || pack.unit === 'oz' || pack.unit === 'ea' || !isVolumeUnit(pack.unit)))) {
         var perBox = piecesInCase(item) > 1 ? piecesInCase(item) : boxesPerCase(pack);
         if (isChipBag(item)) {
@@ -713,7 +739,8 @@
           perBox = chipBagsPerCase();
         }
         var caseLb = pack && pack.unit === 'lb' ? pack.perCase : (pack && pack.unit === 'oz' ? pack.perCase / 16 : 0);
-        if (!(pack && pack.each > 0) && caseLb > 0 && !isChipBag(item)) perBox = caseLb / boxLb;
+        if (pack && pack.unit === 'lb' && caseLb > boxLb && pack.each > boxLb) perBox = caseLb / boxLb;
+        else if (!(pack && pack.each > 0) && caseLb > 0 && !isChipBag(item)) perBox = caseLb / boxLb;
         return casesToOrder(Number(need.quantity) / boxLb, have, perBox);
       }
     }
@@ -754,6 +781,8 @@
     var unit = canonUnit(resolvedCountUnit(item));
     if (unit === 'jar' || unit === 'can' || unit === 'carton' || unit === 'tub' || unit === 'bag' || unit === 'jug' || unit === 'bottle' || unit === 'container') return unit;
     if (number === '800401') return 'bag';
+    if (number === '185095') return 'patty';
+    if (number === '211262') return 'breast';
     if (number === '212500' || number === '685406') return 'jar';
     if (number === '798001') return 'can';
     if (isJarSpice(item)) return 'container';
@@ -851,12 +880,13 @@
         parts.push(roundApprox(need.quantity) + ' lb = ' + roundApprox(needVol) + ' ' + (unitLabel(pack.unit) || pack.unit));
       }
     } else if (isPieceCountUnit(countUnit) && canonUnit(need.unit) === 'lb') {
-      piece = pieceWeightLb(item, need.eachFactor) || averagePieceLb(item) || 0;
-      if (piece > 0) {
+      piece = pieceWeightLb(item, need.eachFactor, countUnit) || averagePieceLb(item) || 0;
+        if (piece > 0) {
         needQty = (Number(need.quantity) || 0) / piece;
         var perBox = piecesInCase(item) > 1 ? piecesInCase(item) : boxesPerCase(pack);
         var caseLb = pack && pack.unit === 'lb' ? pack.perCase : (pack && pack.unit === 'oz' ? pack.perCase / 16 : 0);
-        if (!(pack && pack.each > 0) && caseLb > 0) perBox = caseLb / piece;
+        if (pack && pack.unit === 'lb' && caseLb > piece && pack.each > piece) perBox = caseLb / piece;
+        else if (!(pack && pack.each > 0) && caseLb > 0) perBox = caseLb / piece;
         per = perBox || 1;
       }
     } else {
@@ -878,8 +908,11 @@
         parts.push('Saved ' + explainQty(have) + ' kept as ' + word + 's, not converted from ' + (storedUnit === 'lb' || storedUnit === 'pound' ? 'lb' : 'oz'));
       }
     }
-    var formula = roundApprox(needQty) + ' ' + word + ' need − ' + roundApprox(haveQty) + ' ' + word + ' on hand = ' + roundApprox(net) + ' ' + word;
-    if (result.unit !== 'ea' && per > 0) formula += ' ÷ ' + explainQty(per) + ' ' + word + '/cs';
+    var needWord = shortUnit(word, needQty) || word;
+    var haveWord = shortUnit(word, haveQty) || word;
+    var perWord = shortUnit(word, per) || word;
+    var formula = roundApprox(needQty) + ' ' + needWord + ' need − ' + roundApprox(haveQty) + ' ' + haveWord + ' on hand = ' + roundApprox(net) + ' ' + needWord;
+    if (result.unit !== 'ea' && per > 0) formula += ' ÷ ' + explainQty(per) + ' ' + perWord + '/cs';
     formula += ' → ' + result.amount + ' ' + orderWord;
     parts.push(formula);
     return parts.join('. ');
@@ -1091,7 +1124,7 @@
     return null;
   }
 
-  // A case count that is far from the usual order, or a need far above what is on hand.
+  // A case count that is far from the usual order. A low on-hand count is not a warning by itself.
   function orderWarning(item, cases, need, onHand) {
     var reasons = [];
     var ordered = Number(cases) || 0;
@@ -1107,14 +1140,31 @@
     if (need && need.convertedQuantity != null && counted === 'ea') needQty = Number(need.convertedQuantity);
     else if (need && canonUnit(need.unit) === counted) needQty = Number(need.quantity);
     var have = onHand == null || onHand === '' ? null : Number(onHand);
-    if (needQty > 0 && have > 0 && needQty > have * 4 && ordered > 0) {
-      reasons.push('Need is more than 4× what is on hand');
-    }
     return { flagged: reasons.length > 0, reasons: reasons };
   }
 
   function orderNeed(item, input) {
     input = input || {};
+    if (isCaseCountedPackaging(item)) {
+      var cookQty = input.cookList ? Number(input.cookList.quantity) || 0 : 0;
+      var plateQty = input.plateList ? Number(input.plateList.quantity) || 0 : 0;
+      var blocked = input.plateList && input.plateList.reason && !(plateQty > 0) && !(cookQty > 0);
+      if (!blocked) {
+        var pieces = plateQty > 0 ? plateQty : cookQty;
+        var par = Number(input.standingPar) || 0;
+        var ppc = piecesInCase(item) || 1;
+        var countAs = canonUnit(input.countUnit || resolvedCountUnit(item));
+        var parPieces = countAs === 'case' ? par * ppc : par;
+        var source = 'standing par';
+        if (pieces > 0 && parPieces > 0) source = (plateQty > 0 ? 'plate list' : 'cook list') + ' + par';
+        else if (plateQty > 0) source = 'plate list';
+        else if (cookQty > 0) source = 'cook list';
+        if (pieces > 0 || parPieces > 0) {
+          var reason = plateQty > 0 ? (input.plateList.reason || '') : (input.cookList && input.cookList.reason || '');
+          return { quantity: pieces + parPieces, unit: 'each', eachFactor: null, source: source, reason: reason };
+        }
+      }
+    }
     if (isPortionPacket(item) && !(item && item.orderRole === 'food')) {
       if (input.cookList && Number(input.cookList.quantity) > 0) {
         return {

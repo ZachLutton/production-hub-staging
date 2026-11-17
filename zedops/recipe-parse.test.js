@@ -75,6 +75,28 @@ test('scaled recipe uses raw weights and does not double count', () => {
   };
   assert.equal(order.recipeLineFor(brisketItem, brisketLines).pounds, 70.8);
   assert.equal(order.recipeLineFor({ id: 'bek__774055', name: 'Oregano Leaves' }, brisketLines), null);
+  const pepperOnly = { pepper: { name: 'Spices, pepper, black', pounds: 0.1, catalogId: 'bek__500370', unit: 'lb' } };
+  const pepperMap = { spices_pepper_black: { catalogId: 'bek__500370' } };
+  assert.equal(order.recipeLineFor(brisketItem, pepperOnly, pepperMap), null);
+  const patty = Object.assign({}, bek.buildCatalog(require('./seed.json')).items.bek__185095, { countUnit: 'each' });
+  const pattyNeed = order.orderNeed(patty, { recipe: { quantity: 47.5, unit: 'lb' }, countUnit: 'each' });
+  assert.equal(order.needText(pattyNeed), '47.5 lb ≈ 190 patties');
+  assert.equal(order.orderCases(patty, pattyNeed, 15), 4);
+  assert.equal(order.orderWarning(patty, 4, pattyNeed, 15).reasons.some(function (reason) { return /4×/.test(reason); }), false);
+  const breast = Object.assign({}, bek.buildCatalog(require('./seed.json')).items.bek__211262, { countUnit: 'each' });
+  const breastNeed = order.orderNeed(breast, { recipe: { quantity: 356.3, unit: 'lb' }, countUnit: 'each' });
+  assert.equal(order.needText(breastNeed), '356.3 lb ≈ 1425.2 breasts');
+  assert.equal(order.orderCases(breast, breastNeed, 0), 18);
+  assert.equal(order.orderExplain(breast, breastNeed, 0).includes('80'), true);
+  const cup = bek.buildCatalog(require('./seed.json')).items.bek__111634;
+  const lid = bek.buildCatalog(require('./seed.json')).items.bek__130860;
+  const cupNeed = order.orderNeed(cup, { plateList: { quantity: 1215, unit: 'each', reason: 'Greek Chicken Bowl' }, standingPar: 1, countUnit: 'case' });
+  assert.equal(cupNeed.quantity, 1215 + 2500);
+  assert.equal(cupNeed.source, 'plate list + par');
+  assert.equal(order.orderResult(cup, cupNeed, 2).amount, 0);
+  const lidNeed = order.orderNeed(lid, { plateList: { quantity: 400, unit: 'each' }, standingPar: 1, countUnit: 'case' });
+  assert.equal(lidNeed.quantity, 400 + 2500);
+  assert.equal(order.orderResult(lid, lidNeed, 1).amount, 1);
   const tenderloin = parsed.broadline.filter(function (row) { return row.name === 'Diced Beef Tenderloin'; })[0];
   assert.equal(tenderloin.ingredients[0].pounds, 90.4);
   assert.equal(tenderloin.ingredients[0].name, 'Beef, loin, tenderloin steak, boneless, separable lean only, trimmed to 0" fat, choice, raw');
@@ -483,7 +505,7 @@ test('a standard weight applies until the item overrides it, and a wild order is
   const quiet = order.orderWarning({ name: 'Sauce Marinara Rtu', pack: '6 / #10 CAN', countUnit: 'each', weeklyCaseAverage: 3 }, 2, { quantity: 94, unit: 'lb', convertedQuantity: 14.5 }, 7);
   assert.equal(quiet.flagged, false);
   const aboveHand = order.orderWarning({ weeklyCaseAverage: 1, countUnit: 'lb' }, 2, { quantity: 40, unit: 'lb' }, 2);
-  assert.equal(aboveHand.flagged, true);
+  assert.equal(aboveHand.flagged, false);
   const forced = order.orderNeed({ name: 'Tomato Crushed', pack: '6 / #10 CAN', orderRole: 'supply', tempZone: 'Dry' }, {
     recipe: { quantity: 39.8, unit: 'lb' }, forceFood: true, countUnit: 'each', standingPar: 4
   });
