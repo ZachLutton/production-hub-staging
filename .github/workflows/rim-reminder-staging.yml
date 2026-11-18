@@ -1,0 +1,20 @@
+name: Staging Rim inventory reminder
+
+# Zach's external scheduler starts this at 7:00 AM CT with workflow_dispatch.
+# There is no cron here, so GitHub cannot also fire a delayed copy.
+on:
+  workflow_dispatch:
+
+jobs:
+  notify:
+    if: github.repository == 'ZachLutton/production-hub-staging'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post the Rim count reminder
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          cat > /tmp/payload.json <<'EOF'
+          {"text":":clipboard: Good morning team! Time for the weekly Rim inventory count. Ask a manager for the login if you need it, then enter what you have on hand before end of shift: https://zachlutton.github.io/production-hub-staging/weekly-order.html?store=rim"}
+          EOF
+          curl -sSf -X POST -H 'Content-type: application/json' --data @/tmp/payload.json "$SLACK_WEBHOOK_URL"
