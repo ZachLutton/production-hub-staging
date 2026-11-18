@@ -1,0 +1,40 @@
+name: ZedOps Staging backup
+
+# Run this by hand before a staging deploy. It does not run in the live repo.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    if: github.repository == 'ZachLutton/production-hub-staging'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Refuse a live target before exporting
+        run: node scripts/backup-staging.js --check
+      - name: Install firebase-admin
+        run: npm install --no-save firebase-admin@^12.0.0
+      - name: Export ZedOps Staging
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.ZEDOPS_STAGING_SERVICE_ACCOUNT }}
+          ZEDOPS_STAGING_DATABASE_URL: https://zedops-staging-default-rtdb.firebaseio.com
+        run: node scripts/backup-staging.js
+      - name: Encrypt (public cert only)
+        run: |
+          STAMP=$(date -u +%Y-%m-%dT%H%M%SZ)
+          echo "STAMP=$STAMP" >> "$GITHUB_ENV"
+          openssl cms -encrypt -binary -aes256 -stream -outform DER \
+            -in backup-staging.json -out "zedops-staging-db-$STAMP.json.cms" scripts/backup-public-cert.pem
+          shred -u backup-staging.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zedops-staging-db-${{ env.STAMP }}
+          path: zedops-staging-db-*.json.cms
+          retention-days: 30
+          if-no-files-found: error

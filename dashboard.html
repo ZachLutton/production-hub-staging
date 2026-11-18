@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zedric's — Dashboard (Staging)</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { overscroll-behavior-y: contain; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #2d5016 0%, #4a7c2a 100%);
+            color: #333;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        /* Login screen */
+        #login-screen {
+            position: fixed; inset: 0;
+            background: linear-gradient(135deg, #2d5016 0%, #4a7c2a 100%);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 1000;
+        }
+        .login-box {
+            background: white; padding: 40px 36px;
+            border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.25);
+            text-align: center; max-width: 360px; width: 100%;
+        }
+        .login-box h1 { color: #2d5016; margin-bottom: 8px; font-size: 26px; }
+        .login-box p { color: #666; margin-bottom: 24px; font-size: 15px; }
+        .pin-input {
+            width: 100%; font-size: 32px; text-align: center;
+            letter-spacing: 12px; padding: 12px;
+            border: 2px solid #ccc; border-radius: 8px; outline: none;
+        }
+        .pin-input:focus { border-color: #2d5016; }
+        .pin-error { color: #e74c3c; font-size: 14px; margin-top: 12px; min-height: 20px; }
+
+        #main-content { display: none; max-width: 1100px; margin: 0 auto; }
+
+        .header {
+            background: white; padding: 24px 28px; border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15); margin-bottom: 24px;
+            display: flex; align-items: center; justify-content: space-between;
+            flex-wrap: wrap; gap: 12px;
+        }
+        .header-left h1 { color: #2d5016; font-size: 26px; margin-bottom: 4px; }
+        .header-left .role-tag {
+            display: inline-block; background: #e8f5e0; color: #2d5016;
+            padding: 3px 12px; border-radius: 20px; font-size: 13px; font-weight: 600;
+            margin-top: 6px;
+        }
+        .role-tag.admin { background: #fff4e0; color: #b85400; }
+        .header-right {
+            display: flex; gap: 10px; align-items: center;
+        }
+        .logout-btn {
+            background: #f5f5f5; color: #666; border: 2px solid #ddd;
+            padding: 10px 18px; border-radius: 6px; cursor: pointer;
+            font-weight: 600; font-size: 14px;
+        }
+        .logout-btn:hover { background: #e74c3c; color: white; border-color: #e74c3c; }
+
+        .section-title {
+            color: white; font-size: 18px; font-weight: 600;
+            margin: 8px 4px 14px; letter-spacing: 0.5px;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+        }
+
+        .tile-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 18px; margin-bottom: 30px;
+        }
+
+        .tile {
+            background: white; border-radius: 12px;
+            padding: 24px; cursor: pointer;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+            transition: transform 0.15s, box-shadow 0.15s;
+            text-decoration: none; color: inherit;
+            display: flex; flex-direction: column;
+            min-height: 180px; position: relative; overflow: hidden;
+        }
+        .tile:hover { transform: translateY(-4px); box-shadow: 0 8px 24px rgba(0,0,0,0.2); }
+        .tile:active { transform: translateY(-1px); }
+
+        .tile-icon {
+            width: 56px; height: 56px; border-radius: 12px;
+            background: #e8f5e0; color: #2d5016;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 32px; margin-bottom: 14px;
+        }
+        .tile.production .tile-icon { background: #fff4e0; color: #b85400; }
+        .tile.admin-tile .tile-icon { background: #ffe0e0; color: #b80000; }
+
+        .tile-title { font-size: 19px; font-weight: 700; color: #2d5016; margin-bottom: 6px; }
+        .tile-desc { font-size: 14px; color: #666; line-height: 1.4; flex-grow: 1; }
+        .tile-arrow {
+            margin-top: 12px; color: #2d5016; font-weight: 600; font-size: 14px;
+        }
+
+        .empty-msg {
+            background: rgba(255,255,255,0.15); color: white;
+            padding: 18px; border-radius: 10px; text-align: center;
+            font-size: 14px;
+        }
+
+        .footer {
+            text-align: center; color: rgba(255,255,255,0.75);
+            margin-top: 30px; font-size: 13px;
+        }
+    </style>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="firebase-config.js"></script>
+    <script src="staging-boot.js"></script>
+    <script src="hub-auth.js?v=2"></script>
+</head>
+<body>
+    <!-- LOGIN SCREEN -->
+    <div id="login-screen">
+        <div class="login-box">
+            <h1>Zedric's Dashboard <span style="background:#F9A825;color:#333;font-size:12px;padding:2px 8px;border-radius:4px;">STAGING</span></h1>
+            <p>Enter team PIN to continue</p>
+            <input type="password" id="pin-input" class="pin-input" maxlength="4" inputmode="numeric" pattern="[0-9]*" autofocus>
+            <div class="pin-error" id="pin-error"></div>
+        </div>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div id="main-content">
+        <div class="header">
+            <div class="header-left">
+                <h1>Zedric's Dashboard <span style="background:#F9A825;color:#333;font-size:12px;padding:2px 8px;border-radius:4px;">STAGING</span></h1>
+                <div class="role-tag" id="roleTag">Team</div>
+            </div>
+            <div class="header-right">
+                <button class="logout-btn" onclick="logout()">Log out</button>
+            </div>
+        </div>
+
+        <div style="margin:0 4px 14px;"><span style="display:inline-block;background:#F9A825;color:#333;font-size:13px;font-weight:700;padding:8px 14px;border-radius:6px;">STAGING copy. Test data only. The live hub is not affected.</span></div>
+        <div class="section-title">Tools</div>
+        <div class="tile-grid">
+            <a href="index.html" class="tile production">
+                <div class="tile-icon">📋</div>
+                <div class="tile-title">Production Hub</div>
+                <div class="tile-desc">Daily plating production tracker. Move dishes between days and stations, log final counts and PPH, save to history.</div>
+                <div class="tile-arrow">Open →</div>
+            </a>
+            <a href="monthly-inventory.html" class="tile">
+                <div class="tile-icon">📦</div>
+                <div class="tile-title">Monthly Inventory</div>
+                <div class="tile-desc">End-of-month inventory count. Switch between Main and The Rim, count by section, totals auto-calculate for the accountant.</div>
+                <div class="tile-arrow">Open →</div>
+            </a>
+            <a href="inventory.html" class="tile">
+                <div class="tile-icon">🔄</div>
+                <div class="tile-title">ZedOps inventory</div>
+                <div class="tile-desc">Staging-only transfers, scanner, backstock cooler, and store split. This does not change the monthly inventory.</div>
+                <div class="tile-arrow">Open →</div>
+            </a>
+            <a href="weekly-order.html" class="tile" style="background: linear-gradient(135deg, #fff 0%, #fff8ee 100%);">
+                <div class="tile-icon" style="background:#fff4e0;color:#b85400;">📋</div>
+                <div class="tile-title">Weekly Order</div>
+                <div class="tile-desc">One list for every store. The production hub counts the BEK catalog. Other stores count their supplies. Recipe needs, on-hand, and the BEK order are on this page.</div>
+                <div class="tile-arrow">Open →</div>
+            </a>
+        </div>
+
+        <div id="adminSection" style="display:none;">
+            <div class="section-title">Admin</div>
+            <div class="tile-grid">
+                <div class="tile admin-tile" style="cursor:default;opacity:0.7;">
+                    <div class="tile-icon">⚙️</div>
+                    <div class="tile-title">More tools coming</div>
+                    <div class="tile-desc">Future admin-only reports and management tools will appear here. The team PIN won't see this section.</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">Zedric's Production Hub · v1.0</div>
+    </div>
+
+    <script>
+        // PINs are checked by Firebase when a ZedOps Staging project is configured (see hub-auth.js).
+        var boot = ZedBoot.start();
+        if (boot.mode === 'blocked') {
+            throw new Error('Refusing to start. firebase-config.js points at the live Production Hub.');
+        }
+
+        function logout() {
+            HubAuth.signOut().then(() => location.reload());
+        }
+
+        function showApp(role) {
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('main-content').style.display = 'block';
+            const tag = document.getElementById('roleTag');
+            if (role === 'admin') {
+                tag.textContent = 'Admin';
+                tag.classList.add('admin');
+                document.getElementById('adminSection').style.display = 'block';
+            } else {
+                tag.textContent = 'Team';
+                tag.classList.remove('admin');
+                document.getElementById('adminSection').style.display = 'none';
+            }
+        }
+
+        document.getElementById('pin-input').addEventListener('input', function() {
+            const input = this;
+            document.getElementById('pin-error').textContent = '';
+            if (input.value.length === 4) {
+                const pin = input.value;
+                input.disabled = true;
+                HubAuth.signInWithPin(pin).then(role => {
+                    showApp(role);
+                }).catch(err => {
+                    document.getElementById('pin-error').textContent = HubAuth.friendlyError(err);
+                    input.value = '';
+                }).finally(() => { input.disabled = false; });
+            }
+        });
+
+        // Auto-login if this device is still signed in (24h)
+        HubAuth.restore().then(role => {
+            if (role) showApp(role);
+        });
+    </script>
+</body>
+</html>

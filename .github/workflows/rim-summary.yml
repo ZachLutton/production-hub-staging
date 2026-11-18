@@ -1,0 +1,30 @@
+name: Rim Weekly Order Summary
+
+# The Wednesday 4:30 AM CT run is now started externally by Zach's Weekly Inventory assistant via workflow_dispatch (no GitHub cron).
+# The script reads the most recent Tuesday's counts in America/Chicago time, so the
+# UTC run time does not affect which week it reads.
+on:
+  workflow_dispatch:  # allows manual "Run workflow" from the Actions tab
+
+jobs:
+  summarize-and-post:
+    # This copy lives in staging too. Run only in the live repo so a staging schedule cannot read the live database or post to Slack.
+    if: github.repository == 'ZachLutton/production-hub'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install firebase-admin
+        working-directory: scripts
+        run: npm install --no-save firebase-admin@^12.0.0
+
+      - name: Run summary script
+        working-directory: scripts
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node rim-summary.js
