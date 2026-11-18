@@ -568,11 +568,9 @@
       locations.forEach(function (loc) {
         if (loc.legacyWeekly) {
           var legacy = item.itemNumber ? legacyByItemNumber[item.itemNumber] : null;
-          if (legacy && legacy.counted) {
-            cells[loc.id] = legacy.onHand;
-            total += Number(legacy.onHand) || 0;
-            any = true;
-          } else cells[loc.id] = null;
+          // Rim stays in its own column. It is not added into the hub total.
+          if (legacy && legacy.counted) cells[loc.id] = legacy.onHand;
+          else cells[loc.id] = null;
         } else if (loc.countsWeeklyBek) {
           var bag = countsByLocation[loc.id] || {};
           if (Object.prototype.hasOwnProperty.call(bag, id) && bag[id] != null && bag[id] !== '') {

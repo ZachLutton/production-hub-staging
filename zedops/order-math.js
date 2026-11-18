@@ -444,6 +444,39 @@
     return gap > 0 ? gap : 0;
   }
 
+  // Cook list, plate list, and scaled-recipe needs belong to Colonnade.
+  function isListDrivenSource(source) {
+    var text = String(source || '');
+    if (text === 'recipe' || text === 'plate garnish') return true;
+    if (text.indexOf('cook list') === 0) return true;
+    if (text.indexOf('plate list') === 0) return true;
+    return false;
+  }
+
+  // max(0, par − on hand). A blank count is zero on hand.
+  function parGap(par, onHand) {
+    var have = onHand == null || onHand === '' ? 0 : Number(onHand);
+    if (!isFinite(have)) have = 0;
+    var gap = (Number(par) || 0) - have;
+    return gap > 0 ? gap : 0;
+  }
+
+  // One case round-up after the stores' par shortfalls are added.
+  function combinedParCases(item, gaps) {
+    var sum = 0;
+    (gaps || []).forEach(function (gap) { sum += Number(gap) || 0; });
+    if (!(sum > 0)) return 0;
+    return orderCases(item, { quantity: sum, unit: resolvedCountUnit(item), source: 'standing par' }, 0);
+  }
+
+  function wholeBekAmount(item, input) {
+    input = input || {};
+    if (input.listDriven) {
+      return { amount: Number(input.hubAmount) || 0, unit: input.hubUnit || 'cs', rimUsed: false };
+    }
+    return { amount: combinedParCases(item, input.parGaps), unit: 'cs', rimUsed: true };
+  }
+
   // Never rounds down. An exact case stays exact. A fraction of a case becomes the next case.
   function casesToOrder(need, onHand, perCase) {
     var gap = shortfall(need, onHand);
@@ -1572,6 +1605,10 @@
     weakFoodReport: weakFoodReport,
     isBakingPantry: isBakingPantry,
     onHandGrams: onHandGrams,
+    isListDrivenSource: isListDrivenSource,
+    parGap: parGap,
+    combinedParCases: combinedParCases,
+    wholeBekAmount: wholeBekAmount,
     orderNeed: orderNeed,
     filterCatalog: filterCatalog,
     matchCounts: matchCounts,

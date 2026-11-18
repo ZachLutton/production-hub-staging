@@ -274,7 +274,8 @@
   function handOf(row, loc) {
     loc = loc || currentStore();
     if (!loc) return null;
-    var bag = (state.hands && state.hands[loc.id]) || (loc.id === state.locationId ? state.onHand : {});
+    var own = state.hands && state.hands[loc.id];
+    var bag = own || (loc.id === state.locationId ? state.onHand : {});
     if (bag && bag[row.id] != null && bag[row.id] !== '') {
       if (row.id === CHIP_ID || row.id === LEMON_ID || row.id === SEASON_ID || row.id === PARSLEY_ID) {
         if (typeof bag[row.id] === 'number') return bag[row.id];
@@ -347,6 +348,7 @@
   }
   function cookListFor(item, loc) {
     if (!item || !state.cook) return null;
+    if (loc && ZedLocations.listSourceOf(loc) !== 'catalog') return null;
     var found = ZedCook.piecesForItem(item, cookComponents(state.cook), state.cookMap);
     if (!found) return null;
     var onHub = loc && ZedLocations.listSourceOf(loc) === 'catalog';
@@ -354,6 +356,7 @@
   }
   function plateListFor(item, loc) {
     if (!item) return null;
+    if (loc && ZedLocations.listSourceOf(loc) !== 'catalog') return null;
     var dishes = plateDishList(state.plate);
     var saved = state.plateLinks ? state.plateLinks[item.id] : null;
     var pieces = ZedMeals.plateItemPieces(item, dishes, saved && typeof saved === 'object' ? saved : null);
@@ -1296,35 +1299,52 @@
       controls;
   }
 
+  function catalogStore() {
+    var list = stores();
+    for (var i = 0; i < list.length; i++) {
+      if (ZedLocations.listSourceOf(list[i]) === 'catalog') return list[i];
+    }
+    return list.filter(function (loc) { return loc.isProductionHub; })[0] || null;
+  }
   function renderOrder() {
     var list = stores();
-    if (!hasApprovedRecipe() && !state.plate) {
-      document.getElementById('orderTable').innerHTML = '<p class="empty-state">No scaled recipes are approved for ' + esc(cookLabel()) + '. Upload that week\'s scaled-recipe PDF.</p>';
-      state.orderRows = [];
-      return;
-    }
-    var ids = ZedCatalog.asList(state.catalog.shelf.guide).concat(ZedCatalog.asList(state.catalog.shelf.special));
+    var hub = catalogStore();
+    var ids = state.catalog ? ZedCatalog.asList(state.catalog.shelf.guide).concat(ZedCatalog.asList(state.catalog.shelf.special)) : [];
     var head = list.map(function (loc) { return '<th>' + esc(loc.name) + ' need</th><th>' + esc(loc.name) + ' on hand</th>'; }).join('');
     var body = ids.map(function (id) {
       var item = state.catalog.items[id];
       if (!item || !ZedBek.isShown(item) || item.kind === 'vendor_check') return '';
-      var total = 0;
-      var orderUnit = 'cs';
+      var row = { id: id, item: item, legacyKey: '', source: 'guide' };
+      var hubNeed = hub ? needFor(row, hub) : null;
+      var listDriven = ZedOrder.isListDrivenSource(hubNeed && hubNeed.source);
+      var hubOrder = hub && listDriven ? orderFor(row, hub) : null;
+      var gaps = [];
       var cells = list.map(function (loc) {
-        var row = { id: id, item: item, legacyKey: '', source: 'guide' };
-        var need = needFor(row, loc);
         var hand = handOf(row, loc);
-        var ordered = orderFor(row, loc);
-        total += Number(ordered.amount) || 0;
-        orderUnit = ordered.unit || orderUnit;
-        return '<td class="need-cell">' + needBlock(row, loc) + '</td><td>' + esc(handLabel(row, loc)) + '</td>';
+        if (listDriven && (!hub || loc.id !== hub.id)) {
+          return '<td class="need-cell">—</td><td>—</td>';
+        }
+        if (listDriven) {
+          return '<td class="need-cell">' + needBlock(row, loc) + '</td><td>' + esc(handLabel(row, loc)) + '</td>';
+        }
+        var gap = ZedOrder.parGap(parOf(row, loc), hand);
+        gaps.push(gap);
+        var handText = hand == null || hand === '' ? '—' : handLabel(row, loc);
+        return '<td class="need-cell">par ' + esc(parOf(row, loc) || 0) + ' − on hand ' + esc(hand == null || hand === '' ? 0 : hand) + ' = ' + esc(gap) + '</td><td>' + esc(handText) + '</td>';
       }).join('');
+      var ordered = listDriven
+        ? ZedOrder.wholeBekAmount(item, { listDriven: true, hubAmount: hubOrder ? hubOrder.amount : 0, hubUnit: hubOrder ? hubOrder.unit : 'cs' })
+        : ZedOrder.wholeBekAmount(item, { listDriven: false, parGaps: gaps });
+      if (listDriven && !(hubNeed && hubNeed.quantity > 0) && !(ordered.amount > 0)) return '';
+      if (!listDriven && !(ordered.amount > 0) && !gaps.some(function (gap) { return gap > 0; })) return '';
       return '<tr><td class="item-num">' + esc(item.itemNumber || 'no BEK #') + '</td><td><div class="item-name">' + esc(item.name) +
         (item.temporary ? ' <span class="temp-badge">TEMPORARY</span>' : '') + '</div></td>' + cells +
-        '<td class="need-order">' + esc(orderLabel({ amount: total, unit: orderUnit })) + '</td></tr>';
+        '<td class="need-order">' + esc(orderLabel(ordered)) + '</td></tr>';
     }).join('');
-    document.getElementById('orderTable').innerHTML = '<table class="order-table"><thead><tr><th>Item #</th><th>Name</th>' + head +
-      '<th>Order</th></tr></thead><tbody>' + body + '</tbody></table>';
+    var note = '<p>Food from the recipe, cook list, or plate list is Colonnade need minus Colonnade on hand. Rim is included only for par items, after the stores are added together.</p>';
+    document.getElementById('orderTable').innerHTML = note + (body
+      ? '<table class="order-table"><thead><tr><th>Item #</th><th>Name</th>' + head + '<th>Order</th></tr></thead><tbody>' + body + '</tbody></table>'
+      : '<p class="empty-state">Nothing to order for ' + esc(cookLabel()) + '.</p>');
     state.orderRows = ids.map(function (id) { return state.catalog.items[id]; }).filter(Boolean);
   }
 
@@ -2343,7 +2363,6 @@
   function countSheetDate(loc) {
     var bags = [];
     if (loc && state.hands && state.hands[loc.id]) bags.push(state.hands[loc.id]);
-    if (loc && loc.id === state.locationId && state.onHand) bags.push(state.onHand);
     var latest = 0;
     bags.forEach(function (bag) {
       Object.keys(bag || {}).forEach(function (id) {
@@ -2391,35 +2410,27 @@
     return [];
   }
   function downloadOnHandPdf() {
-    var loc = currentStore();
-    if (loc) state.locationId = loc.id;
-    var rows = sheetRowsNow(loc);
+    var loc = catalogStore();
+    if (!loc) {
+      setPageStatus('The Colonnade on-hand sheet is not available.', true);
+      return;
+    }
+    var rows = catalogSheetRows();
     if (rows.length) {
       if (!state.rows || !state.rows.length) state.rows = rows;
       emitOnHandPdf(loc, rows);
       return;
     }
     var ready = state.boot || Promise.resolve();
-    setPageStatus('Loading the on-hand sheet…');
+    setPageStatus('Loading the Colonnade on-hand sheet…');
     ready.then(function () {
-      loc = currentStore();
-      if (loc) state.locationId = loc.id;
-      var loaded = sheetRowsNow(loc);
-      if (loaded.length) {
-        state.rows = state.rows && state.rows.length ? state.rows : loaded;
-        emitOnHandPdf(loc, loaded);
-        return;
-      }
+      loc = catalogStore();
       if (!loc) {
-        setPageStatus('Pick a store, then download the on-hand PDF.', true);
+        setPageStatus('The Colonnade on-hand sheet is not available.', true);
         return;
       }
       return rowsForStore(loc).then(function (fresh) {
-        state.rows = fresh && fresh.length ? fresh : catalogSheetRows();
-        return loadSupport(loc);
-      }).then(function () {
-        render();
-        emitOnHandPdf(loc, state.rows);
+        emitOnHandPdf(loc, fresh && fresh.length ? fresh : catalogSheetRows());
       });
     }).catch(function (err) {
       setPageStatus((err && err.message) || 'Could not build the on-hand PDF.', true);
