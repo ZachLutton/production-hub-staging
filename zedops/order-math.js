@@ -1341,12 +1341,41 @@
     return i === needle.length && (last - first) <= needle.length * 3;
   }
 
+  function editDistance(a, b) {
+    if (a === b) return 0;
+    if (Math.abs(a.length - b.length) > 1) return 2;
+    var prev = [];
+    var cur = [];
+    var j;
+    for (j = 0; j <= b.length; j++) prev[j] = j;
+    for (var i = 1; i <= a.length; i++) {
+      cur[0] = i;
+      var rowMin = cur[0];
+      for (j = 1; j <= b.length; j++) {
+        var cost = a.charAt(i - 1) === b.charAt(j - 1) ? 0 : 1;
+        cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost);
+        if (cur[j] < rowMin) rowMin = cur[j];
+      }
+      if (rowMin > 1) return 2;
+      var swap = prev;
+      prev = cur;
+      cur = swap;
+    }
+    return prev[b.length];
+  }
+
   function tokenHit(token, hay) {
     if (!token) return false;
     if (hay.indexOf(token) !== -1) return true;
     var words = hay.split(' ');
-    for (var i = 0; i < words.length; i++) {
+    var i;
+    for (i = 0; i < words.length; i++) {
       if (words[i].indexOf(token) === 0) return true;
+    }
+    if (token.length >= 6) {
+      for (i = 0; i < words.length; i++) {
+        if (words[i].length >= 6 && editDistance(token, words[i]) <= 1) return true;
+      }
     }
     return false;
   }
@@ -1355,7 +1384,8 @@
   function filterCatalog(query, items, options) {
     var opts = options || {};
     var hidden = opts.hidden || {};
-    var q = fold(query);
+    var queryText = String(query || '').replace(/tobasco/ig, 'tabasco');
+    var q = fold(queryText);
     var compact = q.replace(/ /g, '');
     var ranked = [];
     (items || []).forEach(function (item) {
@@ -1366,7 +1396,7 @@
       var num = String(item.itemNumber || '').toLowerCase().replace(/\s+/g, '');
       var hay = fold(name + ' ' + brand + ' ' + num);
       var flat = hay.replace(/ /g, '');
-      var rawQ = String(query || '').toLowerCase().trim();
+      var rawQ = queryText.toLowerCase().trim();
       var rawName = String(item.name || '' + ' ' + (item.brand || '') + ' ' + (item.itemNumber || '')).toLowerCase();
       var score = 0;
       if (!q) score = 1;

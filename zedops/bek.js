@@ -151,6 +151,14 @@
       items[rec.id] = rec;
       guide.push(rec.id);
     });
+    ((seed && seed.carried) || []).forEach(function (row) {
+      if (!row || !row.itemNumber) return;
+      var rec = guideRecord(row);
+      if (items[rec.id]) return;
+      rec.kind = 'carried';
+      rec.label = row.label || 'Carried';
+      items[rec.id] = rec;
+    });
     ((seed && seed.special) || []).forEach(function (row) {
       var rec = specialRecord(row);
       items[rec.id] = rec;
@@ -713,11 +721,19 @@
   }
 
   function loadSeed() {
-    if (isNode()) return Promise.resolve(require('./seed.json'));
-    return fetch('zedops/seed.json').then(function (res) {
-      if (!res.ok) throw new Error('Could not load the BEK guide.');
-      return res.json();
-    });
+    function withCarried(seed, carried) {
+      var copy = Object.assign({}, seed || {});
+      copy.carried = Array.isArray(carried) ? carried : [];
+      return copy;
+    }
+    if (isNode()) return Promise.resolve(withCarried(require('./seed.json'), require('./carried-bek.json')));
+    return Promise.all([
+      fetch('zedops/seed.json').then(function (res) {
+        if (!res.ok) throw new Error('Could not load the BEK guide.');
+        return res.json();
+      }),
+      fetch('zedops/carried-bek.json').then(function (res) { return res.ok ? res.json() : []; })
+    ]).then(function (pair) { return withCarried(pair[0], pair[1]); });
   }
 
   function parOf(item, pars) {
