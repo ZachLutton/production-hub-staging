@@ -18,13 +18,15 @@
     recipe: 'staging_zedops_recipe',
     plate: 'staging_zedops_plate',
     standards: 'staging_zedops_standards',
-    cook: 'staging_zedops_cook'
+    cook: 'staging_zedops_cook',
+    countDone: 'staging_zedops_count_done'
   };
 
   var WHOLE_LIST = {};
   Object.keys(PATHS).forEach(function (key) { WHOLE_LIST[PATHS[key]] = true; });
   WHOLE_LIST.staging_inventory = true;
   WHOLE_LIST.staging_weekly_orders = true;
+  WHOLE_LIST[PATHS.countDone] = true;
 
   function clean(path) {
     return String(path || '').replace(/^\/+|\/+$/g, '');
@@ -59,6 +61,9 @@
     if (parts[0] === PATHS.catalog && parts[1] === 'items' && parts.length !== 3) {
       throw new Error('Catalog items are saved one item at a time.');
     }
+    if (parts[0] === PATHS.countDone && parts.length !== 3) {
+      throw new Error('A count completion is saved one store and one cook week at a time.');
+    }
     return p;
   }
 
@@ -68,6 +73,11 @@
 
   function refOf(db, path) {
     return db.ref(assertWritable(path));
+  }
+
+  function setCountDone(db, locationId, weekKey, record) {
+    var path = assertWritable(PATHS.countDone + '/' + locationId + '/' + weekKey);
+    return refOf(db, path).set(record);
   }
 
   function setOnHand(db, locationId, weekKey, itemId, value, unit) {
@@ -350,6 +360,7 @@
     assertWritable: assertWritable,
     countPath: countPath,
     setOnHand: setOnHand,
+    setCountDone: setCountDone,
     setPar: setPar,
     MATCH_HIDDEN: MATCH_HIDDEN,
     setHidden: setHidden,

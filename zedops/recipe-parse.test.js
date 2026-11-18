@@ -527,6 +527,7 @@ test('a standard weight applies until the item overrides it, and a wild order is
   assert.equal(parsed.rules.staging_zedops_catalog['.write'].includes('team@'), false);
   assert.equal(parsed.rules.staging_zedops_standards['.write'].includes('admin@'), true);
   assert.equal(parsed.rules.staging_zedops_pars['.write'].includes('team@'), false);
+  assert.equal(parsed.rules.staging_zedops_count_done['.write'].includes('team@'), true);
 });
 
 test('item search is fuzzy and the match count separates saved picks from blanks', () => {

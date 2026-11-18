@@ -644,6 +644,8 @@
       orderBtn.classList.toggle('active', state.view === 'order');
       orderBtn.setAttribute('aria-pressed', state.view === 'order' ? 'true' : 'false');
     }
+    var doneWrap = document.getElementById('doneCountingWrap');
+    if (doneWrap) doneWrap.hidden = !(loc && loc.id === 'rim');
     var badge = document.getElementById('locationBadge');
     if (badge && loc) {
       var kind = ZedLocations.listSourceOf(loc) === 'catalog' ? 'Full BEK catalog' : 'Store supplies';
@@ -2513,13 +2515,29 @@
       state.weekKey = ZedBek.openCookDate(today);
     });
   }
+  function rimCountSnapshot(loc) {
+    var blank = [];
+    var counted = 0;
+    var total = 0;
+    (state.rows || []).forEach(function (row) {
+      if (!(parOf(row, loc) > 0)) return;
+      total += 1;
+      var hand = handOf(row, loc);
+      if (hand == null || hand === '') blank.push((row.item && (row.item.name || row.item.itemNumber)) || row.id);
+      else counted += 1;
+    });
+    return { counted: counted, total: total, blank: blank };
+  }
   function showApp(role) {
     state.role = role || 'team';
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('main-content').style.display = 'block';
     document.getElementById('roleBadge').textContent = state.role === 'admin' ? 'Admin' : 'Team';
-    state.weekPicked = false;
-    state.weekKey = ZedBek.openCookDate(ZedBek.chicagoParts(new Date()).ymd);
+    var today = ZedBek.chicagoParts(new Date()).ymd;
+    var link = ZedBek.weeklyLink(window.location.search, today);
+    state.weekPicked = !!link.pinned;
+    state.weekKey = link.pinned ? link.cook : ZedBek.openCookDate(today);
+    if (link.store) state.locationId = ZedBek.matchStoreId(link.store);
     document.getElementById('weekSelect').value = state.weekKey;
     state.boot = ZedBek.loadSeed().then(function (seed) { return ZedBek.prepareDatabase(db, seed); }).then(function (moves) {
       if (moves && moves.length) {
@@ -2547,6 +2565,30 @@
     }).catch(showError);
   }
 
+  document.getElementById('doneCounting').addEventListener('click', function () {
+    var loc = currentStore();
+    if (!loc || loc.id !== 'rim') return;
+    var snap = rimCountSnapshot(loc);
+    var user = firebase.auth && firebase.auth().currentUser;
+    var path = ZedStorage.PATHS.countDone + '/' + loc.id + '/' + state.weekKey;
+    var status = document.getElementById('doneCountingStatus');
+    db.ref(path).once('value').then(function (existing) {
+      var prev = existing.val() || {};
+      return ZedStorage.setCountDone(db, loc.id, state.weekKey, {
+        by: user && user.email ? user.email : (state.role || 'team'),
+        at: Date.now(),
+        counted: snap.counted,
+        total: snap.total,
+        blank: snap.blank,
+        posted: !!prev.posted
+      });
+    }).then(function () {
+      var note = 'Saved ' + snap.counted + ' of ' + snap.total + ' par items.';
+      if (snap.blank.length) note += ' Still blank: ' + snap.blank.join(', ') + '.';
+      if (status) status.textContent = note;
+      setPageStatus(note);
+    }).catch(showError);
+  });
   document.getElementById('pin-input').addEventListener('input', function () {
     var input = this;
     document.getElementById('pin-error').textContent = '';

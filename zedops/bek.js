@@ -317,6 +317,31 @@
     return nextSaturday(basis);
   }
 
+  // The cook week a Monday reminder is counting for. Delivery is the coming Saturday,
+  // and production is the Wednesday four days after that truck.
+  // Monday 2026-11-16 opens cook 2026-11-25 (delivery Sat 11/21).
+  // Monday 2026-11-23 opens cook 2026-12-02 (delivery Sat 11/28).
+  function reminderCookDate(ymd) {
+    var saturday = nextSaturday(ymd);
+    if (!saturday) return '';
+    return addDays(saturday, 4);
+  }
+
+  function weeklyLink(search, today) {
+    var params = new URLSearchParams(String(search || '').replace(/^\?/, ''));
+    var store = String(params.get('store') || '').trim().toLowerCase();
+    var cookParam = String(params.get('cook') || '').trim();
+    var hasCook = /^\d{4}-\d{2}-\d{2}$/.test(cookParam);
+    var cook = hasCook ? selectCookDate(cookParam) : (store ? reminderCookDate(today) : openCookDate(today));
+    return { store: store, cook: cook, pinned: !!(store || hasCook) };
+  }
+
+  function matchStoreId(value) {
+    var key = String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+    if (key === 'rim' || key === 'therim') return 'rim';
+    return key;
+  }
+
   function formatCycle(cook) {
     if (!cook || weekdayOf(cook) < 0) return '';
     var cycle = cycleForCook(cook);
@@ -761,6 +786,9 @@
     cycleForCook: cycleForCook,
     nextSaturday: nextSaturday,
     deliverySaturday: deliverySaturday,
+    reminderCookDate: reminderCookDate,
+    weeklyLink: weeklyLink,
+    matchStoreId: matchStoreId,
     formatCycle: formatCycle,
     cycleCookForDay: cycleCookForDay,
     openCookDate: openCookDate,

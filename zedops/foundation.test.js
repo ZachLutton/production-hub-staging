@@ -141,6 +141,8 @@ test('two stores can enter different items at the same time without erasing each
   assert.throws(function () { storage.assertWritable('staging_zedops_counts/store-a/2026-10-27'); });
   assert.throws(function () { storage.assertWritable('staging_inventory/main/items'); });
   assert.throws(function () { storage.assertWritable('staging_weekly_orders/rim/pars'); });
+  assert.throws(function () { storage.assertWritable('staging_zedops_count_done'); });
+  assert.equal(storage.assertWritable('staging_zedops_count_done/rim/2026-12-02'), 'staging_zedops_count_done/rim/2026-12-02');
 });
 
 test('schema migrations are idempotent and do not drop an edited count unit', () => {
@@ -218,6 +220,17 @@ test('the count week is the Tuesday it is due, in Chicago, and prices wait for t
   assert.equal(bek.openCookDate('2026-11-04'), '2026-11-11');
   assert.equal(bek.openCookDate('2026-11-05'), '2026-11-11');
   assert.equal(bek.openCookDate('2026-11-09'), '2026-11-11');
+  assert.equal(bek.reminderCookDate('2026-11-16'), '2026-11-25');
+  assert.equal(bek.cycleForCook(bek.reminderCookDate('2026-11-16')).delivery, '2026-11-21');
+  assert.equal(bek.reminderCookDate('2026-11-23'), '2026-12-02');
+  assert.equal(bek.cycleForCook(bek.reminderCookDate('2026-11-23')).delivery, '2026-11-28');
+  assert.equal(bek.weeklyLink('?store=rim', '2026-11-23').cook, '2026-12-02');
+  assert.equal(bek.weeklyLink('?store=rim', '2026-11-23').store, 'rim');
+  assert.equal(bek.weeklyLink('?store=rim', '2026-11-16').cook, '2026-11-25');
+  assert.equal(bek.weeklyLink('?store=rim&cook=2026-11-18', '2026-11-23').cook, '2026-11-18');
+  assert.equal(bek.weeklyLink('', '2026-11-23').cook, bek.openCookDate('2026-11-23'));
+  assert.equal(bek.matchStoreId('rim'), 'rim');
+  assert.equal(bek.matchStoreId('The Rim'), 'rim');
   assert.equal(bek.openCookDate('2026-11-10'), '2026-11-11');
   assert.equal(bek.openCookDate('2026-11-11'), '2026-11-18');
   assert.equal(bek.openCookDate('2026-11-12'), '2026-11-18');
@@ -257,8 +270,8 @@ test('the count week is the Tuesday it is due, in Chicago, and prices wait for t
   assert.equal(page.indexOf('id="recipeTools"') < page.indexOf('id="storeView"'), true);
   assert.equal(page.indexOf('id="orderSummary"') < page.indexOf('id="storeView"'), true);
   assert.equal(page.indexOf('id="storeView"') < page.indexOf('id="adminTools"'), true);
-  assert.equal(page.includes('Build 20261104bf'), true);
-  assert.equal(page.includes('weekly-page.js?v=20261104bf'), true);
+  assert.equal(page.includes('Build 20261104bg'), true);
+  assert.equal(page.includes('weekly-page.js?v=20261104bg'), true);
   assert.equal(page.includes('id="pdfOnHand"'), true);
   assert.equal(page.includes('button:disabled'), true);
   assert.equal(page.includes('id="plateFile"'), true);
