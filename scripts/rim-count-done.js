@@ -92,7 +92,17 @@ async function publishPending(db, webhookUrl) {
 }
 
 async function main() {
-  const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || '{}');
+  const webhook = process.env.SLACK_DONE_WEBHOOK_URL;
+  if (!webhook) {
+    console.log('SLACK_DONE_WEBHOOK_URL is not set. The completion was not posted.');
+    return;
+  }
+  const raw = process.env.ZEDOPS_STAGING_SERVICE_ACCOUNT;
+  if (!raw) {
+    console.log('ZEDOPS_STAGING_SERVICE_ACCOUNT is not set. The completion was not posted.');
+    return;
+  }
+  const serviceAccount = JSON.parse(raw);
   if (serviceAccount.project_id === LIVE_PROJECT) {
     throw new Error('Refusing the live Firebase project.');
   }
@@ -101,7 +111,7 @@ async function main() {
     credential: admin.credential.cert(serviceAccount),
     databaseURL: STAGING_DATABASE
   });
-  const posted = await publishPending(admin.database(), process.env.SLACK_WEBHOOK_URL);
+  const posted = await publishPending(admin.database(), webhook);
   console.log(posted.length ? 'Posted ' + posted.join(', ') : 'No new Rim completion.');
 }
 

@@ -53,6 +53,12 @@ test('the staging reminder has no schedule and the completion check stays on sta
   assert.equal(script.includes('zedops-staging'), true);
   assert.equal(script.includes('zedrics-production-hub-default-rtdb'), false);
   assert.equal(ping.includes('zedrics-production-hub'), false);
-  assert.equal(ping.includes('FIREBASE_SERVICE_ACCOUNT'), true);
-  assert.equal(ping.includes('SLACK_WEBHOOK_URL'), true);
+  assert.equal(ping.includes('secrets.ZEDOPS_STAGING_SERVICE_ACCOUNT'), true);
+  assert.equal(ping.includes('secrets.SLACK_DONE_WEBHOOK_URL'), true);
+  assert.equal(ping.includes('secrets.SLACK_WEBHOOK_URL'), false);
+  assert.equal(ping.includes('FIREBASE_SERVICE_ACCOUNT'), false);
+  assert.equal(script.includes('process.env.SLACK_DONE_WEBHOOK_URL'), true);
+  assert.equal(script.includes('process.env.SLACK_WEBHOOK_URL'), false);
+  assert.equal(script.includes('process.env.ZEDOPS_STAGING_SERVICE_ACCOUNT'), true);
+  assert.equal(script.includes('FIREBASE_SERVICE_ACCOUNT'), false);
 });

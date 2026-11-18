@@ -28,6 +28,6 @@ jobs:
       - name: Post new Rim completions
         working-directory: scripts
         env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          SLACK_DONE_WEBHOOK_URL: ${{ secrets.SLACK_DONE_WEBHOOK_URL }}
+          ZEDOPS_STAGING_SERVICE_ACCOUNT: ${{ secrets.ZEDOPS_STAGING_SERVICE_ACCOUNT }}
         run: node rim-count-done.js
