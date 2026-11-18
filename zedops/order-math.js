@@ -19,7 +19,7 @@
     carton: 'carton', cartons: 'carton', tub: 'tub', tubs: 'tub',
     bag: 'bag', bags: 'bag', jug: 'jug', jugs: 'jug',
     bottle: 'bottle', bottles: 'bottle', container: 'container', containers: 'container',
-    bunch: 'bunch', bunches: 'bunch',
+    bunch: 'bunch', bunches: 'bunch', roll: 'roll', rolls: 'roll',
     case: 'case', cs: 'case'
   };
   // How many of that unit are in one gallon. Milk and water are about 8.6 lb per gallon.
@@ -55,7 +55,7 @@
 
   function isPieceCountUnit(unit) {
     var key = canonUnit(unit);
-    return key === 'ea' || key === 'jar' || key === 'can' || key === 'carton' || key === 'tub' || key === 'bag' || key === 'jug' || key === 'bottle' || key === 'container' || key === 'bunch';
+    return key === 'ea' || key === 'jar' || key === 'can' || key === 'carton' || key === 'tub' || key === 'bag' || key === 'jug' || key === 'bottle' || key === 'container' || key === 'bunch' || key === 'roll';
   }
 
   function isVolumeUnit(unit) {
@@ -166,6 +166,10 @@
     var eachOnLiquid = chosen && canonUnit(item.countUnit) === 'ea' && volumePackOf(item);
     if (chosen && !(canonUnit(item.countUnit) === 'oz' && isJarSpice(item)) && !eachOnLiquid) {
       return item.countUnit;
+    }
+    if (!(item && item.countUnitChosen) && !isFoodItem(item)) {
+      var supplyUnit = supplyCountUnit(item);
+      if (supplyUnit) return supplyUnit;
     }
     if (isCaseCountedPackaging(item)) return 'case';
     var pieceName = defaultPieceName(item);
@@ -439,6 +443,124 @@
     return 1;
   }
 
+  // Paper goods are counted by the roll. Drinks are counted by the can or bottle.
+  // The number per case is the pieces inside the case, not the feet or ounces.
+  function unitsInCase(item) {
+    var pack = String(item && item.pack || '');
+    var counted = pack.match(/(\d+)\s*\/\s*(\d+)\s*(?:ct|pk)\b/i);
+    if (counted) return Number(counted[1]) * Number(counted[2]);
+    var loose = pack.match(/(\d+)\s*\/\s*(?:ea|each)\b/i);
+    if (loose) return Number(loose[1]) || 1;
+    var measured = pack.match(/(\d+)\s*\/\s*(\d+(?:\.\d+)?)\s*(?:ft|oz|lb|gal|ltr|l)\b/i);
+    if (measured) return Number(measured[1]);
+    var pieces = piecesInCase(item);
+    if (pieces > 1) return pieces;
+    return 1;
+  }
+
+  function supplyCountUnit(item) {
+    if (!item) return '';
+    var name = String(item.name || '').toLowerCase();
+    var pack = String(item.pack || '').toLowerCase();
+    var text = name + ' ' + pack;
+    if (/towel|toilet|tissue/.test(name)) return 'roll';
+    if (/\bbottle\b/.test(text)) return 'bottle';
+    if (/\bcan\b/.test(text)) return 'can';
+    if (/energy drink|\bsoda\b|kombucha/.test(name)) return 'can';
+    if (/protein shake/.test(name) || (/\bwater\b/.test(name) && !/vinegar|chips/.test(name))) return 'bottle';
+    return '';
+  }
+
+  function countHint(item) {
+    if (!item || isFoodItem(item)) return null;
+    var unit = canonUnit(resolvedCountUnit(item));
+    if (!unit) return null;
+    var word = unit === 'ea' ? 'each' : unit;
+    if (unit === 'case') return { unit: 'case', perCase: 1, text: 'Count: case' };
+    var per = unitsInCase(item);
+    if (!(per > 0)) return null;
+    return { unit: word, perCase: per, text: 'Count: ' + word + ' · ' + per + ' per case' };
+  }
+
+  // Old saved unit → new inner unit. factor 1 keeps the number and only changes the word.
+  function supplyShifts() {
+    return [
+      { id: 'bek__881026', itemNumber: '881026', name: 'Towel Roll Enmotion', from: 'each', to: 'roll', factor: 1 },
+      { id: 'bek__185750', itemNumber: '185750', name: 'Toilet Tissue', from: 'case', to: 'roll', factor: 18 },
+      { id: 'bek__116379', itemNumber: '116379', name: 'Water Smartwater', from: 'case', to: 'bottle', factor: 12 },
+      { id: 'bek__168927', itemNumber: '168927', name: 'Energy Drink - Sugar Free', from: 'case', to: 'can', factor: 24 },
+      { id: 'bek__168928', itemNumber: '168928', name: 'Energy Drink - Sugar', from: 'case', to: 'can', factor: 24 },
+      { id: 'bek__193880', itemNumber: '193880', name: 'Water Raspberry Orange', from: 'case', to: 'bottle', factor: 12 },
+      { id: 'inv__chocolate_protein_shake', itemNumber: '', name: 'Chocolate Protein Shake', from: 'case', to: 'bottle', factor: 24 },
+      { id: 'inv__nurri_chocolate_protein_shake', itemNumber: '', name: 'Nurri Chocolate Protein Shake', from: 'case', to: 'bottle', factor: 12 },
+      { id: 'inv__nurri_mocha_protein_shake', itemNumber: '', name: 'Nurri Mocha Protein Shake', from: 'case', to: 'bottle', factor: 12 },
+      { id: 'inv__nurri_vanilla_protein_shake', itemNumber: '', name: 'Nurri Vanilla Protein Shake', from: 'case', to: 'bottle', factor: 12 },
+      { id: 'inv__nurri_strawberry_protein_shake', itemNumber: '', name: 'Nurri Strawberry Protein Shake', from: 'case', to: 'bottle', factor: 12 },
+      { id: 'bek__563091', itemNumber: '563091', name: 'Kombucha 12 Oz', from: 'oz', to: 'can', factor: 1 / 12 },
+      { id: 'bek__563081', itemNumber: '563081', name: 'Kombucha 12 Oz', from: 'oz', to: 'can', factor: 1 / 12 },
+      { id: 'bek__563278', itemNumber: '563278', name: 'Kombucha 12 Oz', from: 'oz', to: 'can', factor: 1 / 12 },
+      { id: 'inv__kombucha_can_ginger_nettle', itemNumber: '', name: 'Kombucha Can - Ginger Nettle', from: 'oz', to: 'can', factor: 1 / 12 },
+      { id: 'inv__kombucha_can_pure_green', itemNumber: '', name: 'Kombucha Can - Pure Green', from: 'oz', to: 'can', factor: 1 / 12 },
+      { id: 'inv__kombucha_can_jasmine', itemNumber: '', name: 'Kombucha Can - Jasmine', from: 'oz', to: 'can', factor: 1 / 12 },
+      { id: 'inv__kombucha_can_ashwaganda', itemNumber: '', name: 'Kombucha Can - Ashwaganda', from: 'oz', to: 'can', factor: 1 / 12 },
+      { id: 'inv__karma_water_pineapple', itemNumber: '', name: 'Karma Water - Pineapple', from: 'each', to: 'bottle', factor: 1 },
+      { id: 'inv__karma_water_berry_cherry', itemNumber: '', name: 'Karma Water - Berry Cherry', from: 'each', to: 'bottle', factor: 1 },
+      { id: 'inv__karma_water_blueberry_lemonade', itemNumber: '', name: 'Karma Water - Blueberry Lemonade', from: 'each', to: 'bottle', factor: 1 }
+    ];
+  }
+
+  function supplyShiftFor(id) {
+    var found = null;
+    supplyShifts().forEach(function (row) {
+      if (row.id === id) found = row;
+    });
+    return found;
+  }
+
+  function oldUnits(shift) {
+    if (!shift) return [];
+    if (shift.from === 'case') return ['case', 'cs', ''];
+    if (shift.from === 'each') return ['each', 'ea', ''];
+    if (shift.from === 'oz') return ['oz', 'ounce', 'ounces', ''];
+    return [shift.from, ''];
+  }
+
+  function applySupplyShift(shift, stored) {
+    if (!shift || stored == null || stored === '') return null;
+    var value;
+    var unit = '';
+    if (typeof stored === 'number') value = stored;
+    else if (typeof stored === 'object') {
+      value = Number(stored.value);
+      unit = canonUnit(stored.unit);
+    } else return null;
+    if (!isFinite(value)) return null;
+    if (unit === canonUnit(shift.to)) return null;
+    if (oldUnits(shift).indexOf(unit) === -1) return null;
+    var next = Math.round(value * shift.factor * 1000) / 1000;
+    return { value: next, unit: shift.to, from: unit || shift.from, factor: shift.factor };
+  }
+
+  // Keep the same physical amount when the count word changes. A case becomes the pieces inside it.
+  function convertCount(item, value, fromUnit, toUnit) {
+    var n = Number(value);
+    if (!isFinite(n)) return null;
+    var from = canonUnit(fromUnit);
+    var to = canonUnit(toUnit);
+    if (!from || !to || from === to) return n;
+    var per = unitsInCase(item);
+    if (!(per > 0)) per = 1;
+    var piece = { ea: true, roll: true, can: true, bottle: true, bunch: true, bag: true, jug: true, jar: true, carton: true, tub: true, container: true };
+    if (from === 'case' && piece[to]) return Math.round(n * per * 1000) / 1000;
+    if (piece[from] && to === 'case') return Math.round(n / per * 1000) / 1000;
+    if (piece[from] && piece[to]) return n;
+    if ((from === 'oz' || from === 'ounce') && piece[to]) {
+      var pack = packAmount(item && item.pack);
+      if (pack && pack.unit === 'oz' && pack.each > 0) return Math.round(n / pack.each * 1000) / 1000;
+    }
+    return n;
+  }
+
   function shortfall(need, onHand) {
     var gap = (Number(need) || 0) - (Number(onHand) || 0);
     return gap > 0 ? gap : 0;
@@ -577,6 +699,7 @@
     if (key === 'case' || key === 'cs') return 'cs';
     if (key === 'ea') return 'ea';
     var one = Math.abs(Number(quantity) - 1) < 1e-9;
+    if (key === 'roll') return one ? 'roll' : 'rolls';
     if (key === 'bag') return one ? 'bag' : 'bags';
     if (key === 'jug') return one ? 'jug' : 'jugs';
     if (key === 'bottle') return one ? 'bottle' : 'bottles';
@@ -845,6 +968,11 @@
     var pack = packAmount(item && item.pack);
     var countUnit = resolvedCountUnit(item);
     var have = onHand == null || onHand === '' ? 0 : Number(onHand) || 0;
+    var innerUnit = supplyCountUnit(item);
+    if (innerUnit && canonUnit(countUnit) === canonUnit(innerUnit) && canonUnit(need.unit) === canonUnit(innerUnit)) {
+      var perInner = unitsInCase(item);
+      if (perInner > 0) return casesToOrder(Number(need.quantity) || 0, have, perInner);
+    }
     if (isPieceCountUnit(countUnit) && canonUnit(need.unit) === 'lb') {
       var boxLb = pieceWeightLb(item, need.eachFactor, countUnit) || averagePieceLb(item);
       if (boxLb > 0 && (pack && (pack.unit === 'lb' || pack.unit === 'oz' || pack.unit === 'ea' || !isVolumeUnit(pack.unit)))) {
@@ -894,7 +1022,7 @@
   function countWord(item) {
     var number = String(item && item.itemNumber || '');
     var unit = canonUnit(resolvedCountUnit(item));
-    if (unit === 'jar' || unit === 'can' || unit === 'carton' || unit === 'tub' || unit === 'bag' || unit === 'jug' || unit === 'bottle' || unit === 'container' || unit === 'bunch') return unit;
+    if (unit === 'jar' || unit === 'can' || unit === 'carton' || unit === 'tub' || unit === 'bag' || unit === 'jug' || unit === 'bottle' || unit === 'container' || unit === 'bunch' || unit === 'roll') return unit;
     if (number === '800401') return 'bag';
     if (number === '185095') return 'patty';
     if (number === '211262') return 'breast';
@@ -1135,19 +1263,12 @@
     function add(item, reason) {
       if (!item || !reason) return;
       if (item.orderRole === 'food' || item.orderRole === 'supply') return;
+      if (isRetailResale(item) && !isFoodItem(item)) return;
       var key = (item.itemNumber || '') + '|' + (item.name || '');
       if (seen[key]) return;
       seen[key] = true;
       found.push({ itemNumber: item.itemNumber || '', name: item.name || '', reason: reason });
     }
-    (items || []).forEach(function (item) {
-      if (!isRetailResale(item)) return;
-      if (!isBakingPantry(item)) return;
-      var words = fold(item && item.name).split(' ').filter(function (word) {
-        return word === 'vinegar' || word === 'vanilla' || word === 'wine' || word === 'marsala' || word === 'extract' || word === 'oats' || word === 'flour' || word === 'cornmeal';
-      });
-      add(item, 'The word ' + (words.join(' and ') || 'in the name') + ' marked this retail item as food. It stays a supply with a par.');
-    });
     (ingredientNames || []).forEach(function (ingredient) {
       var top = filterCatalog(ingredient, items, { solidOnly: true, allowWeak: true })[0];
       var reason = weakMatchReason(ingredient, top);
@@ -1605,6 +1726,13 @@
     weakFoodReport: weakFoodReport,
     isBakingPantry: isBakingPantry,
     onHandGrams: onHandGrams,
+    supplyCountUnit: supplyCountUnit,
+    unitsInCase: unitsInCase,
+    countHint: countHint,
+    supplyShifts: supplyShifts,
+    supplyShiftFor: supplyShiftFor,
+    applySupplyShift: applySupplyShift,
+    convertCount: convertCount,
     isListDrivenSource: isListDrivenSource,
     parGap: parGap,
     combinedParCases: combinedParCases,

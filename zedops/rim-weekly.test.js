@@ -70,7 +70,7 @@ test('a list saved as an object still shows, and an existing list is not replace
   assert.equal((await db.ref('staging_inventory/rim/2026-10').once('value')).val(), null);
 });
 
-test('combined totals add Rim weekly on-hand to the Colonnade count by item number', () => {
+test('Rim weekly on-hand stays in its own column and is not added to the hub total', () => {
   const sections = weekly.sectionsFromSnapshot(tables.rim);
   const item = sections['Bathroom Supplies'][0];
   const key = weekly.getItemKey('Bathroom Supplies', item, 0);
@@ -94,5 +94,5 @@ test('combined totals add Rim weekly on-hand to the Colonnade count by item numb
   const row = rows.filter(function (entry) { return entry.id === id; })[0];
   assert.equal(row.cells.colonnade, 0.5);
   assert.equal(row.cells.rim, 2);
-  assert.equal(row.total, 2.5);
+  assert.equal(row.total, 0.5);
 });

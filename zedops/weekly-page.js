@@ -196,13 +196,12 @@
               }
               if (known && known.orderRole) shown.orderRole = known.orderRole;
               if (known && Number(known.lbPerUnit) > 0) shown.lbPerUnit = Number(known.lbPerUnit);
-              if (item.countUnit) {
-                shown.countUnit = item.countUnit;
-                shown.countUnitChosen = true;
-              }
               if (known && known.countUnitChosen && known.countUnit) {
                 shown.countUnit = known.countUnit;
                 shown.countUnitChosen = true;
+              } else if (item.countUnit) {
+                shown.countUnit = item.countUnit;
+                shown.countUnitChosen = !ZedOrder.supplyCountUnit(shown);
               }
               if (Number(item.eachPerCase) > 0) shown.eachPerCase = Number(item.eachPerCase);
               rows.push({
@@ -248,27 +247,54 @@
     });
   }
   function migrateUnitCounts() {
-    return db.ref(ZedStorage.PATHS.counts).once('value').then(function (snap) {
-      var all = snap.val() || {};
-      var jobs = [];
-      Object.keys(all).forEach(function (loc) {
-        Object.keys(all[loc] || {}).forEach(function (week) {
-          var row = all[loc][week];
-          if (!row) return;
-          if (typeof row[CHIP_ID] === 'number') jobs.push(ZedStorage.setOnHand(db, loc, week, CHIP_ID, ZedOrder.bagsFromPounds(row[CHIP_ID]), 'each'));
-          if (typeof row[LEMON_ID] === 'number') jobs.push(ZedStorage.setOnHand(db, loc, week, LEMON_ID, row[LEMON_ID] / 0.5, 'jug'));
-          if (typeof row[SEASON_ID] === 'number') jobs.push(ZedStorage.setOnHand(db, loc, week, SEASON_ID, Math.round(row[SEASON_ID] / 1.5 * 1000) / 1000, 'container'));
-          var parsley = row[PARSLEY_ID];
-          var parsleyBunches = null;
-          if (typeof parsley === 'number' && isFinite(parsley)) parsleyBunches = parsley;
-          else if (parsley && typeof parsley === 'object') {
-            var parsleyUnit = String(parsley.unit || '').toLowerCase();
-            if (parsleyUnit === 'each' || parsleyUnit === 'ea' || parsleyUnit === '') parsleyBunches = Number(parsley.value);
-          }
-          if (parsleyBunches != null && isFinite(parsleyBunches)) jobs.push(ZedStorage.setOnHand(db, loc, week, PARSLEY_ID, parsleyBunches, 'bunch'));
+    return db.ref(ZedStorage.PATHS.catalog).once('value').then(function (catSnap) {
+      var chosen = {};
+      var items = ((catSnap.val() || {}).items) || {};
+      Object.keys(items).forEach(function (id) {
+        if (items[id] && items[id].countUnitChosen) chosen[id] = true;
+      });
+      return db.ref(ZedStorage.PATHS.counts).once('value').then(function (snap) {
+        var all = snap.val() || {};
+        var jobs = [];
+        Object.keys(all).forEach(function (loc) {
+          Object.keys(all[loc] || {}).forEach(function (week) {
+            var row = all[loc][week];
+            if (!row) return;
+            if (typeof row[CHIP_ID] === 'number') jobs.push(ZedStorage.setOnHand(db, loc, week, CHIP_ID, ZedOrder.bagsFromPounds(row[CHIP_ID]), 'each'));
+            if (typeof row[LEMON_ID] === 'number') jobs.push(ZedStorage.setOnHand(db, loc, week, LEMON_ID, row[LEMON_ID] / 0.5, 'jug'));
+            if (typeof row[SEASON_ID] === 'number') jobs.push(ZedStorage.setOnHand(db, loc, week, SEASON_ID, Math.round(row[SEASON_ID] / 1.5 * 1000) / 1000, 'container'));
+            var parsley = row[PARSLEY_ID];
+            var parsleyBunches = null;
+            if (typeof parsley === 'number' && isFinite(parsley)) parsleyBunches = parsley;
+            else if (parsley && typeof parsley === 'object') {
+              var parsleyUnit = String(parsley.unit || '').toLowerCase();
+              if (parsleyUnit === 'each' || parsleyUnit === 'ea' || parsleyUnit === '') parsleyBunches = Number(parsley.value);
+            }
+            if (parsleyBunches != null && isFinite(parsleyBunches)) jobs.push(ZedStorage.setOnHand(db, loc, week, PARSLEY_ID, parsleyBunches, 'bunch'));
+            ZedOrder.supplyShifts().forEach(function (shift) {
+              if (chosen[shift.id]) return;
+              if (row[shift.id] == null || row[shift.id] === '') return;
+              var next = ZedOrder.applySupplyShift(shift, row[shift.id]);
+              if (!next) return;
+              jobs.push(ZedStorage.setOnHand(db, loc, week, shift.id, next.value, next.unit));
+            });
+          });
+        });
+        return db.ref(ZedStorage.PATHS.pars).once('value').then(function (parSnap) {
+          var pars = parSnap.val() || {};
+          Object.keys(pars).forEach(function (place) {
+            Object.keys(pars[place] || {}).forEach(function (id) {
+              if (chosen[id]) return;
+              var shift = ZedOrder.supplyShiftFor(id);
+              if (!shift) return;
+              var next = ZedOrder.applySupplyShift(shift, pars[place][id]);
+              if (!next) return;
+              jobs.push(ZedStorage.setPar(db, place, id, { value: next.value, unit: next.unit }));
+            });
+          });
+          return Promise.all(jobs);
         });
       });
-      return Promise.all(jobs);
     }).catch(function () {});
   }
   function handOf(row, loc) {
@@ -281,12 +307,12 @@
         if (typeof bag[row.id] === 'number') return bag[row.id];
         return convertedCount(row.id, bag[row.id]);
       }
-      return Number(bag[row.id]);
+      return shownSupply(row, bag[row.id]);
     }
     var remembered = state.legacyById && state.legacyById[loc.id];
-    if (remembered && remembered[row.id] != null) return remembered[row.id];
+    if (remembered && remembered[row.id] != null) return shownSupply(row, remembered[row.id], true);
     if (loc.id === state.locationId && row.legacyKey && state.legacyOnHand[row.legacyKey] != null) {
-      return Number(state.legacyOnHand[row.legacyKey]) || 0;
+      return shownSupply(row, state.legacyOnHand[row.legacyKey], true);
     }
     return null;
   }
@@ -304,9 +330,63 @@
     }
     return null;
   }
+  function convertStoredUnit(itemId, item, fromUnit, toUnit) {
+    if (!itemId || !item) return Promise.resolve();
+    if (ZedOrder.canonUnit(fromUnit) === ZedOrder.canonUnit(toUnit)) return Promise.resolve();
+    return db.ref(ZedStorage.PATHS.counts).once('value').then(function (snap) {
+      var all = snap.val() || {};
+      var jobs = [];
+      Object.keys(all).forEach(function (loc) {
+        Object.keys(all[loc] || {}).forEach(function (week) {
+          var raw = all[loc][week] && all[loc][week][itemId];
+          if (raw == null || raw === '') return;
+          var next = ZedOrder.convertCount(item, typeof raw === 'object' ? raw.value : raw, fromUnit, toUnit);
+          if (next == null || !isFinite(next)) return;
+          jobs.push(ZedStorage.setOnHand(db, loc, week, itemId, next, toUnit));
+          if (week === state.weekKey && state.hands && state.hands[loc]) {
+            state.hands[loc][itemId] = next;
+            if (loc === state.locationId) state.onHand[itemId] = next;
+          }
+        });
+      });
+      return db.ref(ZedStorage.PATHS.pars).once('value').then(function (parSnap) {
+        var pars = parSnap.val() || {};
+        Object.keys(pars).forEach(function (loc) {
+          var raw = pars[loc] && pars[loc][itemId];
+          if (!raw) return;
+          var next = ZedOrder.convertCount(item, raw.value, fromUnit, toUnit);
+          if (next == null || !isFinite(next)) return;
+          var record = { value: next, unit: toUnit };
+          jobs.push(ZedStorage.setPar(db, loc, itemId, record));
+          if (state.allPars && state.allPars[loc]) state.allPars[loc][itemId] = record;
+          if (loc === state.locationId) state.pars[itemId] = record;
+        });
+        return Promise.all(jobs);
+      });
+    });
+  }
+  function shownSupply(row, raw, bareIsOld) {
+    if (raw == null || raw === '') return null;
+    var shift = ZedOrder.supplyShiftFor(row && row.id);
+    var display = row && row.item ? ZedOrder.canonUnit(ZedOrder.resolvedCountUnit(row.item)) : '';
+    if (shift && display === ZedOrder.canonUnit(shift.to) && (typeof raw === 'object' || bareIsOld)) {
+      var next = ZedOrder.applySupplyShift(shift, raw);
+      if (next) return next.value;
+    }
+    if (typeof raw === 'object') {
+      var stored = Number(raw.value);
+      return isFinite(stored) ? stored : null;
+    }
+    var number = Number(raw);
+    return isFinite(number) ? number : null;
+  }
   function parOf(row, loc) {
     var saved = parRecord(row, loc);
-    if (saved) return Number(saved.value) || 0;
+    if (saved) {
+      var shown = shownSupply(row, saved);
+      if (shown != null) return shown;
+      return Number(saved.value) || 0;
+    }
     if (row.item && ZedOrder.isPortionPacket(row.item)) return 1;
     return 0;
   }
@@ -1233,7 +1313,8 @@
     var needText = needBlock(row, loc);
     var temp = item.temporary ? ' <span class="temp-badge">TEMPORARY</span>' : '';
     var food = ZedOrder.isFoodItem(item);
-    var countChoices = ['each', 'bunch', 'bag', 'jug', 'tub', 'jar', 'can', 'carton', 'bottle', 'container', 'case', 'lb', 'gal', 'oz'];
+    var hint = ZedOrder.countHint(item);
+    var countChoices = ['each', 'bunch', 'roll', 'bag', 'jug', 'tub', 'jar', 'can', 'carton', 'bottle', 'container', 'case', 'lb', 'gal', 'oz'];
     var countNow = String(ZedOrder.resolvedCountUnit(item) || 'each').toLowerCase();
     if (countNow === 'pound' || countNow === 'pounds') countNow = 'lb';
     if (countNow === 'gallon' || countNow === 'gallons') countNow = 'gal';
@@ -1282,20 +1363,21 @@
     }
     var controls = state.role === 'admin'
       ? '<tr class="admin-line"><td colspan="6"><div class="row-controls">' + orderSelect + countSelect + roleBtn +
-        (parCell ? '<label class="ctrl-par">Par ' + parCell + '</label>' : '') +
+        (parCell ? '<label class="ctrl-par">Par ' + parCell + (hint ? '<span class="count-hint">' + esc(hint.text) + '</span>' : '') + '</label>' : '') +
         (density ? '<span class="ctrl-density">' + density + '</span>' : '') +
         '</div></td></tr>'
       : '';
     var src = ZedOrder.weightSource(item);
     var weightLine = src ? '<div class="item-brand">' + esc(Math.round(src.lb * 1000) / 1000) + ' lb · ' + esc(src.source) + '</div>' : '';
+    var hintLine = hint ? '<div class="count-hint">' + esc(hint.text) + '</div>' : '';
     var warn = ZedOrder.orderWarning(item, cases, need, hand);
     var warnLine = warn.flagged ? '<div class="order-warn">' + esc(warn.reasons.join(' ')) + '</div>' : '';
     var grams = ZedOrder.onHandGrams(item, hand == null || hand === '' ? '' : hand);
     var gramsNote = grams.text ? '<div class="hand-grams' + (grams.status === 'missing' ? ' missing' : '') + '">' + esc(grams.text) + '</div>' : '';
     return '<tr' + (warn.flagged ? ' class="order-flag"' : '') + '><td class="item-num">' + esc(item.itemNumber || 'no BEK #') + '</td><td><div class="item-name">' +
-      esc(item.name) + temp + '</div><div class="item-brand">' + esc(item.brand || '') + '</div>' + weightLine + '</td><td>' + esc(item.pack || '') +
+      esc(item.name) + temp + '</div><div class="item-brand">' + esc(item.brand || '') + '</div>' + hintLine + weightLine + '</td><td>' + esc(item.pack || '') +
       '</td><td class="need-cell" data-need-for="' + esc(row.id) + '">' + needText + '</td><td><input class="onhand-input" data-hand="' + esc(row.id) + '" type="number" min="0" step="any" inputmode="decimal" aria-label="On hand ' + esc(item.name) + ' in ' + esc(countNow) + '" value="' +
-      (hand == null ? '' : esc(hand)) + '">' + (countNow === 'bunch' ? '<span class="hand-unit">bunch</span>' : '') + gramsNote + '</td><td class="need-order">' + esc(orderLabel(ordered)) + warnLine + '</td></tr>' +
+      (hand == null ? '' : esc(hand)) + '">' + (countNow === 'bunch' || countNow === 'roll' || countNow === 'can' || countNow === 'bottle' ? '<span class="hand-unit">' + esc(countNow) + '</span>' : '') + gramsNote + '</td><td class="need-order">' + esc(orderLabel(ordered)) + warnLine + '</td></tr>' +
       controls;
   }
 
@@ -1693,7 +1775,13 @@
     var id = input.dataset.hand;
     var raw = input.value.trim();
     if (!state.hands[state.locationId]) state.hands[state.locationId] = {};
+    var handRow = null;
+    state.rows.forEach(function (candidate) { if (candidate.id === id) handRow = candidate; });
     var countedUnit = id === CHIP_ID ? 'each' : (id === LEMON_ID ? 'jug' : (id === SEASON_ID ? 'container' : (id === PARSLEY_ID ? 'bunch' : '')));
+    if (!countedUnit && handRow && handRow.item && ZedOrder.supplyCountUnit(handRow.item)) {
+      countedUnit = ZedOrder.canonUnit(ZedOrder.resolvedCountUnit(handRow.item));
+      if (countedUnit === 'ea') countedUnit = 'each';
+    }
     if (raw === '') {
       delete state.onHand[id];
       delete state.hands[state.locationId][id];
@@ -1754,11 +1842,28 @@
       var unitId = input.getAttribute('data-count-unit');
       var unitItem = state.catalog.items[unitId];
       var unitChoice = input.value;
-      if (!unitItem) return;
-      ZedStorage.setCountUnit(db, unitId, unitChoice).then(function () {
+      var unitName = unitItem && unitItem.name;
+      var sourceItem = unitItem;
+      var previousUnit = unitItem ? ZedOrder.resolvedCountUnit(unitItem) : '';
+      state.rows.forEach(function (candidate) {
+        if (!candidate || candidate.id !== unitId || !candidate.item) return;
+        if (!previousUnit) previousUnit = ZedOrder.resolvedCountUnit(candidate.item);
+        if (!sourceItem) sourceItem = candidate.item;
+        if (!unitName) unitName = candidate.item.name;
+      });
+      state.rows.forEach(function (candidate) {
+        if (!candidate || candidate.id !== unitId || !candidate.item) return;
+        candidate.item.countUnit = unitChoice;
+        candidate.item.countUnitChosen = true;
+      });
+      if (unitItem) {
         unitItem.countUnit = unitChoice;
         unitItem.countUnitChosen = true;
-        setPageStatus('Saved. ' + unitItem.name + ' is counted by ' + unitChoice + '.');
+      }
+      convertStoredUnit(unitId, sourceItem, previousUnit, unitChoice).then(function () {
+        return ZedStorage.setCountUnit(db, unitId, unitChoice);
+      }).then(function () {
+        setPageStatus('Saved. ' + (unitName || 'Item') + ' is counted by ' + unitChoice + '.');
         render();
         markSaved();
       }).catch(showError);
@@ -1822,7 +1927,7 @@
       setPageStatus('Enter a standing par of zero or more for ' + row.item.name + '.', true);
       return;
     }
-    var record = { value: value, unit: row.item.countUnit || '' };
+    var record = { value: value, unit: ZedOrder.resolvedCountUnit(row.item) || row.item.countUnit || '' };
     ZedStorage.setPar(db, state.locationId, row.id, record).then(function () {
       if (!state.allPars[state.locationId]) state.allPars[state.locationId] = {};
       state.allPars[state.locationId][row.id] = record;
@@ -2568,8 +2673,9 @@
       state.catalog = ZedSchema.migrateCatalog({ schemaVersion: raw.schemaVersion || 1, items: raw.items || {}, shelf: raw.shelf || {} });
       state.locationDoc = snaps[1].val() || {};
       fillStores();
-      migrateUnitCounts();
-      return chooseWorkingWeek().then(function () {
+      return migrateUnitCounts().then(function () {
+        return chooseWorkingWeek();
+      }).then(function () {
         document.getElementById('weekSelect').value = state.weekKey;
         return seedRimPars().then(function () { return reload(); });
       });
