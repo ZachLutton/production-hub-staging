@@ -538,7 +538,11 @@
     var base = '—';
     if (hand != null && hand !== '') {
       var word = ZedOrder.countWord(row.item);
-      if (ZedOrder.isPieceCountUnit(word) || word === 'bag' || word === 'jug' || word === 'container' || word === 'bottle' || word === 'patty' || word === 'breast') {
+      if (ZedOrder.canonUnit(ZedOrder.resolvedCountUnit(row.item)) === 'lb') {
+        base = ZedOrder.poundOunceText(hand);
+        var pdfGrams = ZedOrder.pdfGramText(hand);
+        return pdfGrams ? base + ' · ' + pdfGrams : base;
+      } else if (ZedOrder.isPieceCountUnit(word) || word === 'bag' || word === 'jug' || word === 'container' || word === 'bottle' || word === 'patty' || word === 'breast') {
         base = hand + ' ' + ZedOrder.shortUnit(word, hand);
       } else {
         var unit = ZedOrder.unitLabel(ZedOrder.resolvedCountUnit(row.item));
@@ -1372,12 +1376,22 @@
     var hintLine = hint ? '<div class="count-hint">' + esc(hint.text) + '</div>' : '';
     var warn = ZedOrder.orderWarning(item, cases, need, hand);
     var warnLine = warn.flagged ? '<div class="order-warn">' + esc(warn.reasons.join(' ')) + '</div>' : '';
-    var grams = ZedOrder.onHandGrams(item, hand == null || hand === '' ? '' : hand);
+    var grams = countNow === 'lb'
+      ? { text: hand == null || hand === '' ? '' : ZedOrder.pdfGramText(hand), status: 'ok' }
+      : ZedOrder.onHandGrams(item, hand == null || hand === '' ? '' : hand);
     var gramsNote = grams.text ? '<div class="hand-grams' + (grams.status === 'missing' ? ' missing' : '') + '">' + esc(grams.text) + '</div>' : '';
+    var handCell = '';
+    if (countNow === 'lb') {
+      var parts = hand == null || hand === '' ? { pounds: '', ounces: '' } : ZedOrder.splitPounds(hand);
+      handCell = '<span class="lb-oz"><label class="lb-oz-field"># <input class="onhand-input" data-hand="' + esc(row.id) + '" data-lb="' + esc(row.id) + '" type="number" min="0" step="any" inputmode="decimal" aria-label="On hand ' + esc(item.name) + ' pounds" value="' + esc(parts.pounds) + '"></label>' +
+        '<label class="lb-oz-field">oz <input class="onhand-input" data-hand="' + esc(row.id) + '" data-oz="' + esc(row.id) + '" type="number" min="0" step="any" inputmode="decimal" aria-label="On hand ' + esc(item.name) + ' ounces" value="' + esc(parts.ounces) + '"></label></span>';
+    } else {
+      handCell = '<input class="onhand-input" data-hand="' + esc(row.id) + '" type="number" min="0" step="any" inputmode="decimal" aria-label="On hand ' + esc(item.name) + ' in ' + esc(countNow) + '" value="' +
+        (hand == null ? '' : esc(hand)) + '">' + (countNow === 'bunch' || countNow === 'roll' || countNow === 'can' || countNow === 'bottle' ? '<span class="hand-unit">' + esc(countNow) + '</span>' : '');
+    }
     return '<tr' + (warn.flagged ? ' class="order-flag"' : '') + '><td class="item-num">' + esc(item.itemNumber || 'no BEK #') + '</td><td><div class="item-name">' +
       esc(item.name) + temp + '</div><div class="item-brand">' + esc(item.brand || '') + '</div>' + hintLine + weightLine + '</td><td>' + esc(item.pack || '') +
-      '</td><td class="need-cell" data-need-for="' + esc(row.id) + '">' + needText + '</td><td><input class="onhand-input" data-hand="' + esc(row.id) + '" type="number" min="0" step="any" inputmode="decimal" aria-label="On hand ' + esc(item.name) + ' in ' + esc(countNow) + '" value="' +
-      (hand == null ? '' : esc(hand)) + '">' + (countNow === 'bunch' || countNow === 'roll' || countNow === 'can' || countNow === 'bottle' ? '<span class="hand-unit">' + esc(countNow) + '</span>' : '') + gramsNote + '</td><td class="need-order">' + esc(orderLabel(ordered)) + warnLine + '</td></tr>' +
+      '</td><td class="need-cell" data-need-for="' + esc(row.id) + '">' + needText + '</td><td>' + handCell + gramsNote + '</td><td class="need-order">' + esc(orderLabel(ordered)) + warnLine + '</td></tr>' +
       controls;
   }
 
@@ -1774,6 +1788,18 @@
     state.orderConfirmed = false;
     var id = input.dataset.hand;
     var raw = input.value.trim();
+    var precise = null;
+    if (input.dataset.lb != null || input.dataset.oz != null) {
+      var lbInput = document.querySelector('[data-lb="' + id.replace(/"/g, '') + '"]');
+      var ozInput = document.querySelector('[data-oz="' + id.replace(/"/g, '') + '"]');
+      var read = ZedOrder.readPounds(lbInput ? lbInput.value : '', ozInput ? ozInput.value : '');
+      if (read.rolled && lbInput && ozInput) {
+        lbInput.value = read.pounds === '' ? '' : String(read.pounds);
+        ozInput.value = read.ounces === '' ? '' : String(read.ounces);
+      }
+      if (read.total == null) raw = '';
+      else { precise = read.total; raw = String(read.total); }
+    }
     if (!state.hands[state.locationId]) state.hands[state.locationId] = {};
     var handRow = null;
     state.rows.forEach(function (candidate) { if (candidate.id === id) handRow = candidate; });
@@ -1786,10 +1812,15 @@
       delete state.onHand[id];
       delete state.hands[state.locationId][id];
     } else {
-      state.onHand[id] = Number(raw);
-      state.hands[state.locationId][id] = Number(raw);
+      state.onHand[id] = precise != null ? precise : Number(raw);
+      state.hands[state.locationId][id] = precise != null ? precise : Number(raw);
     }
-    var cell = input.parentElement && input.parentElement.nextElementSibling;
+    var handTd = input.closest ? input.closest('td') : input.parentElement;
+    var cell = handTd && handTd.nextElementSibling;
+    var gramNote = handTd && handTd.querySelector('.hand-grams');
+    if (gramNote && (input.dataset.lb != null || input.dataset.oz != null)) {
+      gramNote.textContent = raw === '' ? '' : ZedOrder.pdfGramText(precise);
+    }
     var row = null;
     state.rows.forEach(function (candidate) { if (candidate.id === id) row = candidate; });
     var locNow = currentStore();
@@ -1799,7 +1830,7 @@
       if (cell) cell.textContent = orderLabel(orderFor(row, locNow));
       renderSummary(locNow);
     }
-    ZedStorage.setOnHand(db, state.locationId, state.weekKey, id, raw === '' ? null : raw, countedUnit).then(function () {
+    ZedStorage.setOnHand(db, state.locationId, state.weekKey, id, raw === '' ? null : (precise != null ? precise : raw), countedUnit).then(function () {
       var mealInput = document.querySelector('[data-meal-hand="' + id + '"]');
       if (mealInput && mealInput !== input) mealInput.value = raw;
       var typeId = mealInput && mealInput.getAttribute('data-meal-type');
@@ -2416,12 +2447,14 @@
     if ((raw == null || raw === '') && loc && loc.id === state.locationId && row.legacyKey && state.legacyOnHand[row.legacyKey] != null) {
       raw = state.legacyOnHand[row.legacyKey];
     }
-    if (raw == null || raw === '') return { amount: '', entered: '' };
+    if (raw == null || raw === '') return { amount: '', raw: null, entered: '' };
     if (typeof raw === 'object') {
-      var amount = raw.value == null || raw.value === '' ? '' : ZedBek.formatQty(raw.value);
-      return { amount: amount, entered: enteredLabel(raw.by || raw.name || raw.enteredBy || '', raw.at || raw.updatedAt || raw.enteredAt || '') };
+      var number = raw.value == null || raw.value === '' ? null : Number(raw.value);
+      var amount = number == null || !isFinite(number) ? '' : ZedBek.formatQty(number);
+      return { amount: amount, raw: number != null && isFinite(number) ? number : null, entered: enteredLabel(raw.by || raw.name || raw.enteredBy || '', raw.at || raw.updatedAt || raw.enteredAt || '') };
     }
-    return { amount: ZedBek.formatQty(raw), entered: '' };
+    var plain = Number(raw);
+    return { amount: ZedBek.formatQty(raw), raw: isFinite(plain) ? plain : null, entered: '' };
   }
   function sheetUnit(item, amount) {
     var word = ZedOrder.countWord(item);
@@ -2442,13 +2475,21 @@
       var item = row.item || {};
       var counted = countRecord(row, loc);
       var grams = ZedOrder.onHandGrams(item, counted.amount);
+      var onHand = counted.amount;
+      var unit = counted.amount ? sheetUnit(item, counted.amount) : '';
+      var gramText = grams.text;
+      if (ZedOrder.canonUnit(ZedOrder.resolvedCountUnit(item)) === 'lb' && counted.raw != null && counted.amount !== '') {
+        onHand = ZedOrder.weightText(counted.raw);
+        unit = '';
+        gramText = ZedOrder.pdfGramText(counted.raw);
+      }
       groups[index[title]].rows.push({
         number: item.itemNumber || '',
         name: item.name || '',
         pack: item.pack || '',
-        unit: counted.amount ? sheetUnit(item, counted.amount) : '',
-        onHand: counted.amount,
-        grams: grams.text,
+        unit: unit,
+        onHand: onHand,
+        grams: gramText,
         entered: counted.entered
       });
     });

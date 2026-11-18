@@ -156,18 +156,21 @@
         var nameLines = wrapWidth(row.name || '', 22);
         var packLines = wrapWidth(row.pack || '', 14);
         var enteredLines = wrapWidth(row.entered || '', 22);
+        var handLines = wrapWidth(amountThenUnit(row.onHand, row.unit), 24);
         if (!row.pack) packLines = [''];
         if (!row.entered) enteredLines = [''];
+        if (!handLines.length) handLines = [''];
         blocks.push({
           kind: 'row',
           lines: nameLines,
           packLines: packLines,
           enteredLines: enteredLines,
+          handLines: handLines,
           cells: {
             number: row.number || '',
             name: nameLines,
             pack: packLines,
-            onHand: amountThenUnit(row.onHand, row.unit),
+            onHand: handLines,
             grams: row.grams == null ? '' : String(row.grams),
             entered: enteredLines
           }
@@ -182,7 +185,7 @@
     var limit = 620;
     function blockHeight(block) {
       if (block.kind === 'section') return 20;
-      var lines = Math.max(1, block.lines.length, (block.packLines || []).length, (block.enteredLines || []).length);
+      var lines = Math.max(1, block.lines.length, (block.packLines || []).length, (block.enteredLines || []).length, (block.handLines || []).length);
       return 6 + lines * 11;
     }
     blocks.forEach(function (block) {
@@ -235,7 +238,9 @@
         (block.packLines || ['']).forEach(function (line, index) {
           cmds.push('BT /F1 8 Tf 1 0 0 1 ' + columnX('pack') + ' ' + (y - index * 11) + ' Tm (' + pdfString(line) + ') Tj ET');
         });
-        cmds.push('BT /F1 8 Tf 1 0 0 1 ' + columnX('onHand') + ' ' + y + ' Tm (' + pdfString(block.cells.onHand) + ') Tj ET');
+        (block.handLines || [typeof block.cells.onHand === 'string' ? block.cells.onHand : '']).forEach(function (line, index) {
+          cmds.push('BT /F1 8 Tf 1 0 0 1 ' + columnX('onHand') + ' ' + (y - index * 11) + ' Tm (' + pdfString(line) + ') Tj ET');
+        });
         if (block.cells.grams === 'no weight set') cmds.push('0.54 0.12 0.12 rg');
         cmds.push('BT /F1 8 Tf 1 0 0 1 ' + columnX('grams') + ' ' + y + ' Tm (' + pdfString(block.cells.grams) + ') Tj ET');
         cmds.push('0.1 0.1 0.1 rg');

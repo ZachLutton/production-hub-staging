@@ -558,7 +558,73 @@
       var pack = packAmount(item && item.pack);
       if (pack && pack.unit === 'oz' && pack.each > 0) return Math.round(n / pack.each * 1000) / 1000;
     }
+    if (from === 'oz' && to === 'lb') return n / 16;
+    if (from === 'lb' && to === 'oz') return n * 16;
     return n;
+  }
+
+  // 3.5 lb is 3 pounds and 8 ounces. Storage stays the decimal; this is only the display.
+  function splitPounds(value) {
+    if (value == null || value === '') return { pounds: '', ounces: '' };
+    var n = Number(value);
+    if (!isFinite(n)) return { pounds: '', ounces: '' };
+    if (n < 0) n = 0;
+    var pounds = Math.floor(n + 1e-9);
+    var ounces = (n - pounds) * 16;
+    if (ounces >= 16 - 1e-6) {
+      pounds += 1;
+      ounces = 0;
+    }
+    ounces = Math.round(ounces * 10000) / 10000;
+    if (Math.abs(ounces - Math.round(ounces)) < 1e-6) ounces = Math.round(ounces);
+    return { pounds: pounds, ounces: ounces };
+  }
+
+  // lb + oz/16, with full precision. 16 ounces rolls into the next pound.
+  function joinPounds(pounds, ounces) {
+    var read = readPounds(pounds, ounces);
+    return read.total;
+  }
+
+  function readPounds(pounds, ounces) {
+    var lbBlank = pounds == null || String(pounds).trim() === '';
+    var ozBlank = ounces == null || String(ounces).trim() === '';
+    if (lbBlank && ozBlank) return { total: null, pounds: '', ounces: '', rolled: false };
+    var lb = lbBlank ? 0 : Number(pounds);
+    var oz = ozBlank ? 0 : Number(ounces);
+    if (!isFinite(lb) || lb < 0) lb = 0;
+    if (!isFinite(oz) || oz < 0) oz = 0;
+    var total = lb + oz / 16;
+    var parts = splitPounds(total);
+    var rolled = Math.abs(lb - Number(parts.pounds)) > 1e-6 || Math.abs(oz - Number(parts.ounces)) > 1e-4;
+    return { total: total, pounds: parts.pounds, ounces: parts.ounces, rolled: rolled };
+  }
+
+  var PDF_GRAMS_PER_LB = 453.592;
+
+  function pdfGrams(lb) {
+    var n = Number(lb);
+    if (!isFinite(n)) return null;
+    return Math.round(n * PDF_GRAMS_PER_LB);
+  }
+
+  function pdfGramText(lb) {
+    var grams = pdfGrams(lb);
+    if (grams == null) return '';
+    return formatGrams(grams);
+  }
+
+  function poundOunceText(lb) {
+    var parts = splitPounds(lb);
+    if (parts.pounds === '') return '';
+    return parts.pounds + ' lb ' + parts.ounces + ' oz';
+  }
+
+  function weightText(lb) {
+    var text = poundOunceText(lb);
+    if (!text) return '';
+    var grams = pdfGramText(lb);
+    return grams ? text + ' (' + grams + ')' : text;
   }
 
   function shortfall(need, onHand) {
@@ -1726,6 +1792,13 @@
     weakFoodReport: weakFoodReport,
     isBakingPantry: isBakingPantry,
     onHandGrams: onHandGrams,
+    splitPounds: splitPounds,
+    joinPounds: joinPounds,
+    readPounds: readPounds,
+    pdfGrams: pdfGrams,
+    pdfGramText: pdfGramText,
+    poundOunceText: poundOunceText,
+    weightText: weightText,
     supplyCountUnit: supplyCountUnit,
     unitsInCase: unitsInCase,
     countHint: countHint,

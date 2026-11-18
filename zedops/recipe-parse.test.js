@@ -980,3 +980,41 @@ test('sriracha and cholula packets are supplies counted by the case', () => {
   assert.equal(parFn.includes('isPortionPacket'), true);
   assert.equal(parFn.includes('guidePar'), false);
 });
+
+test('a pound count splits into pounds and ounces and keeps the decimal', () => {
+  assert.deepEqual(order.splitPounds(3.5), { pounds: 3, ounces: 8 });
+  assert.deepEqual(order.splitPounds(3.4375), { pounds: 3, ounces: 7 });
+  assert.equal(order.joinPounds(3, 8), 3.5);
+  assert.equal(order.joinPounds(3, 7), 3.4375);
+  assert.equal(order.joinPounds(0, 16), 1);
+  assert.equal(order.joinPounds(1, 16.5), 2.03125);
+  assert.equal(order.joinPounds(2, 15.99), 2 + 15.99 / 16);
+  assert.equal(order.joinPounds('', ''), null);
+  assert.equal(order.joinPounds(0, 1.5), 0.09375);
+  const rolled = order.readPounds(4, 16);
+  assert.equal(rolled.rolled, true);
+  assert.equal(rolled.pounds, 5);
+  assert.equal(rolled.ounces, 0);
+  assert.equal(rolled.total, 5);
+  const held = order.readPounds(2, 15.99);
+  assert.equal(held.rolled, false);
+  assert.equal(held.total, 2 + 15.99 / 16);
+  assert.equal(order.weightText(3 + 7 / 16), '3 lb 7 oz (1,559 g)');
+  assert.equal(order.pdfGramText(3 + 7 / 16), '1,559 g');
+  assert.equal(order.pdfGramText(10), '4,536 g');
+  assert.equal(order.pdfGrams(3 + 7 / 16), 1559);
+  assert.equal(order.shortfall(10, 3.4375), 6.5625);
+  assert.equal(order.convertCount({ pack: '1 / 1 LB' }, 8, 'oz', 'lb'), 0.5);
+  assert.equal(order.convertCount({ pack: '1 / 1 LB' }, 0.5, 'lb', 'oz'), 8);
+  const paste = { name: 'Anchovy Paste Tube', pack: '12 / 2 OZ', countUnit: 'ounce' };
+  assert.equal(order.canonUnit(order.resolvedCountUnit(paste)), 'oz');
+  const pdf = require('./pdf.js');
+  const sheet = Buffer.from(pdf.buildSheetPdf({
+    sections: [{ title: 'Cooler', rows: [{ number: '200305', name: 'Squash', pack: '1 / 1 CS', unit: '', onHand: order.weightText(3 + 7 / 16), grams: order.pdfGramText(3 + 7 / 16), entered: '' }] }]
+  })).toString('latin1');
+  assert.equal(sheet.includes('3 lb 7 oz'), true);
+  assert.equal(sheet.includes('1,559 g'), true);
+  const page = fs.readFileSync(path.join(__dirname, '..', 'weekly-order.html'), 'utf8');
+  assert.equal(page.includes('.lb-oz'), true);
+  assert.equal(page.includes('flex-wrap: nowrap'), true);
+});
