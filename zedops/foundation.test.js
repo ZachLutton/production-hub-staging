@@ -257,8 +257,8 @@ test('the count week is the Tuesday it is due, in Chicago, and prices wait for t
   assert.equal(page.indexOf('id="recipeTools"') < page.indexOf('id="storeView"'), true);
   assert.equal(page.indexOf('id="orderSummary"') < page.indexOf('id="storeView"'), true);
   assert.equal(page.indexOf('id="storeView"') < page.indexOf('id="adminTools"'), true);
-  assert.equal(page.includes('Build 20261104bc'), true);
-  assert.equal(page.includes('weekly-page.js?v=20261104bc'), true);
+  assert.equal(page.includes('Build 20261104bd'), true);
+  assert.equal(page.includes('weekly-page.js?v=20261104bd'), true);
   assert.equal(page.includes('id="pdfOnHand"'), true);
   assert.equal(page.includes('button:disabled'), true);
   assert.equal(page.includes('id="plateFile"'), true);
@@ -347,7 +347,8 @@ test('a downloaded PDF is a real PDF and a spreadsheet keeps a leading zero', as
         { number: '393413', name: 'Egg White Liquid', pack: '15 / 2 LB', unit: 'carton', onHand: '12', grams: '10,886 g', entered: '' },
         { number: '881026', name: 'Towel Roll', pack: '', unit: 'cs', onHand: '3', grams: '\u2014', entered: '' },
         { number: '028201', name: 'Juice Lemon', pack: '6 / .5 GAL', unit: 'gal', onHand: '', grams: '', entered: '' },
-        { number: '200305', name: 'Squash Spaghetti', pack: '1 / 1 CS', unit: 'lb', onHand: '', grams: 'no weight set', entered: '' },
+        { number: '200305', name: 'Squash Spaghetti', pack: '1 / 1 CS', unit: 'lb', onHand: '10', grams: '4,536 g', entered: '' },
+        { number: '000000', name: 'Unweighed Food', pack: '', unit: '', onHand: '1', grams: 'no weight set', entered: '' },
         { number: '171985', name: 'Milk 2% Gal', pack: '4 / 1 GAL', unit: 'gal', onHand: '0', grams: '0 g', entered: 'Ada · Nov 4, 1:00 PM CT' }
       ]
     }]
@@ -371,6 +372,8 @@ test('a downloaded PDF is a real PDF and a spreadsheet keeps a leading zero', as
   assert.equal(onHandPdfBytes.includes('(0 gal) Tj'), true);
   assert.equal(onHandPdfBytes.includes('(0 g) Tj'), true);
   assert.equal(onHandPdfBytes.includes('(no weight set) Tj'), true);
+  assert.equal(onHandPdfBytes.includes('(10 lb) Tj'), true);
+  assert.equal(onHandPdfBytes.includes('(4,536 g) Tj'), true);
   var spot = /1 0 0 1 (\d+) /g;
   var found;
   while ((found = spot.exec(onHandPdfBytes))) assert.equal(Number(found[1]) < 560, true);
@@ -396,13 +399,17 @@ test('a downloaded PDF is a real PDF and a spreadsheet keeps a leading zero', as
   assert.equal(order.onHandGrams(milk, 0).text, '0 g');
   assert.equal(order.onHandGrams(cup, 2).text, '\u2014');
   assert.equal(order.onHandGrams(cup, '').text, '');
-  assert.equal(order.onHandGrams(squash, '').status, 'missing');
+  assert.equal(order.canonUnit(order.resolvedCountUnit(squash)), 'lb');
+  assert.equal(order.canonUnit(order.resolvedCountUnit(Object.assign({}, squash, { countUnit: 'case', countUnitChosen: true }))), 'lb');
+  assert.equal(order.resolvedOrderUnit(squash), 'lb');
+  assert.equal(order.onHandGrams(squash, '').text, '');
+  assert.equal(order.onHandGrams(squash, 10).text, '4,536 g');
   const parsley = built.items.bek__160016;
   assert.equal(order.onHandGrams(parsley, 1).text, '78 g');
   assert.equal(order.onHandGrams(parsley, '').text, '');
   assert.equal(order.onHandGrams(Object.assign({}, parsley, { lbPerUnit: 0.25 }), 1).text, '113 g');
   assert.equal(fs.readFileSync(path.join(root, 'zedops', 'weekly-page.js'), 'utf8').includes("itemNumber === '160016'"), true);
-  assert.equal(order.onHandGrams(Object.assign({}, squash, { lbPerUnit: 10 }), 1).text, '4,536 g');
+  assert.equal(order.onHandGrams(Object.assign({}, squash, { lbPerUnit: 10 }), 1).text, '454 g');
   assert.equal(order.onHandGrams(built.items.bek__483810, 1).text, '1,950 g');
   assert.equal(order.onHandGrams(egg, '').text, '');
 

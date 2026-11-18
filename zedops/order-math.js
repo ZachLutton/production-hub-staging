@@ -154,6 +154,7 @@
     }
     if (number === '028201') return 'jug';
     if (number === '774477') return 'container';
+    if (number === '200305') return 'lb';
     var chosen = item && item.countUnitChosen && item.countUnit;
     // A gallon jug saved as "each" is still a liquid. Count it in the pack's volume, like lemon juice.
     var eachOnLiquid = chosen && canonUnit(item.countUnit) === 'ea' && volumePackOf(item);

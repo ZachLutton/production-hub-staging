@@ -447,6 +447,7 @@ test('gallon, carton, and chip rows order in the count unit', () => {
   assert.equal(order.orderExplain(mashed, mashedNeed, 1), '149.3 lb need − 1 lb on hand = 148.3 lb ÷ 24 lb/cs → 7 cs');
   const squash = catalog.items.bek__200305;
   assert.equal(squash.pack, '1 / 1 CS');
+  assert.equal(order.canonUnit(order.resolvedCountUnit(squash)), 'lb');
   assert.equal(order.resolvedOrderUnit(squash), 'lb');
   const squashNeed = { quantity: 27.7, unit: 'lb', source: 'recipe' };
   assert.deepEqual(order.orderResult(squash, squashNeed, 0), { amount: 27.7, unit: 'lb' });
