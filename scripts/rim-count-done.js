@@ -111,8 +111,12 @@ async function main() {
     credential: admin.credential.cert(serviceAccount),
     databaseURL: STAGING_DATABASE
   });
-  const posted = await publishPending(admin.database(), webhook);
-  console.log(posted.length ? 'Posted ' + posted.join(', ') : 'No new Rim completion.');
+  try {
+    const posted = await publishPending(admin.database(), webhook);
+    console.log(posted.length ? 'Posted ' + posted.join(', ') : 'No new Rim completion.');
+  } finally {
+    await admin.app().delete();
+  }
 }
 
 module.exports = {
@@ -124,7 +128,9 @@ module.exports = {
 };
 
 if (require.main === module) {
-  main().catch(function (err) {
+  main().then(function () {
+    process.exit(0);
+  }).catch(function (err) {
     console.error(err);
     process.exit(1);
   });

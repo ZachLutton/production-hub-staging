@@ -61,4 +61,8 @@ test('the staging reminder has no schedule and the completion check stays on sta
   assert.equal(script.includes('process.env.SLACK_WEBHOOK_URL'), false);
   assert.equal(script.includes('process.env.ZEDOPS_STAGING_SERVICE_ACCOUNT'), true);
   assert.equal(script.includes('FIREBASE_SERVICE_ACCOUNT'), false);
+  assert.equal(script.includes('admin.app().delete()'), true);
+  assert.equal(script.includes('process.exit(0)'), true);
+  assert.equal(script.includes('process.exit(1)'), true);
+  assert.equal(ping.includes('timeout-minutes: 5'), true);
 });
