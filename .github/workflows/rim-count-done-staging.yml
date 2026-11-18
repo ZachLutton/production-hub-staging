@@ -1,0 +1,36 @@
+name: Staging Rim count completion
+
+# Every 15 minutes Monday and Tuesday, America/Chicago.
+# GitHub cron is UTC. Central Standard Time is UTC-6, so Monday 00:00 CT
+# through Tuesday 23:45 CT is Monday 06:00 UTC through Wednesday 05:45 UTC.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/15 6-23 * * 1'
+    - cron: '*/15 * * * 2'
+    - cron: '*/15 0-5 * * 3'
+
+jobs:
+  ping:
+    if: github.repository == 'ZachLutton/production-hub-staging'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # main holds only this workflow; the checker code lives on the staging branch.
+          ref: cursor/feat-plate-split-56a8
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install firebase-admin
+        working-directory: scripts
+        run: npm install --no-save firebase-admin@^12.0.0
+
+      - name: Post new Rim completions
+        working-directory: scripts
+        env:
+          SLACK_DONE_WEBHOOK_URL: ${{ secrets.SLACK_DONE_WEBHOOK_URL }}
+          ZEDOPS_STAGING_SERVICE_ACCOUNT: ${{ secrets.ZEDOPS_STAGING_SERVICE_ACCOUNT }}
+        run: node rim-count-done.js
