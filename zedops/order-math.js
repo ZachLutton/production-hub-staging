@@ -650,6 +650,7 @@
     if (number === '028201') return 0.5 * (lbPerOf('gal', item.lbPerUnit, item) || 8.6);
     if (number === '121792') return 5 / 16;
     if (number === '558188') return 0.75;
+    if (number === '160016') return 78 / 453.6;
     var named = namePortionLb(item);
     var sized = packAmount(item.pack);
     if (named > 0 && sized && sized.unit === 'lb' && sized.perCase > named) return named;

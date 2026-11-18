@@ -1245,11 +1245,11 @@
     var canLb = ZedOrder.canEachLb(item && item.pack);
     var showCanEach = food && ZedOrder.canonUnit(countedUnit) === 'ea' && canLb > 0;
     var missingWeight = food && ZedOrder.onHandGrams(item, 1).status === 'missing';
-    var showPieceAverage = state.role === 'admin' && (item.itemNumber === '121792' || item.itemNumber === '558188' || (missingWeight && (ZedOrder.isPieceCountUnit(countNow) || countNow === 'case')));
+    var showPieceAverage = state.role === 'admin' && (item.itemNumber === '121792' || item.itemNumber === '558188' || item.itemNumber === '160016' || (missingWeight && (ZedOrder.isPieceCountUnit(countNow) || countNow === 'case')));
     var showDensity = state.role === 'admin' && food && (ZedOrder.isVolumeUnit(countedUnit) || showCanEach);
     var density = '';
     if (showPieceAverage) {
-      var pieceDefault = item.itemNumber === '121792' ? 5 / 16 : (item.itemNumber === '558188' ? 0.75 : '');
+      var pieceDefault = item.itemNumber === '121792' ? 5 / 16 : (item.itemNumber === '558188' ? 0.75 : (item.itemNumber === '160016' ? 0.172 : ''));
       var pieceSaved = Number(item.lbPerUnit) > 0 ? item.lbPerUnit : '';
       var pieceLabel = countNow === 'case' ? 'lb per case' : 'lb per piece';
       density = '<label>' + pieceLabel + ' <input data-lb-per="' + esc(row.id) + '" type="number" min="0" step="any" inputmode="decimal" placeholder="' + pieceDefault + '" aria-label="' + pieceLabel + ' for ' + esc(item.name) + '" value="' + (pieceSaved === '' ? '' : esc(pieceSaved)) + '"></label><span class="field-note" data-lb-note="' + esc(row.id) + '"></span>';

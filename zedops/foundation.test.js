@@ -257,8 +257,8 @@ test('the count week is the Tuesday it is due, in Chicago, and prices wait for t
   assert.equal(page.indexOf('id="recipeTools"') < page.indexOf('id="storeView"'), true);
   assert.equal(page.indexOf('id="orderSummary"') < page.indexOf('id="storeView"'), true);
   assert.equal(page.indexOf('id="storeView"') < page.indexOf('id="adminTools"'), true);
-  assert.equal(page.includes('Build 20261104bb'), true);
-  assert.equal(page.includes('weekly-page.js?v=20261104bb'), true);
+  assert.equal(page.includes('Build 20261104bc'), true);
+  assert.equal(page.includes('weekly-page.js?v=20261104bc'), true);
   assert.equal(page.includes('id="pdfOnHand"'), true);
   assert.equal(page.includes('button:disabled'), true);
   assert.equal(page.includes('id="plateFile"'), true);
@@ -397,6 +397,11 @@ test('a downloaded PDF is a real PDF and a spreadsheet keeps a leading zero', as
   assert.equal(order.onHandGrams(cup, 2).text, '\u2014');
   assert.equal(order.onHandGrams(cup, '').text, '');
   assert.equal(order.onHandGrams(squash, '').status, 'missing');
+  const parsley = built.items.bek__160016;
+  assert.equal(order.onHandGrams(parsley, 1).text, '78 g');
+  assert.equal(order.onHandGrams(parsley, '').text, '');
+  assert.equal(order.onHandGrams(Object.assign({}, parsley, { lbPerUnit: 0.25 }), 1).text, '113 g');
+  assert.equal(fs.readFileSync(path.join(root, 'zedops', 'weekly-page.js'), 'utf8').includes("itemNumber === '160016'"), true);
   assert.equal(order.onHandGrams(Object.assign({}, squash, { lbPerUnit: 10 }), 1).text, '4,536 g');
   assert.equal(order.onHandGrams(built.items.bek__483810, 1).text, '1,950 g');
   assert.equal(order.onHandGrams(egg, '').text, '');
