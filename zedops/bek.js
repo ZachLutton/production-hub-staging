@@ -44,6 +44,7 @@
 
   function defaultCountUnit(pack, name) {
     if (/squash spaghetti|spaghetti squash/i.test(String(name || ''))) return 'pound';
+    if (/parsley italian|italian flat leaf/i.test(String(name || ''))) return 'bunch';
     if (/kosher salt|salt sea kosher/i.test(String(name || ''))) return 'each';
     if (/glaze/i.test(String(name || '')) && /balsamic/i.test(String(name || ''))) return 'each';
     var text = String(pack || '');

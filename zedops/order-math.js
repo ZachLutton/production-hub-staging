@@ -19,6 +19,7 @@
     carton: 'carton', cartons: 'carton', tub: 'tub', tubs: 'tub',
     bag: 'bag', bags: 'bag', jug: 'jug', jugs: 'jug',
     bottle: 'bottle', bottles: 'bottle', container: 'container', containers: 'container',
+    bunch: 'bunch', bunches: 'bunch',
     case: 'case', cs: 'case'
   };
   // How many of that unit are in one gallon. Milk and water are about 8.6 lb per gallon.
@@ -54,7 +55,7 @@
 
   function isPieceCountUnit(unit) {
     var key = canonUnit(unit);
-    return key === 'ea' || key === 'jar' || key === 'can' || key === 'carton' || key === 'tub' || key === 'bag' || key === 'jug' || key === 'bottle' || key === 'container';
+    return key === 'ea' || key === 'jar' || key === 'can' || key === 'carton' || key === 'tub' || key === 'bag' || key === 'jug' || key === 'bottle' || key === 'container' || key === 'bunch';
   }
 
   function isVolumeUnit(unit) {
@@ -155,6 +156,11 @@
     if (number === '028201') return 'jug';
     if (number === '774477') return 'container';
     if (number === '200305') return 'lb';
+    if (number === '160016') {
+      var parsleyPick = item && item.countUnitChosen ? canonUnit(item.countUnit) : '';
+      if (parsleyPick && parsleyPick !== 'ea') return item.countUnit;
+      return 'bunch';
+    }
     var chosen = item && item.countUnitChosen && item.countUnit;
     // A gallon jug saved as "each" is still a liquid. Count it in the pack's volume, like lemon juice.
     var eachOnLiquid = chosen && canonUnit(item.countUnit) === 'ea' && volumePackOf(item);
@@ -237,6 +243,7 @@
     if (isChipBag(item)) return chipBagLb();
     var unit = countUnit ? canonUnit(countUnit) : resolvedCountUnit(item);
     if (item && Number(item.lbPerUnit) > 0 && isPieceCountUnit(unit)) return Number(item.lbPerUnit);
+    if (String(item && item.itemNumber || '') === '160016' && (isPieceCountUnit(unit) || unit === 'bunch')) return 78 / 453.6;
     if (isPieceCountUnit(unit)) {
       var named = namePortionLb(item);
       var pack = packAmount(item && item.pack);
@@ -483,7 +490,7 @@
 
   function pieceNoun(item, piecePack) {
     var word = countWord(item);
-    if (word === 'patty' || word === 'breast' || word === 'carton' || word === 'jar' || word === 'can' || word === 'tub' || word === 'bag' || word === 'container') return word;
+    if (word === 'patty' || word === 'breast' || word === 'bunch' || word === 'carton' || word === 'jar' || word === 'can' || word === 'tub' || word === 'bag' || word === 'container') return word;
     if (isJarSpice(item)) return word;
     if (piecePack && piecePack.canSize) return 'can';
     if (/egg white/i.test(String(item && item.name || ''))) return 'carton';
@@ -510,7 +517,7 @@
       result.convertedUnit = 'oz';
       return result;
     }
-    if (canonUnit(unit) === 'ea') {
+    if (canonUnit(unit) === 'ea' || canonUnit(unit) === 'bunch') {
       var volPack = volumePackOf(item);
       if (volPack && volPack.each > 0) {
         result.convertedQuantity = needInCountUnit(result.quantity, result.unit, volPack.unit, result.eachFactor, item && item.lbPerUnit, item);
@@ -854,7 +861,7 @@
   function countWord(item) {
     var number = String(item && item.itemNumber || '');
     var unit = canonUnit(resolvedCountUnit(item));
-    if (unit === 'jar' || unit === 'can' || unit === 'carton' || unit === 'tub' || unit === 'bag' || unit === 'jug' || unit === 'bottle' || unit === 'container') return unit;
+    if (unit === 'jar' || unit === 'can' || unit === 'carton' || unit === 'tub' || unit === 'bag' || unit === 'jug' || unit === 'bottle' || unit === 'container' || unit === 'bunch') return unit;
     if (number === '800401') return 'bag';
     if (number === '185095') return 'patty';
     if (number === '211262') return 'breast';
@@ -873,6 +880,17 @@
   function orderExplain(item, need, onHand) {
     if (!need || !item) return '';
     var result = orderResult(item, need, onHand);
+    if (!pieceOrder(need) && String(item && item.itemNumber || '') === '160016' && canonUnit(resolvedCountUnit(item)) === 'bunch' && canonUnit(need.unit) === 'lb') {
+      var bunchLb = averagePieceLb(item) || (78 / 453.6);
+      var needBunches = (Number(need.quantity) || 0) / bunchLb;
+      var heldBunches = onHand == null || onHand === '' ? 0 : Number(onHand) || 0;
+      var leftBunches = needBunches - heldBunches;
+      if (!(leftBunches > 0)) leftBunches = 0;
+      var bunchCase = piecesInCase(item) || 12;
+      return roundApprox(need.quantity) + ' lb need = ' + roundApprox(needBunches) + ' bunch × 78 g. '
+        + roundApprox(needBunches) + ' bunch need − ' + explainQty(heldBunches) + ' bunch on hand = '
+        + roundApprox(leftBunches) + ' bunch ÷ ' + explainQty(bunchCase) + ' bunch/cs → ' + result.amount + ' cs';
+    }
     if (!pieceOrder(need) && String(item && item.itemNumber || '') === '028201' && canonUnit(need.unit) === 'lb') {
       var jugLb = averagePieceLb(item) || 4.3;
       var jugsHeld = onHand == null || onHand === '' ? 0 : Number(onHand) || 0;

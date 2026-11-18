@@ -221,6 +221,7 @@
   var CHIP_ID = 'bek__800401';
   var LEMON_ID = 'bek__028201';
   var SEASON_ID = 'bek__774477';
+  var PARSLEY_ID = 'bek__160016';
   function convertedCount(id, raw) {
     if (raw == null || raw === '') return null;
     if (typeof raw === 'object') {
@@ -239,7 +240,7 @@
     return number;
   }
   function rememberConverted(bag) {
-    [CHIP_ID, LEMON_ID, SEASON_ID].forEach(function (id) {
+    [CHIP_ID, LEMON_ID, SEASON_ID, PARSLEY_ID].forEach(function (id) {
       if (!bag || bag[id] == null) return;
       var next = convertedCount(id, bag[id]);
       if (next == null) return;
@@ -257,6 +258,14 @@
           if (typeof row[CHIP_ID] === 'number') jobs.push(ZedStorage.setOnHand(db, loc, week, CHIP_ID, ZedOrder.bagsFromPounds(row[CHIP_ID]), 'each'));
           if (typeof row[LEMON_ID] === 'number') jobs.push(ZedStorage.setOnHand(db, loc, week, LEMON_ID, row[LEMON_ID] / 0.5, 'jug'));
           if (typeof row[SEASON_ID] === 'number') jobs.push(ZedStorage.setOnHand(db, loc, week, SEASON_ID, Math.round(row[SEASON_ID] / 1.5 * 1000) / 1000, 'container'));
+          var parsley = row[PARSLEY_ID];
+          var parsleyBunches = null;
+          if (typeof parsley === 'number' && isFinite(parsley)) parsleyBunches = parsley;
+          else if (parsley && typeof parsley === 'object') {
+            var parsleyUnit = String(parsley.unit || '').toLowerCase();
+            if (parsleyUnit === 'each' || parsleyUnit === 'ea' || parsleyUnit === '') parsleyBunches = Number(parsley.value);
+          }
+          if (parsleyBunches != null && isFinite(parsleyBunches)) jobs.push(ZedStorage.setOnHand(db, loc, week, PARSLEY_ID, parsleyBunches, 'bunch'));
         });
       });
       return Promise.all(jobs);
@@ -267,7 +276,7 @@
     if (!loc) return null;
     var bag = (state.hands && state.hands[loc.id]) || (loc.id === state.locationId ? state.onHand : {});
     if (bag && bag[row.id] != null && bag[row.id] !== '') {
-      if (row.id === CHIP_ID || row.id === LEMON_ID || row.id === SEASON_ID) {
+      if (row.id === CHIP_ID || row.id === LEMON_ID || row.id === SEASON_ID || row.id === PARSLEY_ID) {
         if (typeof bag[row.id] === 'number') return bag[row.id];
         return convertedCount(row.id, bag[row.id]);
       }
@@ -1219,7 +1228,7 @@
     var needText = needBlock(row, loc);
     var temp = item.temporary ? ' <span class="temp-badge">TEMPORARY</span>' : '';
     var food = ZedOrder.isFoodItem(item);
-    var countChoices = ['each', 'bag', 'jug', 'tub', 'jar', 'can', 'carton', 'bottle', 'container', 'case', 'lb', 'gal', 'oz'];
+    var countChoices = ['each', 'bunch', 'bag', 'jug', 'tub', 'jar', 'can', 'carton', 'bottle', 'container', 'case', 'lb', 'gal', 'oz'];
     var countNow = String(ZedOrder.resolvedCountUnit(item) || 'each').toLowerCase();
     if (countNow === 'pound' || countNow === 'pounds') countNow = 'lb';
     if (countNow === 'gallon' || countNow === 'gallons') countNow = 'gal';
@@ -1281,7 +1290,7 @@
     return '<tr' + (warn.flagged ? ' class="order-flag"' : '') + '><td class="item-num">' + esc(item.itemNumber || 'no BEK #') + '</td><td><div class="item-name">' +
       esc(item.name) + temp + '</div><div class="item-brand">' + esc(item.brand || '') + '</div>' + weightLine + '</td><td>' + esc(item.pack || '') +
       '</td><td class="need-cell" data-need-for="' + esc(row.id) + '">' + needText + '</td><td><input class="onhand-input" data-hand="' + esc(row.id) + '" type="number" min="0" step="any" inputmode="decimal" aria-label="On hand ' + esc(item.name) + ' in ' + esc(countNow) + '" value="' +
-      (hand == null ? '' : esc(hand)) + '">' + gramsNote + '</td><td class="need-order">' + esc(orderLabel(ordered)) + warnLine + '</td></tr>' +
+      (hand == null ? '' : esc(hand)) + '">' + (countNow === 'bunch' ? '<span class="hand-unit">bunch</span>' : '') + gramsNote + '</td><td class="need-order">' + esc(orderLabel(ordered)) + warnLine + '</td></tr>' +
       controls;
   }
 
@@ -1662,7 +1671,7 @@
     var id = input.dataset.hand;
     var raw = input.value.trim();
     if (!state.hands[state.locationId]) state.hands[state.locationId] = {};
-    var countedUnit = id === CHIP_ID ? 'each' : (id === LEMON_ID ? 'jug' : (id === SEASON_ID ? 'container' : ''));
+    var countedUnit = id === CHIP_ID ? 'each' : (id === LEMON_ID ? 'jug' : (id === SEASON_ID ? 'container' : (id === PARSLEY_ID ? 'bunch' : '')));
     if (raw === '') {
       delete state.onHand[id];
       delete state.hands[state.locationId][id];
