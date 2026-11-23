@@ -298,7 +298,7 @@
     var name = fold(line && line.name);
     if (name === 'red onion') return 'bek__182907';
     // The long USDA brisket line is the 70 lb meat, not a spice that happened to match the item.
-    if (/beef brisket|brisket whole/.test(name)) return 'bek__500370';
+    if (brisketMeatName(line) && (Number(line.pounds) || 0) >= 1) return 'bek__500370';
     if (/blackened redfish|blackening seasoning|blackened seasoning|chef paul prudhomme/.test(name)) return 'bek__774477';
     if (/baking powder/.test(name)) return 'bek__696005';
     if (/baking soda/.test(name)) return 'bek__696131';
@@ -314,21 +314,63 @@
     return nameKey && matches[nameKey] ? matches[nameKey] : null;
   }
 
-  function isBrisketMeat(line) {
+  function brisketMeatName(line) {
     return /beef brisket|brisket whole/.test(fold(line && line.name));
   }
 
+  // A real brisket line is the USDA meat, and it weighs pounds, not a pinch.
+  function isBrisketMeat(line) {
+    return brisketMeatName(line) && (Number(line && line.pounds) || 0) >= 1;
+  }
+
+  // Pepper, salt, and rubs are never the meat. This does not change where the spice itself is ordered.
+  function isSeasoningLine(line) {
+    if (!line || isBrisketMeat(line)) return false;
+    var name = fold(line.name);
+    if (!name) return false;
+    return /\bpeppers?\b|\bsalt\b|\brubs?\b|\bseasonings?\b|\bspices?\b|\bpaprika\b|\bcumin\b|\bchili powder\b|\boregano\b|\bthyme\b|\bcinnamon\b/.test(name);
+  }
+
+  function isMeatItem(item) {
+    var name = fold(item && item.name);
+    if (!name) return false;
+    return /\bbeef\b|\bbrisket\b|\bchicken\b|\bpork\b|\bturkey\b|\bsalmon\b|\bmahi\b|\bsteak\b|\bmeatball\b|\bcod\b|\bbacon\b/.test(name);
+  }
+
+  // Nov 4 scaled recipe: "Beef, brisket, whole, separable lean only, trimmed to 0" fat, all grades, cooked, braised" is 32,118.3 g = 70.8 lb.
+  var BRISKET_LIBRARY = {
+    name: 'Beef, brisket, whole, separable lean only, trimmed to 0" fat, all grades, cooked, braised',
+    pounds: 70.8,
+    grams: 32118.3,
+    where: 'Nov 4 scaled recipe'
+  };
+
   function recipeOwner(line, matches) {
-    var pounds = Number(line && line.pounds) || 0;
-    if (isBrisketMeat(line)) return 'bek__500370';
     var saved = savedMatch(line, matches);
     if (saved && saved.hideMode === 'ignore') return '';
-    if (saved && saved.catalogId === 'bek__500370' && pounds < 1) return '';
-    if (saved && saved.catalogId) return saved.catalogId;
-    var forced = forcedRecipeItemId(line);
-    if (forced) return forced;
-    if (line && line.catalogId === 'bek__500370' && pounds < 1) return '';
-    return (line && line.catalogId) || '';
+    if (isBrisketMeat(line)) return 'bek__500370';
+    var savedId = saved && saved.catalogId ? saved.catalogId : '';
+    if (!(savedId)) {
+      var forced = forcedRecipeItemId(line);
+      savedId = forced || (line && line.catalogId) || '';
+    }
+    if (isSeasoningLine(line) && savedId === 'bek__500370') return '';
+    return savedId;
+  }
+
+  function brisketImplicated(lines, matches) {
+    var hit = false;
+    Object.keys(lines || {}).forEach(function (key) {
+      if (key === '_meta') return;
+      var line = lines[key];
+      if (!line) return;
+      var row = Object.assign({ key: key }, line);
+      if (brisketMeatName(row)) hit = true;
+      var saved = savedMatch(row, matches);
+      if (saved && saved.catalogId === 'bek__500370') hit = true;
+      if (row.catalogId === 'bek__500370') hit = true;
+    });
+    return hit;
   }
 
   function recipeLineFor(item, lines, matches) {
@@ -336,28 +378,42 @@
     var unit = 'lb';
     var eachFactor = null;
     var hit = false;
-    var brisket = item && item.id === 'bek__500370';
+    var brisket = item && (item.id === 'bek__500370' || String(item.itemNumber || '') === '500370');
+    var meatName = '';
     var rows = [];
     Object.keys(lines || {}).forEach(function (key) {
       if (key === '_meta') return;
       var line = lines[key];
       if (!line) return;
-      var owner = recipeOwner(Object.assign({ key: key }, line), matches);
+      var row = Object.assign({ key: key }, line);
+      var owner = recipeOwner(row, matches);
       if (!item || owner !== item.id) return;
-      rows.push(line);
+      if (isSeasoningLine(row) && isMeatItem(item)) return;
+      rows.push(row);
     });
-    var keepSmall = true;
-    if (brisket && rows.some(function (line) { return Number(line.pounds) >= 1; })) keepSmall = false;
     rows.forEach(function (line) {
       var rowLb = Number(line.pounds) || 0;
-      if (!keepSmall && rowLb < 1) return;
+      if (!(rowLb > 0)) return;
+      if (brisket && !isBrisketMeat(line)) return;
       pounds += rowLb;
       unit = line.unit || unit;
       if (line.eachFactor) eachFactor = Number(line.eachFactor);
+      if (line.name) meatName = line.name;
       hit = true;
     });
-    if (!hit || !(pounds > 0)) return null;
-    return { pounds: Math.round(pounds * 1000) / 1000, unit: unit, eachFactor: eachFactor };
+    if (hit && pounds > 0) {
+      var reason = brisket ? 'This week\'s scaled recipe · ' + (meatName || 'brisket meat') : '';
+      return { pounds: Math.round(pounds * 1000) / 1000, unit: unit, eachFactor: eachFactor, reason: reason };
+    }
+    if (brisket && brisketImplicated(lines, matches)) {
+      return {
+        pounds: BRISKET_LIBRARY.pounds,
+        unit: 'lb',
+        eachFactor: null,
+        reason: BRISKET_LIBRARY.where + ' · ' + BRISKET_LIBRARY.name + ' · ' + String(BRISKET_LIBRARY.grams).replace(/\B(?=(\d{3})+(?!\d))/g, ',') + ' g'
+      };
+    }
+    return null;
   }
 
   function isPantryLiquid(item) {
@@ -1764,6 +1820,9 @@
     isPantryLiquid: isPantryLiquid,
     usesSuggestedRecipe: usesSuggestedRecipe,
     forcedRecipeItemId: forcedRecipeItemId,
+    isSeasoningLine: isSeasoningLine,
+    isMeatItem: isMeatItem,
+    brisketLibrary: function () { return { name: BRISKET_LIBRARY.name, pounds: BRISKET_LIBRARY.pounds, grams: BRISKET_LIBRARY.grams, where: BRISKET_LIBRARY.where }; },
     recipeLineFor: recipeLineFor,
     isGlazeSauceOrCondiment: isGlazeSauceOrCondiment,
     isPortionPacket: isPortionPacket,

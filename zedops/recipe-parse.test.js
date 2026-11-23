@@ -73,11 +73,29 @@ test('scaled recipe uses raw weights and does not double count', () => {
     garnish: { name: 'Kosher Salt', pounds: 0.2, catalogId: 'bek__500370', unit: 'lb' },
     meat: { name: brisketMeat.name, pounds: 70.8, catalogId: 'bek__774055', unit: 'lb' }
   };
-  assert.equal(order.recipeLineFor(brisketItem, brisketLines).pounds, 70.8);
+  const weekMeat = order.recipeLineFor(brisketItem, brisketLines);
+  assert.equal(weekMeat.pounds, 70.8);
+  assert.equal(weekMeat.reason.indexOf('This week\'s scaled recipe') >= 0, true);
   assert.equal(order.recipeLineFor({ id: 'bek__774055', name: 'Oregano Leaves' }, brisketLines), null);
   const pepperOnly = { pepper: { name: 'Spices, pepper, black', pounds: 0.1, catalogId: 'bek__500370', unit: 'lb' } };
   const pepperMap = { spices_pepper_black: { catalogId: 'bek__500370' } };
-  assert.equal(order.recipeLineFor(brisketItem, pepperOnly, pepperMap), null);
+  const fromLibrary = order.recipeLineFor(brisketItem, pepperOnly, pepperMap);
+  assert.equal(fromLibrary.pounds, 70.8);
+  assert.equal(fromLibrary.reason.indexOf('Nov 4 scaled recipe') >= 0, true);
+  assert.equal(fromLibrary.reason.indexOf('32,118.3 g') >= 0, true);
+  const pepperTotal = { pepper: { name: 'Spices, pepper, black', pounds: 2.494, catalogId: 'bek__500370', unit: 'lb' } };
+  assert.equal(order.recipeLineFor(brisketItem, pepperTotal, pepperMap).pounds, 70.8);
+  const tinyMeat = { bit: { name: brisketMeat.name, pounds: 0.1, catalogId: 'bek__500370', unit: 'lb' } };
+  assert.equal(order.recipeLineFor(brisketItem, tinyMeat).pounds, 70.8);
+  const otherWeek = { meat: { name: brisketMeat.name, pounds: 80, catalogId: 'bek__774055', unit: 'lb' } };
+  assert.equal(order.recipeLineFor(brisketItem, otherWeek).pounds, 80);
+  const riceOnly = { rice: { name: 'Rice, white, cooked', pounds: 12, catalogId: 'bek__654028', unit: 'lb' } };
+  assert.equal(order.recipeLineFor(brisketItem, riceOnly), null);
+  const chicken = { id: 'bek__211262', itemNumber: '211262', name: 'Chicken Breast 4 Oz Blsl Fresh' };
+  assert.equal(order.recipeLineFor(chicken, pepperOnly, { pepper: { catalogId: 'bek__211262' } }), null);
+  const library = order.brisketLibrary();
+  assert.equal(library.pounds, brisketMeat.pounds);
+  assert.equal(library.grams, brisketMeat.grams);
   const patty = Object.assign({}, bek.buildCatalog(require('./seed.json')).items.bek__185095, { countUnit: 'each' });
   const pattyNeed = order.orderNeed(patty, { recipe: { quantity: 47.5, unit: 'lb' }, countUnit: 'each' });
   assert.equal(order.needText(pattyNeed), '47.5 lb ≈ 190 patties');

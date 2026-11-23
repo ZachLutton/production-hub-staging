@@ -412,7 +412,13 @@
   function recipeNeed(item) {
     var found = ZedOrder.recipeLineFor(item, recipeForOrder(), state.matches);
     if (!found) return null;
-    return { quantity: found.pounds, unit: found.unit || 'lb', eachFactor: found.eachFactor };
+    return {
+      quantity: found.pounds,
+      unit: found.unit || 'lb',
+      eachFactor: found.eachFactor,
+      source: 'recipe',
+      reason: found.reason || ''
+    };
   }
   function plateSummaryNow() {
     if (!state.plate || !(Number(state.plate.totalCook) >= 0)) return null;
@@ -465,6 +471,7 @@
     var qty = 0;
     (state.pendingRecipe.purchases || []).forEach(function (row) {
       if (row.hideMode === 'ignore' || row.catalogId !== item.id) return;
+      if (ZedOrder.isSeasoningLine(row) && ZedOrder.isMeatItem(item)) return;
       qty += Number(row.pounds) || 0;
     });
     return qty;
@@ -476,7 +483,7 @@
     var recipe = onHub && !supplyChoice ? recipeNeed(row.item) : null;
     var pending = onHub && !supplyChoice ? pendingPounds(row.item) : 0;
     if (pending > 0 && (!recipe || pending > (Number(recipe.quantity) || 0))) {
-      recipe = { quantity: pending, unit: 'lb', eachFactor: null };
+      recipe = { quantity: pending, unit: 'lb', eachFactor: null, source: 'recipe', reason: recipe && recipe.reason || '' };
     }
     var garnish = onHub && !supplyChoice ? garnishFor(row.item) : null;
     if (garnish && garnish.pounds > 0) {
