@@ -334,6 +334,12 @@ test('cases always round up and an exact case does not', () => {
   const taco = { cookKnown: true, cookNames: ['Chipotle Honey Lime Fish Taco Bowl'] };
   assert.equal(order.recipeLineFor(slabItem, swappedLines, swappedMap, taco).pounds, 1.5);
   assert.equal(order.cookUsesPickledOnion(['Pickled Red Onion']), true);
+  assert.equal(order.countGuideVisible(slabItem, { cookKnown: true, cookNames: ['Greek Chicken Bowl'], need: 0, order: 0 }), false);
+  assert.equal(order.countGuideVisible(slabItem, { cookKnown: true, cookNames: ['Pickled Red Onion'], need: 0, order: 0 }), true);
+  assert.equal(order.countGuideVisible(dicedItem, { cookKnown: true, cookNames: ['Greek Chicken Bowl'], need: 21.8, order: 3 }), true);
+  const guidePage = fs.readFileSync(path.join(__dirname, 'weekly-page.js'), 'utf8');
+  assert.equal(guidePage.includes('bek__231714'), true);
+  assert.equal(guidePage.includes('withDicedOnion'), true);
   const cod = { id: 'bek__555070', itemNumber: '555070', name: 'Cod Loin 4 oz Skinless Pacific', pack: '1 / 10 lb' };
   const codLines = { fish: { name: 'Fish, cod, Atlantic, raw', pounds: 21.9, catalogId: 'bek__555070', unit: 'lb' } };
   assert.equal(order.recipeLineFor(cod, codLines).pounds, 21.9);

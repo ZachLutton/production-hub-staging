@@ -157,6 +157,39 @@
     }).catch(showError);
   }
 
+  function dicedOnionRow() {
+    var item = state.catalog && state.catalog.items && state.catalog.items.bek__231714;
+    if (!item || !ZedBek.isShown(item)) return null;
+    return { id: 'bek__231714', item: item, legacyKey: '', section: item.label || 'Produce', source: 'guide' };
+  }
+  function withDicedOnion(rows) {
+    var list = rows || [];
+    var has = false;
+    list.forEach(function (row) {
+      if (row && (row.id === 'bek__231714' || (row.item && String(row.item.itemNumber || '') === '231714'))) has = true;
+    });
+    if (has) return list;
+    var made = dicedOnionRow();
+    if (!made) return list;
+    var at = -1;
+    list.forEach(function (row, index) {
+      if (row && (row.id === 'bek__182907' || (row.item && String(row.item.itemNumber || '') === '182907'))) at = index;
+    });
+    if (at >= 0) list.splice(at, 0, made);
+    else list.push(made);
+    return list;
+  }
+  function idleSlab(row) {
+    if (!row || !row.item) return false;
+    var need = needFor(row, currentStore());
+    var ordered = orderFor(row, currentStore());
+    return !ZedOrder.countGuideVisible(row.item, {
+      cookKnown: !!state.cook,
+      cookNames: cookDishNames(),
+      need: need && need.quantity,
+      order: ordered && ordered.amount
+    });
+  }
   function rowsForStore(loc) {
     if (ZedLocations.listSourceOf(loc) === 'catalog') {
       var rows = [];
@@ -165,7 +198,7 @@
           rows.push({ id: item.id, item: item, legacyKey: '', section: item.label || '', source: shelf });
         });
       });
-      return Promise.resolve(rows);
+      return Promise.resolve(withDicedOnion(rows));
     }
     return ensureInventory(loc).then(function (raw) {
       var sections = ZedWeekly.sectionsFromSnapshot(raw || {});
@@ -1258,13 +1291,16 @@
       return;
     }
     var lines = [];
-    ZedCatalog.asList(state.catalog.shelf.guide).concat(ZedCatalog.asList(state.catalog.shelf.special)).forEach(function (id) {
+    var summaryIds = ZedCatalog.asList(state.catalog.shelf.guide).concat(ZedCatalog.asList(state.catalog.shelf.special));
+    if (summaryIds.indexOf('bek__231714') === -1 && state.catalog.items.bek__231714) summaryIds.push('bek__231714');
+    summaryIds.forEach(function (id) {
       var item = state.catalog.items[id];
       if (!item || !ZedBek.isShown(item) || item.kind === 'vendor_check') return;
       var row = { id: id, item: item, legacyKey: '', source: 'guide' };
+      if (idleSlab(row)) return;
       var need = needFor(row, loc);
       var ordered = orderFor(row, loc);
-      var used = ZedOrder.recipeLineFor(item, recipeForOrder(), state.matches);
+      var used = ZedOrder.recipeLineFor(item, recipeForOrder(), state.matches, { cookKnown: !!state.cook, cookNames: cookDishNames() });
       if (!(need && need.quantity > 0) && !(ordered.amount > 0) && !(used && ZedOrder.isFoodItem(item))) return;
       lines.push('<tr><td class="item-num">' + esc(item.itemNumber || 'no BEK #') + '</td><td>' + esc(item.name) + '</td><td class="need-cell">' +
         needBlock(row, loc) + '</td><td>' + esc(handLabel(row, loc)) + '</td><td class="need-order">' + esc(orderLabel(ordered)) + '</td></tr>');
@@ -1299,6 +1335,7 @@
     var groups = [];
     var index = {};
     state.rows.forEach(function (row) {
+      if (idleSlab(row)) return;
       var title = row.section || 'Items';
       if (row.source === 'special') title = 'Special Order (send direct to BEK rep)';
       if (row.source === 'vendorChecks') title = 'Other vendors';
@@ -1428,11 +1465,13 @@
     var list = stores();
     var hub = catalogStore();
     var ids = state.catalog ? ZedCatalog.asList(state.catalog.shelf.guide).concat(ZedCatalog.asList(state.catalog.shelf.special)) : [];
+    if (ids.indexOf('bek__231714') === -1 && state.catalog && state.catalog.items && state.catalog.items.bek__231714) ids.push('bek__231714');
     var head = list.map(function (loc) { return '<th>' + esc(loc.name) + ' need</th><th>' + esc(loc.name) + ' on hand</th>'; }).join('');
     var body = ids.map(function (id) {
       var item = state.catalog.items[id];
       if (!item || !ZedBek.isShown(item) || item.kind === 'vendor_check') return '';
       var row = { id: id, item: item, legacyKey: '', source: 'guide' };
+      if (idleSlab(row)) return '';
       var hubNeed = hub ? needFor(row, hub) : null;
       var listDriven = ZedOrder.isListDrivenSource(hubNeed && hubNeed.source);
       var hubOrder = hub && listDriven ? orderFor(row, hub) : null;
@@ -2410,13 +2449,17 @@
   function bekOrderLines() {
     var lines = [ZedBek.formatCycle(state.weekKey), 'Food need is the approved scaled recipe. Cups and lids from the plate list are included. Meal containers are not. Cases round up.', ''];
     var list = stores();
-    ZedCatalog.asList(state.catalog.shelf.guide).concat(ZedCatalog.asList(state.catalog.shelf.special)).forEach(function (id) {
+    var orderIds = ZedCatalog.asList(state.catalog.shelf.guide).concat(ZedCatalog.asList(state.catalog.shelf.special));
+    if (orderIds.indexOf('bek__231714') === -1 && state.catalog.items.bek__231714) orderIds.push('bek__231714');
+    orderIds.forEach(function (id) {
       var item = state.catalog.items[id];
       if (!item || !ZedBek.isShown(item) || item.kind === 'vendor_check') return;
       var parts = list.map(function (loc) {
         var row = { id: id, item: item, legacyKey: '', source: 'guide' };
+        if (idleSlab(row)) return '';
         return loc.name + ' ' + needLabel(needFor(row, loc)) + ', order ' + orderLabel(orderFor(row, loc));
-      });
+      }).filter(Boolean);
+      if (!parts.length) return;
       lines.push((item.itemNumber || 'no BEK #') + ' ' + item.name + ' | ' + parts.join(' | '));
     });
     return lines;
@@ -2487,6 +2530,7 @@
     var groups = [];
     var index = {};
     (state.rows || []).forEach(function (row) {
+      if (idleSlab(row)) return;
       var title = row.section || 'Items';
       if (row.source === 'special') title = 'Special Order (send direct to BEK rep)';
       if (row.source === 'vendorChecks') title = 'Other vendors';
@@ -2526,7 +2570,7 @@
         rows.push({ id: item.id, item: item, legacyKey: '', section: item.label || '', source: shelf });
       });
     });
-    return rows;
+    return withDicedOnion(rows);
   }
   function countSheetDate(loc) {
     var bags = [];
@@ -2616,6 +2660,7 @@
     var lines = ['Store: ' + (loc ? loc.name : ''), 'Item #    Name    Pack    On hand ________    Order ________', ''];
     var last = '';
     (state.rows || []).forEach(function (row) {
+      if (idleSlab(row)) return;
       if (row.section !== last) {
         lines.push(row.section || 'Items');
         last = row.section;

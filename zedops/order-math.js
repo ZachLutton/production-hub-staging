@@ -297,6 +297,17 @@
   // inside Pickled Red Onion is the slab. A saved match does not swap these two.
   // Pickled red onion is the slab. It is only cooked for the fish taco bowl.
   // Cod loin 555070 is the fish in the Chipotle Honey Fish Taco Bowl.
+  // The slab stays in the catalog, but it is not a count-guide row while nothing this week uses it.
+  function countGuideVisible(item, options) {
+    var opts = options || {};
+    var num = String(item && item.itemNumber || '');
+    var id = item && item.id;
+    if (num !== '182907' && id !== 'bek__182907') return true;
+    if (!(opts.cookKnown && !cookUsesPickledOnion(opts.cookNames))) return true;
+    if (Number(opts.need) > 0 || Number(opts.order) > 0) return true;
+    return false;
+  }
+
   function cookUsesCod(names) {
     return (names || []).some(function (name) {
       var text = fold(name);
@@ -1862,6 +1873,7 @@
     redOnionItemId: redOnionItemId,
     cookUsesPickledOnion: cookUsesPickledOnion,
     cookUsesCod: cookUsesCod,
+    countGuideVisible: countGuideVisible,
     isSeasoningLine: isSeasoningLine,
     isMeatItem: isMeatItem,
     brisketLibrary: function () { return { name: BRISKET_LIBRARY.name, pounds: BRISKET_LIBRARY.pounds, grams: BRISKET_LIBRARY.grams, where: BRISKET_LIBRARY.where }; },
