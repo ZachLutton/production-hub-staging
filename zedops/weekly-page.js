@@ -470,7 +470,10 @@
     if (!item || !state.pendingRecipe) return 0;
     var qty = 0;
     (state.pendingRecipe.purchases || []).forEach(function (row) {
-      if (row.hideMode === 'ignore' || row.catalogId !== item.id) return;
+      if (row.hideMode === 'ignore') return;
+      var onion = ZedOrder.redOnionItemId(row);
+      var owner = onion || row.catalogId;
+      if (owner !== item.id) return;
       if (ZedOrder.isSeasoningLine(row) && ZedOrder.isMeatItem(item)) return;
       qty += Number(row.pounds) || 0;
     });

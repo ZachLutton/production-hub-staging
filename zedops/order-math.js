@@ -293,10 +293,20 @@
     return /caramelized onion|onion caramelized/i.test(item.name || '');
   }
 
-  // "Red Onion" inside Pickled Red Onion defaults to the slab. A saved match wins over this.
+  // Diced red onion is always the diced BEK item. The bare "Red Onion" line
+  // inside Pickled Red Onion is the slab. A saved match does not swap these two.
+  function redOnionItemId(line) {
+    var name = fold(line && line.name);
+    if (!name) return '';
+    if (/diced red onion|red onion diced/.test(name) || (/diced/.test(name) && /red onion/.test(name))) return 'bek__231714';
+    if (name === 'red onion' || name === 'red onions') return 'bek__182907';
+    return '';
+  }
+
   function forcedRecipeItemId(line) {
     var name = fold(line && line.name);
-    if (name === 'red onion') return 'bek__182907';
+    var onion = redOnionItemId(line);
+    if (onion) return onion;
     // The long USDA brisket line is the 70 lb meat, not a spice that happened to match the item.
     if (brisketMeatName(line) && (Number(line.pounds) || 0) >= 1) return 'bek__500370';
     if (/blackened redfish|blackening seasoning|blackened seasoning|chef paul prudhomme/.test(name)) return 'bek__774477';
@@ -348,6 +358,8 @@
   function recipeOwner(line, matches) {
     var saved = savedMatch(line, matches);
     if (saved && saved.hideMode === 'ignore') return '';
+    var onion = redOnionItemId(line);
+    if (onion) return onion;
     if (isBrisketMeat(line)) return 'bek__500370';
     var savedId = saved && saved.catalogId ? saved.catalogId : '';
     if (!(savedId)) {
@@ -1820,6 +1832,7 @@
     isPantryLiquid: isPantryLiquid,
     usesSuggestedRecipe: usesSuggestedRecipe,
     forcedRecipeItemId: forcedRecipeItemId,
+    redOnionItemId: redOnionItemId,
     isSeasoningLine: isSeasoningLine,
     isMeatItem: isMeatItem,
     brisketLibrary: function () { return { name: BRISKET_LIBRARY.name, pounds: BRISKET_LIBRARY.pounds, grams: BRISKET_LIBRARY.grams, where: BRISKET_LIBRARY.where }; },

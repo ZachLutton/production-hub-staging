@@ -301,8 +301,24 @@ test('cases always round up and an exact case does not', () => {
     red_onion: { name: 'Red Onion', pounds: 1.5, catalogId: 'bek__231714', unit: 'lb' }
   };
   assert.equal(order.forcedRecipeItemId(savedLines.red_onion), 'bek__182907');
+  assert.equal(order.forcedRecipeItemId(savedLines.diced_red_onion), 'bek__231714');
   assert.equal(order.recipeLineFor({ id: 'bek__182907' }, savedLines).pounds, 1.5);
   assert.equal(order.recipeLineFor({ id: 'bek__231714' }, savedLines).pounds, 21.6);
+  const swappedLines = {
+    diced_red_onion: { name: 'Diced Red Onion', pounds: 21.8, catalogId: 'bek__182907', unit: 'lb' },
+    red_onion: { name: 'Red Onion', pounds: 1.5, catalogId: 'bek__231714', unit: 'lb' }
+  };
+  const swappedMap = {
+    diced_red_onion: { catalogId: 'bek__182907' },
+    red_onion: { catalogId: 'bek__231714' }
+  };
+  const slabItem = { id: 'bek__182907', itemNumber: '182907', name: slab.name, pack: slab.pack, countUnit: 'pound' };
+  const dicedItem = { id: 'bek__231714', itemNumber: '231714', name: dicedOnion.name, pack: dicedOnion.pack, countUnit: 'pound' };
+  assert.equal(order.recipeLineFor(slabItem, swappedLines, swappedMap).pounds, 1.5);
+  assert.equal(order.recipeLineFor(dicedItem, swappedLines, swappedMap).pounds, 21.8);
+  assert.equal(order.orderCases(dicedItem, { quantity: 21.8, unit: 'lb', source: 'recipe' }, 0), 3);
+  assert.equal(order.orderCases(slabItem, { quantity: 1.5, unit: 'lb', source: 'recipe' }, 0), 1);
+  assert.equal(order.redOnionItemId({ name: 'Red Onion, diced' }), 'bek__231714');
   assert.equal(order.usesSuggestedRecipe(Object.assign({ id: 'bek__182907' }, slab)), true);
   const marinara = { name: 'Sauce Marinara Rtu', pack: '6 / #10 CAN', countUnit: 'can', itemNumber: '660333', tempZone: 'Dry' };
   assert.equal(order.packAmount(marinara.pack).each, 6.5);
