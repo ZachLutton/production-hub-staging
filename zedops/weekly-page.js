@@ -481,6 +481,7 @@
       var owner = onion || row.catalogId;
       if (owner !== item.id) return;
       if (owner === 'bek__182907' && state.cook && !ZedOrder.cookUsesPickledOnion(cookDishNames())) return;
+      if ((item.id === 'bek__555070' || String(item.itemNumber || '') === '555070') && state.cook && !ZedOrder.cookUsesCod(cookDishNames())) return;
       if (ZedOrder.isSeasoningLine(row) && ZedOrder.isMeatItem(item)) return;
       qty += Number(row.pounds) || 0;
     });

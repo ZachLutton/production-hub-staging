@@ -296,6 +296,17 @@
   // Diced red onion is always the diced BEK item. The bare "Red Onion" line
   // inside Pickled Red Onion is the slab. A saved match does not swap these two.
   // Pickled red onion is the slab. It is only cooked for the fish taco bowl.
+  // Cod loin 555070 is the fish in the Chipotle Honey Fish Taco Bowl.
+  function cookUsesCod(names) {
+    return (names || []).some(function (name) {
+      var text = fold(name);
+      if (!text) return false;
+      if (text.indexOf('cod') !== -1) return true;
+      if (text.indexOf('fish taco') !== -1) return true;
+      return text.indexOf('chipotle honey') !== -1 && /fish|taco/.test(text);
+    });
+  }
+
   function cookUsesPickledOnion(names) {
     return (names || []).some(function (name) {
       var text = fold(name);
@@ -428,6 +439,8 @@
       var slab = item && (item.id === 'bek__182907' || String(item.itemNumber || '') === '182907');
       var opts = options || {};
       if (slab && opts.cookKnown && !cookUsesPickledOnion(opts.cookNames)) return null;
+      var cod = item && (item.id === 'bek__555070' || String(item.itemNumber || '') === '555070');
+      if (cod && opts.cookKnown && !cookUsesCod(opts.cookNames)) return null;
       var reason = brisket ? 'This week\'s scaled recipe · ' + (meatName || 'brisket meat') : '';
       return { pounds: Math.round(pounds * 1000) / 1000, unit: unit, eachFactor: eachFactor, reason: reason };
     }
@@ -1848,6 +1861,7 @@
     forcedRecipeItemId: forcedRecipeItemId,
     redOnionItemId: redOnionItemId,
     cookUsesPickledOnion: cookUsesPickledOnion,
+    cookUsesCod: cookUsesCod,
     isSeasoningLine: isSeasoningLine,
     isMeatItem: isMeatItem,
     brisketLibrary: function () { return { name: BRISKET_LIBRARY.name, pounds: BRISKET_LIBRARY.pounds, grams: BRISKET_LIBRARY.grams, where: BRISKET_LIBRARY.where }; },
