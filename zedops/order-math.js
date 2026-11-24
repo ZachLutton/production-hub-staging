@@ -1529,21 +1529,21 @@
     if (isCaseCountedPackaging(item)) {
       var cookQty = input.cookList ? Number(input.cookList.quantity) || 0 : 0;
       var plateQty = input.plateList ? Number(input.plateList.quantity) || 0 : 0;
-      var blocked = input.plateList && input.plateList.reason && !(plateQty > 0) && !(cookQty > 0);
-      if (!blocked) {
-        var pieces = plateQty > 0 ? plateQty : cookQty;
-        var par = Number(input.standingPar) || 0;
-        var ppc = piecesInCase(item) || 1;
-        var countAs = canonUnit(input.countUnit || resolvedCountUnit(item));
-        var parPieces = countAs === 'case' ? par * ppc : par;
-        var source = 'standing par';
-        if (pieces > 0 && parPieces > 0) source = (plateQty > 0 ? 'plate list' : 'cook list') + ' + par';
-        else if (plateQty > 0) source = 'plate list';
-        else if (cookQty > 0) source = 'cook list';
-        if (pieces > 0 || parPieces > 0) {
-          var reason = plateQty > 0 ? (input.plateList.reason || '') : (input.cookList && input.cookList.reason || '');
-          return { quantity: pieces + parPieces, unit: 'each', eachFactor: null, source: source, reason: reason };
-        }
+      var pieces = plateQty > 0 ? plateQty : cookQty;
+      var par = Number(input.standingPar) || 0;
+      var ppc = piecesInCase(item) || 1;
+      var countAs = canonUnit(input.parUnit || input.countUnit || resolvedCountUnit(item));
+      var parPieces = countAs === 'case' ? par * ppc : par;
+      var source = 'standing par';
+      if (pieces > 0 && parPieces > 0) source = (plateQty > 0 ? 'plate list' : 'cook list') + ' + par';
+      else if (plateQty > 0) source = 'plate list';
+      else if (cookQty > 0) source = 'cook list';
+      if (pieces > 0 || parPieces > 0) {
+        var reason = '';
+        if (plateQty > 0 && input.plateList) reason = input.plateList.reason || '';
+        else if (cookQty > 0 && input.cookList) reason = input.cookList.reason || '';
+        else if (input.plateList && input.plateList.reason) reason = input.plateList.reason;
+        return { quantity: pieces + parPieces, unit: 'each', eachFactor: null, source: source, reason: reason };
       }
     }
     if (isPortionPacket(item) && !(item && item.orderRole === 'food')) {

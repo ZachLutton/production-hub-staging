@@ -115,6 +115,15 @@ test('scaled recipe uses raw weights and does not double count', () => {
   const lidNeed = order.orderNeed(lid, { plateList: { quantity: 400, unit: 'each' }, standingPar: 1, countUnit: 'case' });
   assert.equal(lidNeed.quantity, 400 + 2500);
   assert.equal(order.orderResult(lid, lidNeed, 1).amount, 1);
+  const cupPar2 = order.orderNeed(cup, { plateList: { quantity: 1215, unit: 'each', reason: 'Greek Chicken Bowl' }, standingPar: 2, countUnit: 'case' });
+  assert.equal(cupPar2.quantity, 1215 + 5000);
+  assert.equal(cupPar2.source, 'plate list + par');
+  assert.equal(order.orderResult(cup, cupPar2, 0).amount, 3);
+  const keptPieces = order.orderNeed(cup, { plateList: { quantity: 1215, unit: 'each' }, standingPar: 1, parUnit: 'each', countUnit: 'case' });
+  assert.equal(keptPieces.quantity, 1216);
+  const pagePar = fs.readFileSync(path.join(__dirname, 'weekly-page.js'), 'utf8');
+  const parHandler = pagePar.slice(pagePar.indexOf('Enter a standing par of zero or more'));
+  assert.equal(parHandler.includes("querySelector('[data-need-for="), true);
   const tenderloin = parsed.broadline.filter(function (row) { return row.name === 'Diced Beef Tenderloin'; })[0];
   assert.equal(tenderloin.ingredients[0].pounds, 90.4);
   assert.equal(tenderloin.ingredients[0].name, 'Beef, loin, tenderloin steak, boneless, separable lean only, trimmed to 0" fat, choice, raw');

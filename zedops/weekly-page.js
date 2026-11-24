@@ -502,11 +502,15 @@
     var retail = ZedOrder.isRetailResale(Object.assign({}, row.item, { label: row.item.label || row.section }));
     var fromRecipe = !supplyChoice && !retail && !!(recipe && Number(recipe.quantity) > 0);
     var packet = ZedOrder.isPortionPacket(row.item);
+    var packaging = ZedOrder.isCaseCountedPackaging(row.item);
+    var parSaved = parRecord(row, loc);
+    var usePar = packaging || packet || !(fromRecipe || ZedOrder.isFoodItem(row.item));
     return ZedOrder.orderNeed(row.item, {
       cookList: supplyChoice ? null : cookListFor(row.item, loc),
       plateList: supplyChoice ? null : plateListFor(row.item, loc),
       recipe: supplyChoice || packet ? null : recipe,
-      standingPar: (packet || !(fromRecipe || ZedOrder.isFoodItem(row.item))) ? parOf(row, loc) : 0,
+      standingPar: usePar ? (parSaved ? (Number(parSaved.value) || 0) : 0) : 0,
+      parUnit: usePar && parSaved ? parSaved.unit : '',
       countUnit: ZedOrder.resolvedCountUnit(row.item),
       forceFood: fromRecipe && !packet
     });
@@ -1373,7 +1377,7 @@
     var parCell = '';
     if (!food && state.role === 'admin') {
       var parValue = parOf(row, loc);
-      parCell = '<input data-par="' + esc(row.id) + '" type="number" min="0" step="any" inputmode="decimal" aria-label="Standing par for ' + esc(item.name) + '" value="' + (parValue ? esc(parValue) : '') + '"><span class="field-note" data-par-note="' + esc(row.id) + '"></span>';
+      parCell = '<input data-par="' + esc(row.id) + '" type="number" min="0" step="any" inputmode="decimal" aria-label="Standing par for ' + esc(item.name) + ' in ' + esc(countNow) + '" value="' + (parValue ? esc(parValue) : '') + '"><span class="hand-unit">' + esc(countNow) + '</span><span class="field-note" data-par-note="' + esc(row.id) + '"></span>';
     }
     var controls = state.role === 'admin'
       ? '<tr class="admin-line"><td colspan="6"><div class="row-controls">' + orderSelect + countSelect + roleBtn +
@@ -1974,9 +1978,9 @@
       state.allPars[state.locationId][row.id] = record;
       state.pars[row.id] = record;
       if (note) note.textContent = 'Saved';
-      var tr = input.closest('tr');
-      var needCell = tr && tr.querySelector('[data-need-for="' + id + '"]');
-      var orderCell = tr && tr.querySelector('.need-order');
+      var needCell = document.querySelector('[data-need-for="' + id + '"]');
+      var itemRow = needCell && needCell.closest ? needCell.closest('tr') : null;
+      var orderCell = itemRow && itemRow.querySelector('.need-order');
       var loc = currentStore();
       if (needCell) needCell.innerHTML = needBlock(row, loc);
       if (orderCell) {

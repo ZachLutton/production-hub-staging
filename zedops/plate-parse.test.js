@@ -56,10 +56,12 @@ test('the 11/4 plate list splits muffins and cookies off the meal trays', async 
   assert.equal(order.casesToOrder(plateNeed.quantity, 150, 1000), 1);
   assert.equal(order.casesToOrder(plateNeed.quantity, 154, 1000), 0);
   assert.equal(order.casesToOrder(plateNeed.quantity, 2000, 1000), 0);
-  const missing = order.orderNeed(cup, { plateList: { quantity: 0, unit: 'each', reason: meals.cupNeedReason(null, null) }, standingPar: 4 });
-  assert.equal(missing.quantity, 0);
-  assert.equal(missing.source, 'plate list');
+  const missing = order.orderNeed(cup, { plateList: { quantity: 0, unit: 'each', reason: meals.cupNeedReason(null, null) }, standingPar: 4, countUnit: 'case' });
+  assert.equal(missing.quantity, 4000);
+  assert.equal(missing.source, 'standing par');
   assert.equal(missing.reason.includes('No plate list'), true);
+  const missingEach = order.orderNeed(cup, { plateList: { quantity: 0, unit: 'each', reason: meals.cupNeedReason(null, null) }, standingPar: 4, parUnit: 'each', countUnit: 'case' });
+  assert.equal(missingEach.quantity, 4);
   const unmatched = meals.cupNeedReason({ totalCook: 10 }, meals.tally([{ key: 'salmon', name: 'Grilled Salmon', count: 10 }], {}, 10));
   assert.equal(unmatched.includes('not matched') || unmatched.includes('matched muffin'), true);
   assert.equal(meals.cupNeedReason({ totalCook: 4897, dishes: parsed.dishes }, summary), '');
