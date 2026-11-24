@@ -520,10 +520,17 @@
     });
     return qty;
   }
+  function shownPar(row, loc) {
+    var saved = parRecord(row, loc);
+    if (saved) return parOf(row, loc);
+    if (row.item && ZedOrder.isStationSupply(row.item) && row.item.guidePar != null) return Number(row.item.guidePar) || 0;
+    return parOf(row, loc);
+  }
   function needFor(row, loc) {
     loc = loc || currentStore();
     var onHub = loc && ZedLocations.listSourceOf(loc) === 'catalog';
-    var supplyChoice = row.item && row.item.orderRole === 'supply';
+    var station = row.item && ZedOrder.isStationSupply(row.item);
+    var supplyChoice = (row.item && row.item.orderRole === 'supply') || station;
     var recipe = onHub && !supplyChoice ? recipeNeed(row.item) : null;
     var pending = onHub && !supplyChoice ? pendingPounds(row.item) : 0;
     if (pending > 0 && (!recipe || pending > (Number(recipe.quantity) || 0))) {
@@ -545,12 +552,15 @@
     var packet = ZedOrder.isPortionPacket(row.item);
     var packaging = ZedOrder.isCaseCountedPackaging(row.item);
     var parSaved = parRecord(row, loc);
-    var usePar = packaging || packet || !(fromRecipe || ZedOrder.isFoodItem(row.item));
-    return ZedOrder.orderNeed(row.item, {
+    var usePar = station || packaging || packet || !(fromRecipe || ZedOrder.isFoodItem(row.item));
+    var parNumber = shownPar(row, loc);
+    var mathItem = row.item;
+    if (station && row.item.orderRole !== 'food') mathItem = Object.assign({}, row.item, { orderRole: 'supply' });
+    return ZedOrder.orderNeed(mathItem, {
       cookList: supplyChoice ? null : cookListFor(row.item, loc),
       plateList: supplyChoice ? null : plateListFor(row.item, loc),
       recipe: supplyChoice || packet ? null : recipe,
-      standingPar: usePar ? (parSaved ? (Number(parSaved.value) || 0) : 0) : 0,
+      standingPar: usePar ? parNumber : 0,
       parUnit: usePar && parSaved ? parSaved.unit : '',
       countUnit: ZedOrder.resolvedCountUnit(row.item),
       forceFood: fromRecipe && !packet
@@ -1484,16 +1494,17 @@
         if (listDriven) {
           return '<td class="need-cell">' + needBlock(row, loc) + '</td><td>' + esc(handLabel(row, loc)) + '</td>';
         }
-        var gap = ZedOrder.parGap(parOf(row, loc), hand);
+        var gap = ZedOrder.parGap(shownPar(row, loc), hand);
         gaps.push(gap);
         var handText = hand == null || hand === '' ? '—' : handLabel(row, loc);
-        return '<td class="need-cell">par ' + esc(parOf(row, loc) || 0) + ' − on hand ' + esc(hand == null || hand === '' ? 0 : hand) + ' = ' + esc(gap) + '</td><td>' + esc(handText) + '</td>';
+        return '<td class="need-cell">par ' + esc(shownPar(row, loc) || 0) + ' − on hand ' + esc(hand == null || hand === '' ? 0 : hand) + ' = ' + esc(gap) + '</td><td>' + esc(handText) + '</td>';
       }).join('');
       var ordered = listDriven
         ? ZedOrder.wholeBekAmount(item, { listDriven: true, hubAmount: hubOrder ? hubOrder.amount : 0, hubUnit: hubOrder ? hubOrder.unit : 'cs' })
         : ZedOrder.wholeBekAmount(item, { listDriven: false, parGaps: gaps });
-      if (listDriven && !(hubNeed && hubNeed.quantity > 0) && !(ordered.amount > 0)) return '';
-      if (!listDriven && !(ordered.amount > 0) && !gaps.some(function (gap) { return gap > 0; })) return '';
+      var station = ZedOrder.isStationSupply(item);
+      if (!station && listDriven && !(hubNeed && hubNeed.quantity > 0) && !(ordered.amount > 0)) return '';
+      if (!station && !listDriven && !(ordered.amount > 0) && !gaps.some(function (gap) { return gap > 0; })) return '';
       return '<tr><td class="item-num">' + esc(item.itemNumber || 'no BEK #') + '</td><td><div class="item-name">' + esc(item.name) +
         (item.temporary ? ' <span class="temp-badge">TEMPORARY</span>' : '') + '</div></td>' + cells +
         '<td class="need-order">' + esc(orderLabel(ordered)) + '</td></tr>';

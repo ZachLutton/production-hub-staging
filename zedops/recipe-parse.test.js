@@ -659,6 +659,9 @@ test('food follows the temp zone, even on a supply shelf, and a supply par saves
   const sticker = { name: 'Label 3 In Use First Orange', tempZone: 'Dry', label: 'Label Printing Table' };
   assert.equal(order.isFoodItem(pecan), true);
   assert.equal(order.isFoodItem(sticker), false);
+  assert.equal(order.isStationSupply(sticker), true);
+  assert.equal(order.isStationSupply(pecan), true);
+  assert.equal(order.isStationSupply({ name: 'Towel', label: 'Bathroom Supplies' }), false);
   assert.equal(order.isFoodItem(Object.assign({}, pecan, { orderRole: 'supply' })), false);
   assert.equal(order.isFoodItem(Object.assign({}, sticker, { orderRole: 'food' })), true);
   const cumin = { name: 'Cumin Comino Ground', label: 'Saute Line', pack: '1 / 4.5 LB', countUnit: 'pound', tempZone: 'Dry', itemNumber: '774055' };

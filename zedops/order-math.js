@@ -298,6 +298,11 @@
   // Pickled red onion is the slab. It is only cooked for the fish taco bowl.
   // Cod loin 555070 is the fish in the Chipotle Honey Fish Taco Bowl.
   // The slab stays in the catalog, but it is not a count-guide row while nothing this week uses it.
+  // Label Printing Table is a par station. Cook-list gating does not apply to it.
+  function isStationSupply(item) {
+    return /label printing|labeling station/i.test(String(item && item.label || ''));
+  }
+
   function countGuideVisible(item, options) {
     var opts = options || {};
     var num = String(item && item.itemNumber || '');
@@ -1874,6 +1879,7 @@
     cookUsesPickledOnion: cookUsesPickledOnion,
     cookUsesCod: cookUsesCod,
     countGuideVisible: countGuideVisible,
+    isStationSupply: isStationSupply,
     isSeasoningLine: isSeasoningLine,
     isMeatItem: isMeatItem,
     brisketLibrary: function () { return { name: BRISKET_LIBRARY.name, pounds: BRISKET_LIBRARY.pounds, grams: BRISKET_LIBRARY.grams, where: BRISKET_LIBRARY.where }; },
