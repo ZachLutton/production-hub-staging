@@ -409,8 +409,14 @@
     });
     return out;
   }
+  function cookDishNames() {
+    return cookComponents(state.cook).map(function (row) { return row && row.name; }).filter(Boolean);
+  }
   function recipeNeed(item) {
-    var found = ZedOrder.recipeLineFor(item, recipeForOrder(), state.matches);
+    var found = ZedOrder.recipeLineFor(item, recipeForOrder(), state.matches, {
+      cookKnown: !!state.cook,
+      cookNames: cookDishNames()
+    });
     if (!found) return null;
     return {
       quantity: found.pounds,
@@ -474,6 +480,7 @@
       var onion = ZedOrder.redOnionItemId(row);
       var owner = onion || row.catalogId;
       if (owner !== item.id) return;
+      if (owner === 'bek__182907' && state.cook && !ZedOrder.cookUsesPickledOnion(cookDishNames())) return;
       if (ZedOrder.isSeasoningLine(row) && ZedOrder.isMeatItem(item)) return;
       qty += Number(row.pounds) || 0;
     });
