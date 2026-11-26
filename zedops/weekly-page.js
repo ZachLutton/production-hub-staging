@@ -591,6 +591,10 @@
     return ZedOrder.orderResult(row.item, need, handOf(row, loc));
   }
   function orderLabel(result) {
+    if (result && Number(result.plusCases) > 0) {
+      var base = orderLabel({ amount: result.amount, unit: result.unit });
+      return base === '0' ? result.plusCases + ' cs' : base + ' + ' + result.plusCases + ' cs';
+    }
     if (!result || !(Number(result.amount) > 0)) return '0';
     if (result.unit === 'ea') return result.amount + ' ea';
     if (result.unit === 'lb') return result.amount + ' lb';
@@ -706,6 +710,7 @@
     state.hands = {};
     state.legacyById = {};
     state.allPars = {};
+    state.inventorySections = {};
     return Promise.all(stores().map(function (loc) {
       return db.ref(ZedStorage.PATHS.counts + '/' + loc.id + '/' + state.weekKey).once('value').then(function (snap) {
         state.hands[loc.id] = snap.val() || {};
@@ -728,6 +733,7 @@
               });
             });
             state.legacyById[loc.id] = map;
+            state.inventorySections[loc.id] = sections;
           });
         }).catch(function () { state.legacyById[loc.id] = {}; });
       });
@@ -1471,49 +1477,118 @@
     }
     return list.filter(function (loc) { return loc.isProductionHub; })[0] || null;
   }
-  function renderOrder() {
+  function sectionKey(name) {
+    var text = String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    if (text === 'labeling station' || text === 'label station') return 'label printing table';
+    return text;
+  }
+  function rimStore() {
     var list = stores();
+    for (var i = 0; i < list.length; i++) {
+      if (ZedLocations.listSourceOf(list[i]) === 'inventory') return list[i];
+    }
+    return null;
+  }
+  function renderOrder() {
     var hub = catalogStore();
+    var rim = rimStore();
     var ids = state.catalog ? ZedCatalog.asList(state.catalog.shelf.guide).concat(ZedCatalog.asList(state.catalog.shelf.special)) : [];
     if (ids.indexOf('bek__231714') === -1 && state.catalog && state.catalog.items && state.catalog.items.bek__231714) ids.push('bek__231714');
-    var head = list.map(function (loc) { return '<th>' + esc(loc.name) + ' need</th><th>' + esc(loc.name) + ' on hand</th>'; }).join('');
-    var body = ids.map(function (id) {
+    var guideRows = [];
+    var guideIds = {};
+    var guideNumbers = {};
+    ids.forEach(function (id) {
       var item = state.catalog.items[id];
-      if (!item || !ZedBek.isShown(item) || item.kind === 'vendor_check') return '';
-      var row = { id: id, item: item, legacyKey: '', source: 'guide' };
-      if (idleSlab(row)) return '';
-      var hubNeed = hub ? needFor(row, hub) : null;
-      var listDriven = ZedOrder.isListDrivenSource(hubNeed && hubNeed.source);
-      var hubOrder = hub && listDriven ? orderFor(row, hub) : null;
-      var gaps = [];
-      var cells = list.map(function (loc) {
-        var hand = handOf(row, loc);
-        if (listDriven && (!hub || loc.id !== hub.id)) {
-          return '<td class="need-cell">—</td><td>—</td>';
-        }
-        if (listDriven) {
-          return '<td class="need-cell">' + needBlock(row, loc) + '</td><td>' + esc(handLabel(row, loc)) + '</td>';
-        }
-        var gap = ZedOrder.parGap(shownPar(row, loc), hand);
-        gaps.push(gap);
-        var handText = hand == null || hand === '' ? '—' : handLabel(row, loc);
-        return '<td class="need-cell">par ' + esc(shownPar(row, loc) || 0) + ' − on hand ' + esc(hand == null || hand === '' ? 0 : hand) + ' = ' + esc(gap) + '</td><td>' + esc(handText) + '</td>';
+      if (!item || !ZedBek.isShown(item) || item.kind === 'vendor_check') return;
+      var row = { id: id, item: item, legacyKey: '', source: 'guide', section: item.label || 'Colonnade' };
+      if (idleSlab(row)) return;
+      guideRows.push(row);
+      guideIds[id] = true;
+      if (item.itemNumber) guideNumbers[String(item.itemNumber)] = true;
+    });
+    var groups = [];
+    var groupAt = {};
+    function groupFor(title) {
+      var key = sectionKey(title);
+      if (!key) key = 'rim only';
+      if (groupAt[key] == null) {
+        groupAt[key] = groups.length;
+        groups.push({ title: key === 'rim only' ? 'Rim only' : title, rows: [] });
+      }
+      return groups[groupAt[key]];
+    }
+    guideRows.forEach(function (row) { groupFor(row.section).rows.push(row); });
+    var rimSections = rim && state.inventorySections ? state.inventorySections[rim.id] : null;
+    Object.keys(rimSections || {}).forEach(function (section) {
+      (rimSections[section] || []).forEach(function (item, index) {
+        if (!item || item.hidden === true) return;
+        var number = String(item.itemNumber || '');
+        var id = itemIdForInventory(item);
+        if ((number && guideNumbers[number]) || guideIds[id]) return;
+        var known = catalogItem(id);
+        var shown = known && known.name ? Object.assign({}, known) : {
+          id: id,
+          vendor: 'bek',
+          itemNumber: item.itemNumber || '',
+          name: item.name || '',
+          brand: item.brand || '',
+          pack: item.pack || '',
+          label: section,
+          countUnit: item.countUnit || 'each',
+          kind: 'supply',
+          guidePar: null
+        };
+        if (!shown.label) shown.label = section;
+        if (item.countUnit && !(known && known.countUnitChosen)) shown.countUnit = item.countUnit;
+        if (Number(item.eachPerCase) > 0) shown.eachPerCase = Number(item.eachPerCase);
+        var key = sectionKey(section);
+        var bucket = groupAt[key] != null ? groups[groupAt[key]].title : 'Rim only';
+        groupFor(bucket).rows.push({
+          id: id,
+          item: shown,
+          legacyKey: ZedWeekly.getItemKey(section, item, ZedWeekly.itemIndex(item, index)),
+          source: 'inventory',
+          section: bucket
+        });
+      });
+    });
+    var body = groups.map(function (group) {
+      var lines = group.rows.map(function (row) {
+        var item = row.item;
+        var hubNeed = hub ? needFor(row, hub) : null;
+        var listDriven = ZedOrder.isListDrivenSource(hubNeed && hubNeed.source);
+        var hubOrder = hub && listDriven ? orderFor(row, hub) : null;
+        var hubPar = hub ? shownPar(row, hub) : 0;
+        var rimPar = rim ? parOf(row, rim) : 0;
+        var rimHand = rim ? handOf(row, rim) : null;
+        var rimGap = ZedOrder.parGap(rimPar, rimHand);
+        var hubGap = ZedOrder.parGap(hubPar, hub ? handOf(row, hub) : null);
+        var ordered = ZedOrder.masterOrderAmount(item, {
+          listDriven: listDriven,
+          hubAmount: hubOrder ? hubOrder.amount : 0,
+          hubUnit: hubOrder ? hubOrder.unit : 'cs',
+          parGaps: [hubGap, rimGap],
+          rimGap: rimGap
+        });
+        var supplyRow = ZedOrder.supplyParOrderRow(item) || row.source === 'inventory';
+        if (!supplyRow && !(rimGap > 0) && listDriven && !(hubNeed && hubNeed.quantity > 0) && !(hubOrder && hubOrder.amount > 0)) return '';
+        if (!supplyRow && !(rimGap > 0) && !listDriven && !(ordered.amount > 0) && !(hubGap > 0)) return '';
+        var colonnade = 'par ' + (hubPar || 0);
+        if (listDriven && hubNeed && hubNeed.quantity > 0) colonnade += '<div>' + esc(ZedOrder.needText(hubNeed)) + '</div>';
+        var rimHandText = rimHand == null || rimHand === '' ? '—' : handLabel(row, rim);
+        return '<tr><td class="item-num">' + esc(item.itemNumber || 'no BEK #') + '</td><td><div class="item-name">' + esc(item.name) +
+          (item.temporary ? ' <span class="temp-badge">TEMPORARY</span>' : '') + '</div></td>' +
+          '<td class="need-cell">' + colonnade + '</td><td>par ' + esc(rimPar || 0) + '</td><td>' + esc(rimHandText) + '</td>' +
+          '<td class="need-order">' + esc(orderLabel(ordered)) + '</td></tr>';
       }).join('');
-      var ordered = listDriven
-        ? ZedOrder.wholeBekAmount(item, { listDriven: true, hubAmount: hubOrder ? hubOrder.amount : 0, hubUnit: hubOrder ? hubOrder.unit : 'cs' })
-        : ZedOrder.wholeBekAmount(item, { listDriven: false, parGaps: gaps });
-      var supplyRow = ZedOrder.supplyParOrderRow(item);
-      if (!supplyRow && listDriven && !(hubNeed && hubNeed.quantity > 0) && !(ordered.amount > 0)) return '';
-      if (!supplyRow && !listDriven && !(ordered.amount > 0) && !gaps.some(function (gap) { return gap > 0; })) return '';
-      return '<tr><td class="item-num">' + esc(item.itemNumber || 'no BEK #') + '</td><td><div class="item-name">' + esc(item.name) +
-        (item.temporary ? ' <span class="temp-badge">TEMPORARY</span>' : '') + '</div></td>' + cells +
-        '<td class="need-order">' + esc(orderLabel(ordered)) + '</td></tr>';
+      if (!lines) return '';
+      return '<tr class="section-row"><th colspan="6">' + esc(group.title) + '</th></tr>' + lines;
     }).join('');
-    var note = '<p>Food from the recipe, cook list, or plate list is Colonnade need minus Colonnade on hand. Rim is included only for par items, after the stores are added together.</p>';
+    var note = '<p>The Whole BEK order follows the Colonnade guide. The total is the Colonnade need or par gap plus the Rim par gap, rounded up to cases. Rim counts stay on Rim.</p>';
     document.getElementById('orderTable').innerHTML = note + (body
-      ? '<table class="order-table"><thead><tr><th>Item #</th><th>Name</th>' + head + '<th>Order</th></tr></thead><tbody>' + body + '</tbody></table>'
+      ? '<table class="order-table"><thead><tr><th>Item #</th><th>Name</th><th>Colonnade par</th><th>Rim par</th><th>Rim on hand</th><th>Total</th></tr></thead><tbody>' + body + '</tbody></table>'
       : '<p class="empty-state">Nothing to order for ' + esc(cookLabel()) + '.</p>');
-    state.orderRows = ids.map(function (id) { return state.catalog.items[id]; }).filter(Boolean);
+    state.orderRows = guideRows.map(function (row) { return row.item; });
   }
 
   function renderAdmin(loc) {

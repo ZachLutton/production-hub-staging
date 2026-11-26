@@ -782,6 +782,21 @@
     return { amount: combinedParCases(item, input.parGaps), unit: 'cs', rimUsed: true };
   }
 
+  // Colonnade need or par gap, plus the Rim par gap, then one case round.
+  // A recipe line that already rounded to cases keeps that amount and adds the Rim cases.
+  function masterOrderAmount(item, input) {
+    input = input || {};
+    if (input.listDriven) {
+      var hubAmount = Number(input.hubAmount) || 0;
+      var hubUnit = input.hubUnit || 'cs';
+      var rimCases = combinedParCases(item, [Number(input.rimGap) || 0]);
+      if (!(rimCases > 0)) return { amount: hubAmount, unit: hubUnit, rimUsed: false };
+      if (hubUnit !== 'cs') return { amount: hubAmount, unit: hubUnit, plusCases: rimCases, rimUsed: true };
+      return { amount: hubAmount + rimCases, unit: 'cs', rimUsed: true };
+    }
+    return { amount: combinedParCases(item, input.parGaps), unit: 'cs', rimUsed: true };
+  }
+
   // Never rounds down. An exact case stays exact. A fraction of a case becomes the next case.
   function casesToOrder(need, onHand, perCase) {
     var gap = shortfall(need, onHand);
@@ -1936,6 +1951,7 @@
     parGap: parGap,
     combinedParCases: combinedParCases,
     wholeBekAmount: wholeBekAmount,
+    masterOrderAmount: masterOrderAmount,
     orderNeed: orderNeed,
     filterCatalog: filterCatalog,
     matchCounts: matchCounts,

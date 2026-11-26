@@ -701,6 +701,11 @@ test('food follows the temp zone, even on a supply shelf, and a supply par saves
   const flips = order.weakFoodReport([vinegarChips, bbqChips, vanillaShake, vinegarItem], ['Vinegar', 'Kosher Salt', 'Apple Cider Vinegar']);
   assert.deepEqual(flips.map(function (row) { return row.name; }), []);
   const towel = { itemNumber: '881026', name: 'Towel Roll Enmotion 10 In', pack: '6 / 800 FT', tempZone: 'Dry', label: 'Bathroom Supplies' };
+  const napkin = { itemNumber: '126331', name: 'Napkin Dixie Ultra 2-ply Brown', pack: '24 / 250 CT', countUnit: 'case', countUnitChosen: true };
+  assert.equal(order.masterOrderAmount(napkin, { listDriven: false, parGaps: [1, 1] }).amount, 2);
+  assert.equal(order.masterOrderAmount(towel, { listDriven: false, parGaps: [3, 3] }).amount, 1);
+  assert.deepEqual(order.masterOrderAmount(napkin, { listDriven: true, hubAmount: 2, hubUnit: 'cs', rimGap: 0 }), { amount: 2, unit: 'cs', rimUsed: false });
+  assert.equal(order.masterOrderAmount(napkin, { listDriven: true, hubAmount: 2, hubUnit: 'cs', rimGap: 1 }).amount, 3);
   const tissue = { itemNumber: '185750', name: 'Toilet Tissue 2-ply Soft Mega', pack: '1 / 18 CT', tempZone: 'Dry', label: 'Bathroom Supplies', countUnit: 'case' };
   assert.equal(order.resolvedCountUnit(towel), 'roll');
   assert.equal(order.countHint(towel).text, 'Count: roll · 6 per case');

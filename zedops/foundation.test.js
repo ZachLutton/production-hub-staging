@@ -270,8 +270,8 @@ test('the count week is the Tuesday it is due, in Chicago, and prices wait for t
   assert.equal(page.indexOf('id="recipeTools"') < page.indexOf('id="storeView"'), true);
   assert.equal(page.indexOf('id="orderSummary"') < page.indexOf('id="storeView"'), true);
   assert.equal(page.indexOf('id="storeView"') < page.indexOf('id="adminTools"'), true);
-  assert.equal(page.includes('Build 20261104br'), true);
-  assert.equal(page.includes('weekly-page.js?v=20261104br'), true);
+  assert.equal(page.includes('Build 20261104bs'), true);
+  assert.equal(page.includes('weekly-page.js?v=20261104bs'), true);
   assert.equal(page.includes('id="pdfOnHand"'), true);
   assert.equal(page.includes('button:disabled'), true);
   assert.equal(page.includes('id="plateFile"'), true);
@@ -351,7 +351,8 @@ test('combined totals add partial units by item number and skip hidden monthly r
   const pageLogic = fs.readFileSync(path.join(__dirname, 'weekly-page.js'), 'utf8');
   const pdfFn = pageLogic.slice(pageLogic.indexOf('function downloadOnHandPdf'), pageLogic.indexOf("getElementById('pdfOnHand')"));
   assert.equal(pageLogic.includes('function catalogStore'), true);
-  assert.equal(pageLogic.includes('Rim is included only for par items'), true);
+  assert.equal(pageLogic.includes('Colonnade par'), true);
+  assert.equal(pageLogic.includes('plus the Rim par gap'), true);
   assert.equal(pdfFn.includes('catalogStore()'), true);
   assert.equal(pdfFn.includes('currentStore()'), false);
   const salmon = rows.filter(function (row) { return row.id === 'bek__local_salmon_4oz'; })[0];
