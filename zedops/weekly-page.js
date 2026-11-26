@@ -1502,9 +1502,9 @@
       var ordered = listDriven
         ? ZedOrder.wholeBekAmount(item, { listDriven: true, hubAmount: hubOrder ? hubOrder.amount : 0, hubUnit: hubOrder ? hubOrder.unit : 'cs' })
         : ZedOrder.wholeBekAmount(item, { listDriven: false, parGaps: gaps });
-      var station = ZedOrder.isStationSupply(item);
-      if (!station && listDriven && !(hubNeed && hubNeed.quantity > 0) && !(ordered.amount > 0)) return '';
-      if (!station && !listDriven && !(ordered.amount > 0) && !gaps.some(function (gap) { return gap > 0; })) return '';
+      var supplyRow = ZedOrder.supplyParOrderRow(item);
+      if (!supplyRow && listDriven && !(hubNeed && hubNeed.quantity > 0) && !(ordered.amount > 0)) return '';
+      if (!supplyRow && !listDriven && !(ordered.amount > 0) && !gaps.some(function (gap) { return gap > 0; })) return '';
       return '<tr><td class="item-num">' + esc(item.itemNumber || 'no BEK #') + '</td><td><div class="item-name">' + esc(item.name) +
         (item.temporary ? ' <span class="temp-badge">TEMPORARY</span>' : '') + '</div></td>' + cells +
         '<td class="need-order">' + esc(orderLabel(ordered)) + '</td></tr>';

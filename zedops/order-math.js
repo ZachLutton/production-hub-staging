@@ -303,6 +303,12 @@
     return /label printing|labeling station/i.test(String(item && item.label || ''));
   }
 
+  // Combined-order rows that are pars or supplies stay visible at a zero order.
+  // Recipe food, including the cook-list slab and cod, does not.
+  function supplyParOrderRow(item) {
+    return isStationSupply(item) || !isFoodItem(item);
+  }
+
   function countGuideVisible(item, options) {
     var opts = options || {};
     var num = String(item && item.itemNumber || '');
@@ -1880,6 +1886,7 @@
     cookUsesCod: cookUsesCod,
     countGuideVisible: countGuideVisible,
     isStationSupply: isStationSupply,
+    supplyParOrderRow: supplyParOrderRow,
     isSeasoningLine: isSeasoningLine,
     isMeatItem: isMeatItem,
     brisketLibrary: function () { return { name: BRISKET_LIBRARY.name, pounds: BRISKET_LIBRARY.pounds, grams: BRISKET_LIBRARY.grams, where: BRISKET_LIBRARY.where }; },
